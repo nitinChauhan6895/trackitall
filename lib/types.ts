@@ -121,6 +121,7 @@ export type Profile = {
   first_name: string | null;
   last_name: string | null;
   email: string | null;
+  share_to_community: boolean;
 };
 
 export function displayName(p: Pick<Profile, "first_name" | "last_name" | "username">): string {
@@ -140,8 +141,12 @@ export type Measurement = {
   entry_date: string;
   bodyweight: number | null;
   body_fat_pct: number | null;
+  height: number | null;
+  age: number | null;
   chest: number | null;
+  shoulders: number | null;
   waist: number | null;
+  navel: number | null;
   arms: number | null;
   thighs: number | null;
   created_at: string;
@@ -149,9 +154,13 @@ export type Measurement = {
 
 export const MEASUREMENT_FIELDS = [
   { key: "bodyweight", label: "Bodyweight", unit: "kg" },
+  { key: "height", label: "Height", unit: "cm" },
+  { key: "age", label: "Age", unit: "yr" },
   { key: "body_fat_pct", label: "Body fat", unit: "%" },
   { key: "chest", label: "Chest", unit: "cm" },
+  { key: "shoulders", label: "Shoulders", unit: "cm" },
   { key: "waist", label: "Waist", unit: "cm" },
+  { key: "navel", label: "Navel", unit: "cm" },
   { key: "arms", label: "Arms", unit: "cm" },
   { key: "thighs", label: "Thighs", unit: "cm" },
 ] as const;
@@ -168,9 +177,18 @@ export type Pr = {
   unit_type: PrUnitType;
   value: number; // kg amount, total seconds (time), or distance amount
   distance_unit: "m" | "km" | null;
+  reps: number | null; // optional, mainly for kg-type PRs (e.g. 120 kg x 5)
+  achieved_date: string | null; // date the PR was set (YYYY-MM-DD)
   created_at: string;
   updated_at: string;
 };
+
+// Emoji icon for a PR tile, based on its unit type.
+export function prIcon(pr: Pick<Pr, "unit_type">): string {
+  if (pr.unit_type === "time") return "⏱️";
+  if (pr.unit_type === "distance") return "📍";
+  return "🏋️";
+}
 
 export function formatPrValue(pr: Pick<Pr, "unit_type" | "value" | "distance_unit">): string {
   if (pr.unit_type === "kg") return `${trimNum(pr.value)} kg`;

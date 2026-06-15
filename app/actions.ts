@@ -266,6 +266,8 @@ export async function savePr(input: {
   unit_type: PrUnitType;
   value: number;
   distance_unit: "m" | "km" | null;
+  reps?: number | null;
+  achieved_date?: string | null;
 }) {
   const name = input.exercise_name.trim();
   if (!name) throw new Error("Exercise name is required");
@@ -273,6 +275,8 @@ export async function savePr(input: {
     throw new Error("Invalid unit type");
   if (!Number.isFinite(input.value) || input.value < 0)
     throw new Error("Invalid value");
+  if (input.achieved_date && !DATE_RE.test(input.achieved_date))
+    throw new Error("Invalid date");
 
   const { supabase, user } = await requireUser();
 
@@ -282,6 +286,9 @@ export async function savePr(input: {
     unit_type: input.unit_type,
     value: input.value,
     distance_unit: input.unit_type === "distance" ? input.distance_unit : null,
+    // Reps only make sense for kg-type PRs; ignore for time/distance.
+    reps: input.unit_type === "kg" ? cleanInt(input.reps) : null,
+    achieved_date: input.achieved_date ?? null,
     updated_at: new Date().toISOString(),
   };
 
@@ -338,6 +345,16 @@ export async function updateProfile(input: {
   revalidatePath("/");
 }
 
+export async function setShareToCommunity(share: boolean) {
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ share_to_community: share })
+    .eq("user_id", user.id);
+  if (error) throw error;
+  revalidatePath("/");
+}
+
 // ---------- Measurements ----------
 
 export async function saveMeasurement(input: {
@@ -345,8 +362,12 @@ export async function saveMeasurement(input: {
   entry_date: string;
   bodyweight: number | null;
   body_fat_pct: number | null;
+  height: number | null;
+  age: number | null;
   chest: number | null;
+  shoulders: number | null;
   waist: number | null;
+  navel: number | null;
   arms: number | null;
   thighs: number | null;
 }) {
@@ -358,8 +379,12 @@ export async function saveMeasurement(input: {
     entry_date: input.entry_date,
     bodyweight: cleanNum(input.bodyweight),
     body_fat_pct: cleanNum(input.body_fat_pct),
+    height: cleanNum(input.height),
+    age: cleanNum(input.age),
     chest: cleanNum(input.chest),
+    shoulders: cleanNum(input.shoulders),
     waist: cleanNum(input.waist),
+    navel: cleanNum(input.navel),
     arms: cleanNum(input.arms),
     thighs: cleanNum(input.thighs),
   };

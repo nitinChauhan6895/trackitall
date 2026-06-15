@@ -20,7 +20,7 @@ export async function getProfile(): Promise<Profile> {
   if (user) {
     const { data } = await supabase
       .from("profiles")
-      .select("user_id, username, first_name, last_name, email")
+      .select("user_id, username, first_name, last_name, email, share_to_community")
       .eq("user_id", user.id)
       .single();
     if (data) return data as Profile;
@@ -33,6 +33,7 @@ export async function getProfile(): Promise<Profile> {
     first_name: null,
     last_name: null,
     email: user?.email ?? null,
+    share_to_community: false,
   };
 }
 
@@ -161,6 +162,7 @@ export async function getRecentPrs(limit = 3): Promise<Pr[]> {
   const { data, error } = await supabase
     .from("prs")
     .select("*")
+    .order("achieved_date", { ascending: false, nullsFirst: false })
     .order("updated_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
@@ -172,6 +174,7 @@ export async function getAllPrs(): Promise<Pr[]> {
   const { data, error } = await supabase
     .from("prs")
     .select("*")
+    .order("achieved_date", { ascending: false, nullsFirst: false })
     .order("updated_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as Pr[];

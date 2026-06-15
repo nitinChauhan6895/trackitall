@@ -10,7 +10,18 @@ import {
   type Pr,
   type PrUnitType,
 } from "@/lib/types";
+import { toDateKey } from "@/lib/date";
 import { deletePr, savePr } from "@/app/actions";
+import { PrTile } from "@/components/Tiles";
+
+function fmtDate(key: string) {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 const UNIT_OPTIONS: { value: PrUnitType; label: string }[] = [
   { value: "kg", label: "kg" },
@@ -21,6 +32,13 @@ const UNIT_OPTIONS: { value: PrUnitType; label: string }[] = [
 export default function PrManager({ initialPrs }: { initialPrs: Pr[] }) {
   const router = useRouter();
   const [editing, setEditing] = useState<Pr | null>(null);
+  const [adding, setAdding] = useState(false);
+
+  function done() {
+    setEditing(null);
+    setAdding(false);
+    router.refresh();
+  }
 
   return (
     <main className="flex flex-1 flex-col px-4 pb-16 safe-top">
@@ -37,59 +55,83 @@ export default function PrManager({ initialPrs }: { initialPrs: Pr[] }) {
         </h1>
       </header>
 
-      {initialPrs.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-black/15 px-4 py-8 text-center text-sm text-muted">
-          No PRs yet. Add your personal bests below.
-        </p>
+      {editing || adding ? (
+        <PrForm
+          key={editing?.id ?? "new"}
+          editing={editing}
+          onDone={done}
+          onCancel={() => {
+            setEditing(null);
+            setAdding(false);
+          }}
+        />
       ) : (
-        <ul className="space-y-2.5">
-          {initialPrs.map((pr) => (
-            <li key={pr.id}>
-              <button
-                type="button"
-                onClick={() => setEditing(pr)}
-                className="flex w-full items-center justify-between rounded-2xl border border-black/5 bg-white px-4 py-3.5 text-left active:bg-black/5"
-              >
-                <span className="font-medium">{pr.exercise_name}</span>
-                <PrBadge pr={pr} />
-              </button>
-            </li>
-          ))}
-        </ul>
+        <>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="mb-4 w-full rounded-2xl bg-orange px-4 py-3.5 text-base font-semibold text-white transition active:scale-[0.98]"
+          >
+            + Add PR
+          </button>
+
+          {initialPrs.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-black/15 px-4 py-8 text-center text-sm text-muted">
+              No PRs yet. Add your personal bests above.
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                {initialPrs.map((pr) => (
+                  <PrTile key={pr.id} pr={pr} onEdit={() => setEditing(pr)} />
+                ))}
+              </div>
+
+              <h2 className="mb-2 mt-6 text-sm font-semibold text-muted">
+                History
+              </h2>
+              <ul className="space-y-2.5">
+                {initialPrs.map((pr) => (
+                  <li key={pr.id}>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(pr)}
+                      className="w-full rounded-2xl border border-black/5 bg-white px-4 py-3.5 text-left active:bg-black/5"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="min-w-0 flex-1 truncate font-medium text-ink">
+                          {pr.exercise_name}
+                        </span>
+                        <span className="shrink-0 rounded-lg bg-orange-soft px-2.5 py-1 text-sm font-semibold text-orange">
+                          {formatPrValue(pr)}
+                          {pr.reps != null ? ` ×${pr.reps}` : ""}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-muted">
+                        {pr.achieved_date
+                          ? fmtDate(pr.achieved_date)
+                          : "No date"}
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
       )}
-
-      <PrForm
-        key={editing?.id ?? "new"}
-        editing={editing}
-        onDone={() => {
-          setEditing(null);
-          router.refresh();
-        }}
-      />
     </main>
-  );
-}
-
-function PrBadge({ pr }: { pr: Pr }) {
-  const tone =
-    pr.unit_type === "kg"
-      ? "bg-orange-soft text-orange"
-      : pr.unit_type === "time"
-        ? "bg-green/10 text-green"
-        : "bg-beige text-ink";
-  return (
-    <span className={`rounded-lg px-3 py-1.5 text-sm font-semibold ${tone}`}>
-      {formatPrValue(pr)}
-    </span>
   );
 }
 
 function PrForm({
   editing,
   onDone,
+  onCancel,
 }: {
   editing: Pr | null;
   onDone: () => void;
+  onCancel: () => void;
 }) {
   const [name, setName] = useState(editing?.exercise_name ?? "");
   const [unit, setUnit] = useState<PrUnitType>(editing?.unit_type ?? "kg");
@@ -101,6 +143,12 @@ function PrForm({
     if (editing.unit_type === "time") return formatSeconds(editing.value);
     return String(editing.value);
   });
+  const [reps, setReps] = useState(
+    editing?.reps != null ? String(editing.reps) : "",
+  );
+  const [date, setDate] = useState(
+    editing?.achieved_date ?? toDateKey(new Date()),
+  );
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -128,6 +176,13 @@ function PrForm({
       }
     }
 
+    const repsNum =
+      unit === "kg" && reps.trim() !== "" ? Number(reps) : null;
+    if (repsNum != null && (!Number.isFinite(repsNum) || repsNum < 0)) {
+      setError("Enter valid reps.");
+      return;
+    }
+
     setBusy(true);
     try {
       await savePr({
@@ -136,6 +191,8 @@ function PrForm({
         unit_type: unit,
         value: numeric,
         distance_unit: unit === "distance" ? distanceUnit : null,
+        reps: repsNum,
+        achieved_date: date,
       });
       onDone();
     } catch (err: any) {
@@ -157,17 +214,27 @@ function PrForm({
   }
 
   return (
-    <form onSubmit={submit} className="mt-6">
+    <form onSubmit={submit}>
       <h2 className="mb-2 text-sm font-semibold text-muted">
         {editing ? "Edit PR" : "Add a new PR"}
       </h2>
 
       <div className="space-y-2.5">
+        <div>
+          <label className="mb-1 block text-sm text-muted">Date achieved</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base text-ink outline-none focus:border-orange"
+          />
+        </div>
+
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Exercise name"
-          className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base outline-none focus:border-orange"
+          className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange"
         />
 
         <div className="flex gap-2.5">
@@ -176,12 +243,21 @@ function PrForm({
             onChange={(e) => setValue(e.target.value)}
             inputMode={unit === "time" ? "text" : "decimal"}
             placeholder={unit === "time" ? "mm:ss" : "Value"}
-            className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base outline-none focus:border-orange"
+            className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange"
           />
+          {unit === "kg" && (
+            <input
+              value={reps}
+              onChange={(e) => setReps(e.target.value)}
+              inputMode="numeric"
+              placeholder="Reps"
+              className="w-20 shrink-0 rounded-xl border border-black/10 bg-white px-3 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange"
+            />
+          )}
           <select
             value={unit}
             onChange={(e) => setUnit(e.target.value as PrUnitType)}
-            className="shrink-0 rounded-xl border border-black/10 bg-white px-3 py-3 text-base outline-none focus:border-orange"
+            className="shrink-0 rounded-xl border border-black/10 bg-white px-3 py-3 text-base text-ink outline-none focus:border-orange"
           >
             {UNIT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -190,6 +266,10 @@ function PrForm({
             ))}
           </select>
         </div>
+
+        {unit === "kg" && (
+          <p className="text-xs text-muted">Reps optional (e.g. 120 kg × 5).</p>
+        )}
 
         {unit === "distance" && (
           <div className="flex gap-2">
@@ -221,16 +301,26 @@ function PrForm({
           {busy ? "Saving…" : editing ? "Update PR" : "Save PR"}
         </button>
 
-        {editing && (
+        <div className="flex gap-3">
           <button
             type="button"
-            onClick={remove}
+            onClick={onCancel}
             disabled={busy}
-            className="w-full rounded-xl px-4 py-2 text-sm text-muted active:text-orange"
+            className="flex-1 rounded-xl border border-black/10 px-4 py-2.5 text-sm text-muted active:bg-black/5"
           >
-            Delete PR
+            Cancel
           </button>
-        )}
+          {editing && (
+            <button
+              type="button"
+              onClick={remove}
+              disabled={busy}
+              className="flex-1 rounded-xl px-4 py-2.5 text-sm text-orange active:bg-orange-soft"
+            >
+              Delete PR
+            </button>
+          )}
+        </div>
       </div>
     </form>
   );

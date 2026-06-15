@@ -101,6 +101,23 @@ function toSetInput(
   return out;
 }
 
+// True if a draft set has any value entered, for whichever exercise type.
+function draftSetHasAny(
+  s: DraftSet,
+  cardio: boolean,
+  cardioType: CardioType,
+): boolean {
+  if (!cardio) return s.reps !== "" || s.weight !== "";
+  return CARDIO_FIELDS[cardioType].some((f) => s[FIELD_META[f].key] !== "");
+}
+
+// An exercise is saveable once it has a name OR at least one filled entry.
+// (Cardio counts distance/time/incline/resistance/weight, not just reps/weight.)
+function exerciseHasContent(ex: DraftExercise, cardio: boolean): boolean {
+  if (ex.name.trim() !== "") return true;
+  return ex.sets.some((s) => draftSetHasAny(s, cardio, ex.cardioType));
+}
+
 export default function LogWizard({ date }: { date: string }) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
@@ -147,16 +164,20 @@ export default function LogWizard({ date }: { date: string }) {
   }
 
   async function saveExercise(g: MuscleGroup, ex: DraftExercise) {
-    if (!ex.name.trim()) return;
     const cardio = isCardio(g);
-    updateExercise(g, ex.id, { saving: true });
+    // Cardio exercises can save without a typed name — fall back to the type
+    // label (e.g. "Running") so the Save button isn't blocked on naming.
+    const name =
+      ex.name.trim() || (cardio ? CARDIO_TYPE_LABELS[ex.cardioType] : "");
+    if (!name) return;
+    updateExercise(g, ex.id, { saving: true, name });
     try {
       const { id } = await upsertExercise({
         id: ex.savedId,
         date,
         muscle_group: g,
         cardio_type: cardio ? ex.cardioType : null,
-        name: ex.name,
+        name,
         sets: ex.sets.map((s) => toSetInput(cardio, ex.cardioType, s)),
       });
       updateExercise(g, ex.id, {
@@ -172,10 +193,11 @@ export default function LogWizard({ date }: { date: string }) {
 
   async function finish() {
     setFinishing(true);
-    // Auto-save any still-open card that has a name, so nothing is lost.
+    // Auto-save any still-open card that has real content, so nothing is lost.
     for (const g of selected) {
+      const cardio = isCardio(g);
       for (const ex of byGroup[g] ?? []) {
-        if (!ex.collapsed && ex.name.trim()) {
+        if (!ex.collapsed && exerciseHasContent(ex, cardio)) {
           try {
             await saveExercise(g, ex);
           } catch {
@@ -368,12 +390,7 @@ function EditingCard({
   onSave: () => void | Promise<void>;
   onRemove: () => void | Promise<void>;
 }) {
-  function addSet(s: DraftSet) {
-    onChange({ sets: [...ex.sets, s] });
-  }
-  function removeSet(id: string) {
-    onChange({ sets: ex.sets.filter((x) => x.id !== id) });
-  }
+  const canSave = exerciseHasContent(ex, cardio);
 
   return (
     <div className="rounded-2xl border-[1.5px] border-orange/60 p-3">
@@ -404,14 +421,13 @@ function EditingCard({
         cardio={cardio}
         cardioType={ex.cardioType}
         sets={ex.sets}
-        onAdd={addSet}
-        onRemove={removeSet}
+        onChange={(sets) => onChange({ sets })}
       />
 
       <div className="mt-3 flex items-center gap-2">
         <button
           type="button"
-          disabled={!ex.name.trim() || ex.saving}
+          disabled={!canSave || ex.saving}
           onClick={() => onSave()}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-green px-3 py-2.5 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-40"
         >
@@ -469,18 +485,24 @@ function SavedCard({
           </button>
         </div>
       </div>
-      {ex.sets.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {ex.sets.map((s) => (
-            <span
-              key={s.id}
-              className="rounded-lg bg-orange-soft px-2.5 py-1 text-xs font-medium text-orange"
-            >
-              {summarizeSet(cardio, ex.cardioType, s)}
-            </span>
-          ))}
-        </div>
-      )}
+      {(() => {
+        const filled = ex.sets.filter((s) =>
+          draftSetHasAny(s, cardio, ex.cardioType),
+        );
+        if (filled.length === 0) return null;
+        return (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {filled.map((s) => (
+              <span
+                key={s.id}
+                className="rounded-lg bg-orange-soft px-2.5 py-1 text-xs font-medium text-orange"
+              >
+                {summarizeSet(cardio, ex.cardioType, s)}
+              </span>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -523,73 +545,42 @@ const FIELD_META: Record<
   weight: { key: "weight", placeholder: "weight", type: "number", step: "0.5" },
 };
 
+// Inline-editable set/entry rows. Each row's inputs write straight into the
+// exercise's `sets` array (no separate uncommitted draft), so cardio entries are
+// never lost and the parent's "Save exercise" button sees them immediately.
 function SetEditor({
   cardio,
   cardioType,
   sets,
-  onAdd,
-  onRemove,
+  onChange,
 }: {
   cardio: boolean;
   cardioType: CardioType;
   sets: DraftSet[];
-  onAdd: (s: DraftSet) => void;
-  onRemove: (id: string) => void;
+  onChange: (sets: DraftSet[]) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<DraftSet>(emptySet());
-
   const fields: CardioField[] = cardio ? CARDIO_FIELDS[cardioType] : [];
 
-  function hasAny(s: DraftSet): boolean {
-    if (!cardio) return s.reps !== "" || s.weight !== "";
-    return fields.some((f) => s[FIELD_META[f].key] !== "");
+  function addRow() {
+    onChange([...sets, emptySet()]);
+  }
+  function removeRow(id: string) {
+    onChange(sets.filter((s) => s.id !== id));
+  }
+  function patchRow(id: string, key: keyof DraftSet, value: string) {
+    onChange(sets.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
   }
 
-  function commit() {
-    if (!hasAny(draft)) return;
-    onAdd({ ...draft, id: uid() });
-    setDraft(emptySet());
-    setOpen(false);
-  }
+  const inputClass =
+    "min-w-0 flex-1 rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus:border-green";
 
   return (
-    <div className="mt-2">
-      {sets.length > 0 && (
-        <div className="space-y-1.5">
-          {sets.map((s) => (
-            <div
-              key={s.id}
-              className="flex items-center justify-between rounded-lg bg-beige px-3 py-2 text-sm"
-            >
-              <span className="tabular-nums">
-                {summarizeSet(cardio, cardioType, s)}
-              </span>
-              <button
-                type="button"
-                onClick={() => onRemove(s.id)}
-                aria-label="Remove set"
-                className="text-muted active:text-orange"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {!open && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="mt-2 text-sm font-medium text-green"
-        >
-          + {cardio ? "entry" : "set"}
-        </button>
-      )}
-
-      {open && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+    <div className="mt-2 space-y-2">
+      {sets.map((s, i) => (
+        <div key={s.id} className="flex items-center gap-2">
+          <span className="w-5 shrink-0 text-center text-xs font-medium text-muted">
+            {i + 1}
+          </span>
           {cardio ? (
             fields.map((f) => {
               const meta = FIELD_META[f];
@@ -600,12 +591,10 @@ function SetEditor({
                   inputMode={meta.type === "number" ? "decimal" : "text"}
                   min={meta.type === "number" ? 0 : undefined}
                   step={meta.step}
-                  value={draft[meta.key]}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, [meta.key]: e.target.value }))
-                  }
+                  value={s[meta.key]}
+                  onChange={(e) => patchRow(s.id, meta.key, e.target.value)}
                   placeholder={meta.placeholder}
-                  className="min-w-0 flex-1 rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm outline-none focus:border-green"
+                  className={inputClass}
                 />
               );
             })
@@ -615,36 +604,41 @@ function SetEditor({
                 type="number"
                 inputMode="numeric"
                 min={0}
-                value={draft.reps}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, reps: e.target.value }))
-                }
+                value={s.reps}
+                onChange={(e) => patchRow(s.id, "reps", e.target.value)}
                 placeholder="reps"
-                className="min-w-0 flex-1 rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm outline-none focus:border-green"
+                className={inputClass}
               />
               <input
                 type="number"
                 inputMode="decimal"
                 min={0}
                 step="0.5"
-                value={draft.weight}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, weight: e.target.value }))
-                }
+                value={s.weight}
+                onChange={(e) => patchRow(s.id, "weight", e.target.value)}
                 placeholder="weight"
-                className="min-w-0 flex-1 rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm outline-none focus:border-green"
+                className={inputClass}
               />
             </>
           )}
           <button
             type="button"
-            onClick={commit}
-            className="shrink-0 rounded-lg bg-green px-3 py-2 text-sm font-semibold text-white active:scale-95"
+            onClick={() => removeRow(s.id)}
+            aria-label="Remove set"
+            className="shrink-0 px-1 text-muted active:text-orange"
           >
-            Add
+            ✕
           </button>
         </div>
-      )}
+      ))}
+
+      <button
+        type="button"
+        onClick={addRow}
+        className="text-sm font-medium text-green active:opacity-70"
+      >
+        + {cardio ? "entry" : "set"}
+      </button>
     </div>
   );
 }

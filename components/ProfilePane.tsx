@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { updateProfile, signOut } from "@/app/actions";
+import { setShareToCommunity, updateProfile, signOut } from "@/app/actions";
 import {
   displayName,
   profileInitial,
@@ -110,6 +110,8 @@ function Menu({
         <p className="text-sm text-muted">@{profile.username}</p>
       </div>
 
+      <ShareToggle initial={profile.share_to_community} />
+
       <div className="border-t border-black/5">
         <Row icon="👤" label="Edit profile" onClick={onEdit} />
         <Row icon="✉️" label={profile.email ?? "No email on file"} muted />
@@ -126,6 +128,59 @@ function Menu({
           </button>
         </form>
       </div>
+    </div>
+  );
+}
+
+function ShareToggle({ initial }: { initial: boolean }) {
+  const [on, setOn] = useState(initial);
+  const [busy, setBusy] = useState(false);
+
+  async function toggle() {
+    const next = !on;
+    setOn(next); // optimistic
+    setBusy(true);
+    try {
+      await setShareToCommunity(next);
+    } catch {
+      setOn(!next); // revert on failure
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="my-2 rounded-2xl bg-green-tint p-3">
+      <div className="flex items-center gap-3">
+        <span aria-hidden className="text-lg">
+          👥
+        </span>
+        <span className="flex-1 font-medium text-ink">Share with community</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label="Share with community"
+          disabled={busy}
+          onClick={toggle}
+          className={[
+            "relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60",
+            on ? "bg-green" : "bg-black/20",
+          ].join(" ")}
+        >
+          <span
+            className={[
+              "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+              on ? "translate-x-[22px]" : "translate-x-0.5",
+            ].join(" ")}
+          />
+        </button>
+      </div>
+      <p className="mt-1.5 text-xs text-muted">
+        {on
+          ? "Your stats appear in Community, and you can see others'."
+          : "Off — your stats stay private and Community stays hidden."}
+      </p>
     </div>
   );
 }

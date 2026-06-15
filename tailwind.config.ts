@@ -8,6 +8,7 @@ const config: Config = {
         green: {
           DEFAULT: "#3B6D11",
           dark: "#33600e",
+          tint: "#EAF3DE",
         },
         orange: {
           DEFAULT: "#D85A30",

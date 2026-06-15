@@ -10,6 +10,15 @@ import {
 } from "@/lib/types";
 import { toDateKey } from "@/lib/date";
 import { deleteMeasurement, saveMeasurement } from "@/app/actions";
+import { MetricTile, metricIcon } from "@/components/Tiles";
+
+// Latest non-null value recorded for each tracked metric (entries are newest-first).
+function latestValues(entries: Measurement[]) {
+  return MEASUREMENT_FIELDS.map((f) => {
+    const hit = entries.find((m) => m[f.key] != null);
+    return { field: f, value: hit ? hit[f.key] : null };
+  });
+}
 
 const inputClass =
   "w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
@@ -65,6 +74,22 @@ export default function MeasurementsManager({
         />
       ) : (
         <>
+          {initial.length > 0 && (
+            <div className="mb-4 grid grid-cols-2 gap-3">
+              {latestValues(initial)
+                .filter((m) => m.value != null)
+                .map(({ field, value }) => (
+                  <MetricTile
+                    key={field.key}
+                    icon={metricIcon(field.key)}
+                    label={field.label}
+                    value={String(value)}
+                    unit={field.unit}
+                  />
+                ))}
+            </div>
+          )}
+
           <button
             type="button"
             onClick={() => setAdding(true)}
@@ -72,6 +97,8 @@ export default function MeasurementsManager({
           >
             + Add entry
           </button>
+
+          <h2 className="mb-2 text-sm font-semibold text-muted">History</h2>
 
           {initial.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-black/15 px-4 py-8 text-center text-sm text-muted">
@@ -156,8 +183,12 @@ function MeasurementForm({
         entry_date: date,
         bodyweight: num("bodyweight"),
         body_fat_pct: num("body_fat_pct"),
+        height: num("height"),
+        age: num("age"),
         chest: num("chest"),
+        shoulders: num("shoulders"),
         waist: num("waist"),
+        navel: num("navel"),
         arms: num("arms"),
         thighs: num("thighs"),
       });

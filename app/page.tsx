@@ -1,9 +1,13 @@
 import Link from "next/link";
 import {
+  getMeasurements,
   getMonthWorkoutSummary,
   getProfile,
+  getRecentPrs,
   getWorkoutStats,
 } from "@/lib/data";
+import { MEASUREMENT_FIELDS } from "@/lib/types";
+import { MetricTile, PrTile, metricIcon } from "@/components/Tiles";
 import {
   buildCalendarGrid,
   monthLabel,
@@ -26,11 +30,23 @@ export default async function HomePage({
   searchParams: { m?: string };
 }) {
   const { year, month } = parseMonthParam(searchParams.m);
-  const [profile, stats, workoutSummary] = await Promise.all([
-    getProfile(),
-    getWorkoutStats(),
-    getMonthWorkoutSummary(year, month),
-  ]);
+  const [profile, stats, workoutSummary, recentPrs, measurements] =
+    await Promise.all([
+      getProfile(),
+      getWorkoutStats(),
+      getMonthWorkoutSummary(year, month),
+      getRecentPrs(2),
+      getMeasurements(),
+    ]);
+
+  // Two headline measurement tiles: latest bodyweight + latest body-fat %.
+  const measurementTiles = (["bodyweight", "body_fat_pct"] as const)
+    .map((key) => {
+      const field = MEASUREMENT_FIELDS.find((f) => f.key === key)!;
+      const hit = measurements.find((m) => m[key] != null);
+      return hit ? { field, value: hit[key]! } : null;
+    })
+    .filter((t): t is { field: (typeof MEASUREMENT_FIELDS)[number]; value: number } => t !== null);
 
   const grid = buildCalendarGrid(year, month);
   const today = new Date();
@@ -129,21 +145,37 @@ export default async function HomePage({
         </div>
       </section>
 
-      {/* PR corner + Measurements */}
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <CornerCard
-          href="/prs"
-          icon="🏆"
-          title="PR corner"
-          className="bg-orange-soft text-orange"
-        />
-        <CornerCard
-          href="/measurements"
-          icon="📏"
-          title="Measurements"
-          className="bg-green/10 text-green"
-        />
-      </div>
+      {/* PR corner preview */}
+      <PreviewSection icon="🏆" title="PR corner" href="/prs">
+        {recentPrs.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3">
+            {recentPrs.map((pr) => (
+              <PrTile key={pr.id} pr={pr} />
+            ))}
+          </div>
+        ) : (
+          <EmptyHint href="/prs">Add your first PR →</EmptyHint>
+        )}
+      </PreviewSection>
+
+      {/* Measurements preview */}
+      <PreviewSection icon="📏" title="Measurements" href="/measurements">
+        {measurementTiles.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3">
+            {measurementTiles.map(({ field, value }) => (
+              <MetricTile
+                key={field.key}
+                icon={metricIcon(field.key)}
+                label={field.label}
+                value={String(value)}
+                unit={field.unit}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyHint href="/measurements">Log your first measurement →</EmptyHint>
+        )}
+      </PreviewSection>
 
       {/* Log workout */}
       <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md px-4 pb-5 pt-2 safe-bottom">
@@ -181,24 +213,45 @@ function StatCard({ value, label }: { value: number; label: string }) {
   );
 }
 
-function CornerCard({
-  href,
+function PreviewSection({
   icon,
   title,
-  className,
+  href,
+  children,
 }: {
-  href: string;
   icon: string;
   title: string;
-  className: string;
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mt-5">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="flex items-center gap-1.5 text-base font-semibold">
+          <span aria-hidden>{icon}</span> {title}
+        </h2>
+        <Link href={href} className="text-sm font-medium text-orange active:opacity-70">
+          View all →
+        </Link>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function EmptyHint({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
 }) {
   return (
     <Link
       href={href}
-      className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-5 text-base font-semibold transition active:scale-[0.98] ${className}`}
+      className="flex items-center justify-center rounded-2xl border border-dashed border-black/15 px-4 py-6 text-center text-sm text-muted active:bg-black/5"
     >
-      <span aria-hidden>{icon}</span>
-      {title}
+      {children}
     </Link>
   );
 }
