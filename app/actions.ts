@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import {
   MUSCLE_GROUPS,
   PR_UNIT_TYPES,
+  parseTimeToSeconds,
+  type CardioType,
   type MuscleGroup,
   type PrUnitType,
 } from "@/lib/types";
@@ -28,9 +30,115 @@ export type SetInput = {
   weight_kg?: number | null;
   distance_km?: number | null;
   speed_kmh?: number | null;
+  time_seconds?: number | null;
+  incline?: number | null;
+  resistance?: number | null;
+  distance_m?: number | null;
 };
 export type ExerciseInput = { name: string; sets: SetInput[] };
 export type GroupInput = { muscle_group: MuscleGroup; exercises: ExerciseInput[] };
+
+function setHasValue(s: SetInput): boolean {
+  return (
+    cleanInt(s.reps) != null ||
+    cleanNum(s.weight_kg) != null ||
+    cleanNum(s.distance_km) != null ||
+    cleanNum(s.speed_kmh) != null ||
+    cleanInt(s.time_seconds) != null ||
+    cleanNum(s.incline) != null ||
+    cleanNum(s.resistance) != null ||
+    cleanNum(s.distance_m) != null
+  );
+}
+
+function setRow(s: SetInput, exerciseId: string, userId: string, position: number) {
+  return {
+    exercise_id: exerciseId,
+    user_id: userId,
+    position,
+    reps: cleanInt(s.reps),
+    weight_kg: cleanNum(s.weight_kg),
+    distance_km: cleanNum(s.distance_km),
+    speed_kmh: cleanNum(s.speed_kmh),
+    time_seconds: cleanInt(s.time_seconds),
+    incline: cleanNum(s.incline),
+    resistance: cleanNum(s.resistance),
+    distance_m: cleanNum(s.distance_m),
+  };
+}
+
+// ---------- Per-exercise save/edit (Log workout wizard) ----------
+// Persists a single exercise + its sets immediately so nothing is lost mid-session.
+// Pass `id` to edit an existing exercise (its sets are replaced).
+export async function upsertExercise(input: {
+  id?: string;
+  date: string;
+  muscle_group: MuscleGroup;
+  cardio_type?: CardioType | null;
+  name: string;
+  sets: SetInput[];
+}): Promise<{ id: string }> {
+  if (!DATE_RE.test(input.date)) throw new Error("Invalid date");
+  if (!MUSCLE_GROUPS.includes(input.muscle_group))
+    throw new Error("Invalid muscle group");
+  const name = input.name.trim();
+  if (!name) throw new Error("Exercise name is required");
+
+  const { supabase, user } = await requireUser();
+  let exerciseId = input.id;
+
+  if (exerciseId) {
+    const { error } = await supabase
+      .from("exercises")
+      .update({ name: name.slice(0, 120), cardio_type: input.cardio_type ?? null })
+      .eq("id", exerciseId);
+    if (error) throw error;
+    const { error: delErr } = await supabase
+      .from("sets")
+      .delete()
+      .eq("exercise_id", exerciseId);
+    if (delErr) throw delErr;
+  } else {
+    const { count } = await supabase
+      .from("exercises")
+      .select("id", { count: "exact", head: true })
+      .eq("workout_date", input.date);
+    const { data, error } = await supabase
+      .from("exercises")
+      .insert({
+        user_id: user.id,
+        workout_date: input.date,
+        muscle_group: input.muscle_group,
+        name: name.slice(0, 120),
+        cardio_type: input.cardio_type ?? null,
+        position: count ?? 0,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    exerciseId = data.id as string;
+  }
+
+  const rows = input.sets
+    .filter(setHasValue)
+    .map((s, i) => setRow(s, exerciseId!, user.id, i));
+  if (rows.length > 0) {
+    const { error } = await supabase.from("sets").insert(rows);
+    if (error) throw error;
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/day/${input.date}`);
+  return { id: exerciseId! };
+}
+
+export async function deleteExerciseById(id: string, date: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.from("exercises").delete().eq("id", id);
+  if (error) throw error;
+  revalidatePath("/");
+  revalidatePath(`/day/${date}`);
+}
 
 export async function saveWorkout(date: string, groups: GroupInput[]) {
   if (!DATE_RE.test(date)) throw new Error("Invalid date");
@@ -57,22 +165,8 @@ export async function saveWorkout(date: string, groups: GroupInput[]) {
       if (exErr) throw exErr;
 
       const rows = ex.sets
-        .map((s, i) => ({
-          exercise_id: inserted.id,
-          user_id: user.id,
-          position: i,
-          reps: cleanInt(s.reps),
-          weight_kg: cleanNum(s.weight_kg),
-          distance_km: cleanNum(s.distance_km),
-          speed_kmh: cleanNum(s.speed_kmh),
-        }))
-        .filter(
-          (r) =>
-            r.reps != null ||
-            r.weight_kg != null ||
-            r.distance_km != null ||
-            r.speed_kmh != null,
-        );
+        .filter(setHasValue)
+        .map((s, i) => setRow(s, inserted.id as string, user.id, i));
 
       if (rows.length > 0) {
         const { error: setErr } = await supabase.from("sets").insert(rows);
@@ -123,12 +217,22 @@ export async function deleteExercise(formData: FormData) {
 export async function addSet(formData: FormData) {
   const exerciseId = String(formData.get("exercise_id") ?? "");
   const date = String(formData.get("date") ?? "");
-  const isCardio = String(formData.get("cardio") ?? "") === "1";
 
-  const reps = cleanInt(numOrNull(formData.get("reps")));
-  const weight_kg = cleanNum(numOrNull(formData.get("weight")));
-  const distance_km = cleanNum(numOrNull(formData.get("distance")));
-  const speed_kmh = cleanNum(numOrNull(formData.get("speed")));
+  const input: SetInput = {
+    reps: numOrNull(formData.get("reps")),
+    weight_kg: numOrNull(formData.get("weight")),
+    distance_km: numOrNull(formData.get("distance_km")),
+    distance_m: numOrNull(formData.get("distance_m")),
+    speed_kmh: numOrNull(formData.get("speed")),
+    incline: numOrNull(formData.get("incline")),
+    resistance: numOrNull(formData.get("resistance")),
+    time_seconds: parseTimeToSeconds(String(formData.get("time") ?? "")),
+  };
+
+  if (!setHasValue(input)) {
+    revalidatePath(`/day/${date}`);
+    return;
+  }
 
   const { supabase, user } = await requireUser();
 
@@ -137,15 +241,9 @@ export async function addSet(formData: FormData) {
     .select("id", { count: "exact", head: true })
     .eq("exercise_id", exerciseId);
 
-  const { error } = await supabase.from("sets").insert({
-    exercise_id: exerciseId,
-    user_id: user.id,
-    position: count ?? 0,
-    reps: isCardio ? null : reps,
-    weight_kg: isCardio ? null : weight_kg,
-    distance_km: isCardio ? distance_km : null,
-    speed_kmh: isCardio ? speed_kmh : null,
-  });
+  const { error } = await supabase
+    .from("sets")
+    .insert(setRow(input, exerciseId, user.id, count ?? 0));
   if (error) throw error;
 
   revalidatePath(`/day/${date}`);
@@ -214,6 +312,77 @@ export async function signOut() {
   const { supabase } = await requireUser();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+// ---------- Profile ----------
+
+export async function updateProfile(input: {
+  first_name: string;
+  last_name: string;
+}) {
+  const { supabase, user } = await requireUser();
+  const first = input.first_name.trim().slice(0, 60);
+  const last = input.last_name.trim().slice(0, 60);
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ first_name: first || null, last_name: last || null })
+    .eq("user_id", user.id);
+  if (error) throw error;
+
+  // Keep auth metadata in sync (used as a fallback display source).
+  await supabase.auth.updateUser({
+    data: { first_name: first, last_name: last },
+  });
+
+  revalidatePath("/");
+}
+
+// ---------- Measurements ----------
+
+export async function saveMeasurement(input: {
+  id?: string;
+  entry_date: string;
+  bodyweight: number | null;
+  body_fat_pct: number | null;
+  chest: number | null;
+  waist: number | null;
+  arms: number | null;
+  thighs: number | null;
+}) {
+  if (!DATE_RE.test(input.entry_date)) throw new Error("Invalid date");
+  const { supabase, user } = await requireUser();
+
+  const payload = {
+    user_id: user.id,
+    entry_date: input.entry_date,
+    bodyweight: cleanNum(input.bodyweight),
+    body_fat_pct: cleanNum(input.body_fat_pct),
+    chest: cleanNum(input.chest),
+    waist: cleanNum(input.waist),
+    arms: cleanNum(input.arms),
+    thighs: cleanNum(input.thighs),
+  };
+
+  if (input.id) {
+    const { error } = await supabase
+      .from("measurements")
+      .update(payload)
+      .eq("id", input.id);
+    if (error) throw error;
+  } else {
+    const { error } = await supabase.from("measurements").insert(payload);
+    if (error) throw error;
+  }
+
+  revalidatePath("/measurements");
+}
+
+export async function deleteMeasurement(id: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.from("measurements").delete().eq("id", id);
+  if (error) throw error;
+  revalidatePath("/measurements");
 }
 
 // ---------- helpers ----------

@@ -30,6 +30,63 @@ export function isCardio(group: MuscleGroup): boolean {
   return group === "cardio";
 }
 
+// ---- Cardio exercise types (per-exercise field sets) ----
+export const CARDIO_TYPES = [
+  "running",
+  "elliptical",
+  "skierg",
+  "rowing",
+  "sledge_push",
+  "sledge_pull",
+  "farmer_walk",
+  "generic",
+] as const;
+export type CardioType = (typeof CARDIO_TYPES)[number];
+
+export const CARDIO_TYPE_LABELS: Record<CardioType, string> = {
+  running: "Running",
+  elliptical: "Elliptical",
+  skierg: "SkiErg",
+  rowing: "Rowing",
+  sledge_push: "Sledge push",
+  sledge_pull: "Sledge pull",
+  farmer_walk: "Farmer walk",
+  generic: "Other (distance + time)",
+};
+
+// Fields each cardio type collects, in display order.
+export type CardioField =
+  | "distance_km"
+  | "distance_m"
+  | "time"
+  | "incline"
+  | "resistance"
+  | "weight";
+
+export const CARDIO_FIELDS: Record<CardioType, CardioField[]> = {
+  running: ["distance_km", "time", "incline"],
+  elliptical: ["distance_km", "time", "resistance"],
+  skierg: ["distance_m", "time"],
+  rowing: ["distance_m", "time"],
+  sledge_push: ["distance_m", "weight"],
+  sledge_pull: ["distance_m", "weight"],
+  farmer_walk: ["distance_m", "weight"],
+  generic: ["distance_km", "time"],
+};
+
+export const CARDIO_FIELD_LABELS: Record<CardioField, string> = {
+  distance_km: "Distance (km)",
+  distance_m: "Distance (m)",
+  time: "Time (mm:ss)",
+  incline: "Incline",
+  resistance: "Resistance",
+  weight: "Weight (kg)",
+};
+
+export function defaultCardioType(): CardioType {
+  return "running";
+}
+
 export type WorkoutSet = {
   id: string;
   exercise_id: string;
@@ -38,6 +95,11 @@ export type WorkoutSet = {
   weight_kg: number | null;
   distance_km: number | null;
   speed_kmh: number | null;
+  // Round 2 cardio fields:
+  time_seconds: number | null;
+  incline: number | null;
+  resistance: number | null;
+  distance_m: number | null;
 };
 
 export type Exercise = {
@@ -48,8 +110,52 @@ export type Exercise = {
   name: string;
   position: number;
   created_at: string;
+  cardio_type: CardioType | null;
   sets: WorkoutSet[];
 };
+
+// ---- Profile ----
+export type Profile = {
+  user_id: string;
+  username: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+};
+
+export function displayName(p: Pick<Profile, "first_name" | "last_name" | "username">): string {
+  const full = [p.first_name, p.last_name].filter(Boolean).join(" ").trim();
+  return full || p.username;
+}
+
+export function profileInitial(p: Pick<Profile, "first_name" | "username">): string {
+  const base = (p.first_name || p.username || "?").trim();
+  return (base[0] || "?").toUpperCase();
+}
+
+// ---- Measurements ----
+export type Measurement = {
+  id: string;
+  user_id: string;
+  entry_date: string;
+  bodyweight: number | null;
+  body_fat_pct: number | null;
+  chest: number | null;
+  waist: number | null;
+  arms: number | null;
+  thighs: number | null;
+  created_at: string;
+};
+
+export const MEASUREMENT_FIELDS = [
+  { key: "bodyweight", label: "Bodyweight", unit: "kg" },
+  { key: "body_fat_pct", label: "Body fat", unit: "%" },
+  { key: "chest", label: "Chest", unit: "cm" },
+  { key: "waist", label: "Waist", unit: "cm" },
+  { key: "arms", label: "Arms", unit: "cm" },
+  { key: "thighs", label: "Thighs", unit: "cm" },
+] as const;
+export type MeasurementField = (typeof MEASUREMENT_FIELDS)[number]["key"];
 
 // ---- PRs ----
 export const PR_UNIT_TYPES = ["kg", "time", "distance"] as const;

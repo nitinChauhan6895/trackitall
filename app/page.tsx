@@ -1,8 +1,7 @@
 import Link from "next/link";
 import {
   getMonthWorkoutSummary,
-  getRecentPrs,
-  getUsername,
+  getProfile,
   getWorkoutStats,
 } from "@/lib/data";
 import {
@@ -14,8 +13,10 @@ import {
   prevMonth,
   toDateKey,
 } from "@/lib/date";
-import { MUSCLE_GROUP_LABELS, formatPrValue, type Pr } from "@/lib/types";
-import { signOut } from "@/app/actions";
+import { MUSCLE_GROUP_LABELS, displayName } from "@/lib/types";
+import ProfilePane from "@/components/ProfilePane";
+import HomeTabs from "./HomeTabs";
+import Community from "./Community";
 
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -25,11 +26,10 @@ export default async function HomePage({
   searchParams: { m?: string };
 }) {
   const { year, month } = parseMonthParam(searchParams.m);
-  const [name, stats, workoutSummary, recentPrs] = await Promise.all([
-    getUsername(),
+  const [profile, stats, workoutSummary] = await Promise.all([
+    getProfile(),
     getWorkoutStats(),
     getMonthWorkoutSummary(year, month),
-    getRecentPrs(3),
   ]);
 
   const grid = buildCalendarGrid(year, month);
@@ -44,25 +44,12 @@ export default async function HomePage({
     month: "long",
   });
 
-  return (
-    <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
-      <header className="flex items-start justify-between pb-2 pt-5">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Hi, {name}</h1>
-          <p className="mt-0.5 text-sm text-muted">{todayLabel}</p>
-        </div>
-        <form action={signOut}>
-          <button
-            type="submit"
-            className="rounded-lg px-2 py-1 text-sm text-muted active:text-ink"
-          >
-            Sign out
-          </button>
-        </form>
-      </header>
+  const firstName = profile.first_name || displayName(profile);
 
+  const mySpace = (
+    <>
       {/* Stats */}
-      <div className="mt-3 grid grid-cols-3 gap-3">
+      <div className="mt-4 grid grid-cols-3 gap-3">
         <StatCard value={stats.last7} label="last 7 days" />
         <StatCard value={stats.last14} label="last 14 days" />
         <StatCard value={stats.month} label="this month" />
@@ -142,8 +129,21 @@ export default async function HomePage({
         </div>
       </section>
 
-      {/* PR corner preview */}
-      <PrPreview prs={recentPrs} />
+      {/* PR corner + Measurements */}
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <CornerCard
+          href="/prs"
+          icon="🏆"
+          title="PR corner"
+          className="bg-orange-soft text-orange"
+        />
+        <CornerCard
+          href="/measurements"
+          icon="📏"
+          title="Measurements"
+          className="bg-green/10 text-green"
+        />
+      </div>
 
       {/* Log workout */}
       <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md px-4 pb-5 pt-2 safe-bottom">
@@ -154,6 +154,20 @@ export default async function HomePage({
           + Log workout
         </Link>
       </div>
+    </>
+  );
+
+  return (
+    <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
+      <header className="flex items-start justify-between pb-1 pt-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Hi, {firstName}</h1>
+          <p className="mt-0.5 text-sm text-muted">{todayLabel}</p>
+        </div>
+        <ProfilePane profile={profile} />
+      </header>
+
+      <HomeTabs mySpace={mySpace} community={<Community />} />
     </main>
   );
 }
@@ -167,33 +181,24 @@ function StatCard({ value, label }: { value: number; label: string }) {
   );
 }
 
-function PrPreview({ prs }: { prs: Pr[] }) {
+function CornerCard({
+  href,
+  icon,
+  title,
+  className,
+}: {
+  href: string;
+  icon: string;
+  title: string;
+  className: string;
+}) {
   return (
-    <section className="mt-4 rounded-2xl bg-beige-pr p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-2 font-semibold">
-          <span aria-hidden>🏆</span> PR corner
-        </h2>
-        <Link href="/prs" className="text-sm font-medium text-orange">
-          View all →
-        </Link>
-      </div>
-      {prs.length === 0 ? (
-        <p className="mt-2 text-sm text-muted">
-          No PRs yet. Add your bests in the PR corner.
-        </p>
-      ) : (
-        <ul className="mt-2 space-y-1.5">
-          {prs.map((pr) => (
-            <li key={pr.id} className="flex items-center justify-between text-sm">
-              <span className="text-ink">{pr.exercise_name}</span>
-              <span className="font-semibold text-orange">
-                {formatPrValue(pr)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <Link
+      href={href}
+      className={`flex items-center justify-center gap-2 rounded-2xl px-4 py-5 text-base font-semibold transition active:scale-[0.98] ${className}`}
+    >
+      <span aria-hidden>{icon}</span>
+      {title}
+    </Link>
   );
 }

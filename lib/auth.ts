@@ -13,3 +13,8 @@ export function isValidUsername(username: string): boolean {
 export function usernameToEmail(username: string): string {
   return `${normalizeUsername(username)}@${USERNAME_EMAIL_DOMAIN}`;
 }
+
+// Real email is now collected at signup (used for password recovery).
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}

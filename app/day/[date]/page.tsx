@@ -3,11 +3,16 @@ import { notFound } from "next/navigation";
 import { getDayExercises } from "@/lib/data";
 import { formatDayHeading, monthParam } from "@/lib/date";
 import {
+  CARDIO_FIELDS,
   MUSCLE_GROUPS,
   MUSCLE_GROUP_LABELS,
+  formatSeconds,
   isCardio,
+  type CardioField,
+  type CardioType,
   type Exercise,
   type MuscleGroup,
+  type WorkoutSet,
 } from "@/lib/types";
 import { addSet } from "@/app/actions";
 import SwipeSetRow from "./SwipeSetRow";
@@ -100,6 +105,9 @@ function ExerciseRow({
   date: string;
   cardio: boolean;
 }) {
+  const cardioType: CardioType = exercise.cardio_type ?? "generic";
+  const fields: CardioField[] = cardio ? CARDIO_FIELDS[cardioType] : [];
+
   return (
     <div>
       <SwipeExerciseHeader id={exercise.id} date={date} name={exercise.name} />
@@ -112,41 +120,31 @@ function ExerciseRow({
               id={s.id}
               date={date}
               left={`Set ${i + 1}`}
-              right={
-                cardio
-                  ? `${fmt(s.distance_km)} km${s.speed_kmh != null ? ` · ${fmt(s.speed_kmh)} km/h` : ""}`
-                  : `${s.reps ?? "–"} × ${fmt(s.weight_kg)} kg`
-              }
+              right={formatSavedSet(cardio, cardioType, s)}
             />
           ))}
         </div>
       )}
 
-      <form action={addSet} className="mt-2 flex items-center gap-2">
+      <form action={addSet} className="mt-2 flex flex-wrap items-center gap-2">
         <input type="hidden" name="exercise_id" value={exercise.id} />
         <input type="hidden" name="date" value={date} />
-        <input type="hidden" name="cardio" value={cardio ? "1" : "0"} />
         {cardio ? (
-          <>
-            <input
-              name="distance"
-              type="number"
-              min={0}
-              step="0.1"
-              inputMode="decimal"
-              placeholder="Distance (km)"
-              className="w-full rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm outline-none focus:border-green"
-            />
-            <input
-              name="speed"
-              type="number"
-              min={0}
-              step="0.1"
-              inputMode="decimal"
-              placeholder="Speed (km/h)"
-              className="w-full rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm outline-none focus:border-green"
-            />
-          </>
+          fields.map((f) => {
+            const meta = FIELD_INPUTS[f];
+            return (
+              <input
+                key={f}
+                name={meta.name}
+                type={meta.type}
+                inputMode={meta.type === "number" ? "decimal" : "text"}
+                min={meta.type === "number" ? 0 : undefined}
+                step={meta.step}
+                placeholder={meta.placeholder}
+                className="min-w-0 flex-1 rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm outline-none focus:border-green"
+              />
+            );
+          })
         ) : (
           <>
             <input
@@ -155,7 +153,7 @@ function ExerciseRow({
               min={0}
               inputMode="numeric"
               placeholder="Reps"
-              className="w-full rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm outline-none focus:border-green"
+              className="min-w-0 flex-1 rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm outline-none focus:border-green"
             />
             <input
               name="weight"
@@ -164,7 +162,7 @@ function ExerciseRow({
               step="0.5"
               inputMode="decimal"
               placeholder="Weight (kg)"
-              className="w-full rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm outline-none focus:border-green"
+              className="min-w-0 flex-1 rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm outline-none focus:border-green"
             />
           </>
         )}
@@ -179,7 +177,50 @@ function ExerciseRow({
   );
 }
 
+const FIELD_INPUTS: Record<
+  CardioField,
+  { name: string; placeholder: string; type: "number" | "text"; step?: string }
+> = {
+  distance_km: { name: "distance_km", placeholder: "Distance (km)", type: "number", step: "0.1" },
+  distance_m: { name: "distance_m", placeholder: "Distance (m)", type: "number", step: "1" },
+  time: { name: "time", placeholder: "Time (mm:ss)", type: "text" },
+  incline: { name: "incline", placeholder: "Incline", type: "number", step: "0.5" },
+  resistance: { name: "resistance", placeholder: "Resistance", type: "number", step: "1" },
+  weight: { name: "weight", placeholder: "Weight (kg)", type: "number", step: "0.5" },
+};
+
+function formatSavedSet(
+  cardio: boolean,
+  cardioType: CardioType,
+  s: WorkoutSet,
+): string {
+  if (!cardio) {
+    return `${s.reps ?? "–"} × ${fmt(s.weight_kg)} kg`;
+  }
+  const parts: string[] = [];
+  for (const f of CARDIO_FIELDS[cardioType]) {
+    if (f === "distance_km" && s.distance_km != null)
+      parts.push(`${fmt(s.distance_km)} km`);
+    else if (f === "distance_m" && s.distance_m != null)
+      parts.push(`${fmt(s.distance_m)} m`);
+    else if (f === "time" && s.time_seconds != null)
+      parts.push(formatSeconds(s.time_seconds));
+    else if (f === "incline" && s.incline != null)
+      parts.push(`incline ${fmt(s.incline)}`);
+    else if (f === "resistance" && s.resistance != null)
+      parts.push(`resist ${fmt(s.resistance)}`);
+    else if (f === "weight" && s.weight_kg != null)
+      parts.push(`${fmt(s.weight_kg)} kg`);
+  }
+  // Legacy rows (pre-round-2) stored cardio as distance_km + speed_kmh.
+  if (parts.length === 0) {
+    if (s.distance_km != null) parts.push(`${fmt(s.distance_km)} km`);
+    if (s.speed_kmh != null) parts.push(`${fmt(s.speed_kmh)} km/h`);
+  }
+  return parts.length ? parts.join(" · ") : "–";
+}
+
 function fmt(n: number | null): string {
   if (n == null) return "–";
-  return Number.isInteger(n) ? String(n) : String(n);
+  return String(n);
 }

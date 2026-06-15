@@ -1,15 +1,39 @@
 import { createClient } from "@/lib/supabase/server";
-import { MUSCLE_GROUPS, type Exercise, type MuscleGroup, type Pr } from "@/lib/types";
+import {
+  MUSCLE_GROUPS,
+  type Exercise,
+  type Measurement,
+  type MuscleGroup,
+  type Pr,
+  type Profile,
+} from "@/lib/types";
 import { toDateKey } from "@/lib/date";
 
-export async function getUsername(): Promise<string> {
+export async function getProfile(): Promise<Profile> {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const email = user?.email ?? "";
-  const name = email.split("@")[0] || "there";
-  return name.charAt(0).toUpperCase() + name.slice(1);
+
+  const fallbackUsername = (user?.email ?? "there").split("@")[0] || "there";
+
+  if (user) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("user_id, username, first_name, last_name, email")
+      .eq("user_id", user.id)
+      .single();
+    if (data) return data as Profile;
+  }
+
+  // Profile row missing (e.g. a legacy account from before the round-2 migration).
+  return {
+    user_id: user?.id ?? "",
+    username: fallbackUsername,
+    first_name: null,
+    last_name: null,
+    email: user?.email ?? null,
+  };
 }
 
 export async function getMonthWorkoutDays(
@@ -151,4 +175,15 @@ export async function getAllPrs(): Promise<Pr[]> {
     .order("updated_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as Pr[];
+}
+
+export async function getMeasurements(): Promise<Measurement[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("measurements")
+    .select("*")
+    .order("entry_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as Measurement[];
 }
