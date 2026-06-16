@@ -1,12 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
 import {
   MUSCLE_GROUPS,
+  type Circuit,
   type Exercise,
   type Measurement,
   type MuscleGroup,
   type Pr,
   type Profile,
 } from "@/lib/types";
+import {
+  hasPerfectWeek,
+  longestGapDays,
+  longestStreak,
+  maxWorkoutsInWindow,
+  type BadgeStats,
+} from "@/lib/badges";
 import { toDateKey } from "@/lib/date";
 
 export async function getProfile(): Promise<Profile> {
@@ -178,6 +186,107 @@ export async function getAllPrs(): Promise<Pr[]> {
     .order("updated_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as Pr[];
+}
+
+export async function getBadgeStats(): Promise<BadgeStats> {
+  const supabase = createClient();
+  const [exRes, prRes] = await Promise.all([
+    supabase
+      .from("exercises")
+      .select(
+        "workout_date, muscle_group, name, cardio_type, created_at, sets(distance_km, distance_m, weight_kg)",
+      ),
+    supabase.from("prs").select("created_at, updated_at"),
+  ]);
+
+  const exs = (exRes.data ?? []) as any[];
+  const days = exs.map((e) => e.workout_date as string);
+
+  let maxRunKm = 0;
+  let totalCardioKm = 0;
+  let maxDeadliftKg = 0;
+  const cardioDays = new Set<string>();
+  const strengthDays = new Set<string>();
+  const groups = new Set<string>();
+
+  for (const e of exs) {
+    const g = e.muscle_group as string;
+    groups.add(g);
+    const cardioish = g === "cardio" || g === "hiit";
+    if (cardioish) cardioDays.add(e.workout_date);
+    else strengthDays.add(e.workout_date);
+
+    const isRun = /run/i.test(e.name ?? "") || e.cardio_type === "running";
+    const isDeadlift = /deadlift/i.test(e.name ?? "");
+
+    for (const s of e.sets ?? []) {
+      if (isRun && s.distance_km != null)
+        maxRunKm = Math.max(maxRunKm, s.distance_km);
+      if (cardioish)
+        totalCardioKm += (s.distance_km ?? 0) + (s.distance_m ?? 0) / 1000;
+      if (isDeadlift && s.weight_kg != null)
+        maxDeadliftKg = Math.max(maxDeadliftKg, s.weight_kg);
+    }
+  }
+
+  const prs = (prRes.data ?? []) as any[];
+  const pbBeaten = prs.some(
+    (p) =>
+      p.updated_at &&
+      p.created_at &&
+      new Date(p.updated_at).getTime() - new Date(p.created_at).getTime() >
+        60000,
+  );
+
+  return {
+    totalWorkouts: new Set(days).size,
+    longestStreak: longestStreak(days),
+    maxWorkoutsInWeek: maxWorkoutsInWindow(days, 7),
+    hasPerfectWeek: hasPerfectWeek(days),
+    longestGapDays: longestGapDays(days),
+    maxRunKm,
+    totalCardioKm,
+    cardioSessions: cardioDays.size,
+    strengthSessions: strengthDays.size,
+    maxDeadliftKg,
+    categories: groups.size,
+    pbBeaten,
+    prCount: prs.length,
+  };
+}
+
+export async function getCircuits(): Promise<Circuit[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("circuits")
+    .select("*, circuit_exercises(*)")
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((c: any) => ({
+    ...c,
+    set_times: c.set_times ?? [],
+    exercises: (c.circuit_exercises ?? []).sort(
+      (a: any, b: any) => a.position - b.position,
+    ),
+  })) as Circuit[];
+}
+
+export async function getCircuit(id: string): Promise<Circuit | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("circuits")
+    .select("*, circuit_exercises(*)")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    ...(data as any),
+    set_times: (data as any).set_times ?? [],
+    exercises: ((data as any).circuit_exercises ?? []).sort(
+      (a: any, b: any) => a.position - b.position,
+    ),
+  } as Circuit;
 }
 
 export async function getMeasurements(): Promise<Measurement[]> {

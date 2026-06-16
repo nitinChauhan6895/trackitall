@@ -6,34 +6,34 @@ import { formatPrValue, prIcon, type Pr } from "@/lib/types";
 //  only pass onEdit from a client component.)
 export function PrTile({ pr, onEdit }: { pr: Pr; onEdit?: () => void }) {
   return (
-    <div className="relative flex aspect-square flex-col justify-between rounded-2xl bg-orange-soft p-4">
+    <div className="relative rounded-2xl bg-orange-soft p-3">
       {onEdit && (
         <button
           type="button"
           onClick={onEdit}
           aria-label={`Edit ${pr.exercise_name}`}
-          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full text-orange active:bg-orange/10"
+          className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full text-sm text-orange active:bg-orange/10"
         >
           ✎
         </button>
       )}
-      <span aria-hidden className="text-2xl">
-        {prIcon(pr)}
-      </span>
-      <div>
-        <div className="flex items-baseline gap-1">
-          <span className="text-2xl font-bold leading-none text-orange">
-            {formatPrValue(pr)}
-          </span>
-          {pr.reps != null && (
-            <span className="text-sm font-semibold text-orange/70">
-              ×{pr.reps}
-            </span>
-          )}
-        </div>
-        <p className="mt-1 truncate text-sm font-medium text-ink">
+      <div className="flex items-center gap-1.5">
+        <span aria-hidden className="text-base">
+          {prIcon(pr)}
+        </span>
+        <p className="truncate text-xs font-medium text-ink">
           {pr.exercise_name}
         </p>
+      </div>
+      <div className="mt-1.5 flex items-baseline gap-1">
+        <span className="text-xl font-bold leading-none text-orange">
+          {formatPrValue(pr)}
+        </span>
+        {pr.reps != null && (
+          <span className="text-xs font-semibold text-orange/70">
+            ×{pr.reps}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -52,18 +52,18 @@ export function MetricTile({
   unit: string;
 }) {
   return (
-    <div className="flex aspect-square flex-col justify-between rounded-2xl bg-green-tint p-4">
-      <span aria-hidden className="text-2xl">
-        {icon}
-      </span>
-      <div>
-        <div className="flex items-baseline gap-1">
-          <span className="text-2xl font-bold leading-none text-green">
-            {value}
-          </span>
-          <span className="text-sm font-semibold text-green/70">{unit}</span>
-        </div>
-        <p className="mt-1 truncate text-sm font-medium text-ink">{label}</p>
+    <div className="rounded-2xl bg-green-tint p-3">
+      <div className="flex items-center gap-1.5">
+        <span aria-hidden className="text-base">
+          {icon}
+        </span>
+        <p className="truncate text-xs font-medium text-ink">{label}</p>
+      </div>
+      <div className="mt-1.5 flex items-baseline gap-1">
+        <span className="text-xl font-bold leading-none text-green">
+          {value}
+        </span>
+        <span className="text-xs font-semibold text-green/70">{unit}</span>
       </div>
     </div>
   );

@@ -1,18 +1,21 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CARDIO_FIELDS,
+  CARDIO_FIELD_META,
   CARDIO_TYPES,
   CARDIO_TYPE_LABELS,
   MUSCLE_GROUPS,
   MUSCLE_GROUP_LABELS,
   defaultCardioType,
-  isCardio,
+  formatSeconds,
   parseTimeToSeconds,
   type CardioField,
   type CardioType,
+  type Circuit,
   type MuscleGroup,
 } from "@/lib/types";
 import {
@@ -20,6 +23,23 @@ import {
   upsertExercise,
   type SetInput,
 } from "@/app/actions";
+import { libraryFor, type LibraryItem } from "@/lib/presets";
+import { HIIT_EXERCISES, resolveHiitMetrics } from "@/lib/hiit";
+import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
+
+type Mode = "cardio" | "hiit" | "strength";
+function modeFor(g: MuscleGroup): Mode {
+  if (g === "cardio") return "cardio";
+  if (g === "hiit") return "hiit";
+  return "strength";
+}
+
+type FieldDesc = {
+  draftKey: keyof DraftSet;
+  label: string;
+  unit: string;
+  kind: "number" | "time";
+};
 
 type DraftSet = {
   id: string;
@@ -28,8 +48,12 @@ type DraftSet = {
   distance_km: string;
   distance_m: string;
   time: string;
+  calories: string;
   incline: string;
   resistance: string;
+  sets_count: string;
+  height: string;
+  floors: string;
 };
 
 type DraftExercise = {
@@ -54,18 +78,37 @@ const emptySet = (): DraftSet => ({
   distance_km: "",
   distance_m: "",
   time: "",
+  calories: "",
   incline: "",
   resistance: "",
+  sets_count: "",
+  height: "",
+  floors: "",
 });
 
-const newExercise = (): DraftExercise => ({
-  id: uid(),
-  name: "",
-  cardioType: defaultCardioType(),
-  sets: [],
-  collapsed: false,
-  saving: false,
-});
+// A fresh card for `group`. Cardio & HIIT cards carry a single inline entry.
+function newExercise(
+  group: MuscleGroup,
+  init?: Partial<DraftExercise>,
+): DraftExercise {
+  const mode = modeFor(group);
+  const cardioType = init?.cardioType ?? defaultCardioType();
+  const defaultName =
+    mode === "cardio"
+      ? CARDIO_TYPE_LABELS[cardioType]
+      : mode === "hiit"
+        ? HIIT_EXERCISES[0].name
+        : "";
+  return {
+    id: uid(),
+    name: defaultName,
+    cardioType,
+    sets: mode === "strength" ? [] : [emptySet()],
+    collapsed: false,
+    saving: false,
+    ...init,
+  };
+}
 
 function shortDate(date: string) {
   const [y, m, d] = date.split("-").map(Number);
@@ -81,49 +124,132 @@ function num(s: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function toSetInput(
-  cardio: boolean,
-  cardioType: CardioType,
-  s: DraftSet,
-): SetInput {
-  if (!cardio) {
+function fieldKey(f: CardioField): keyof DraftSet {
+  return f as keyof DraftSet;
+}
+
+function cardioDesc(f: CardioField): FieldDesc {
+  const meta = CARDIO_FIELD_META[f];
+  return {
+    draftKey: fieldKey(f),
+    label: meta.label,
+    unit: meta.unit,
+    kind: f === "time" ? "time" : "number",
+  };
+}
+
+// Inline-entry field list for cardio/HIIT (strength uses set rows instead).
+function fieldDescriptors(mode: Mode, ex: DraftExercise): FieldDesc[] {
+  if (mode === "cardio") return CARDIO_FIELDS[ex.cardioType].map(cardioDesc);
+  if (mode === "hiit")
+    return resolveHiitMetrics(ex.name).map((m) => ({
+      draftKey: m.draftKey,
+      label: m.label,
+      unit: m.unit,
+      kind: m.kind,
+    }));
+  return [];
+}
+
+function setFromDraftKey(out: SetInput, key: keyof DraftSet, raw: string) {
+  switch (key) {
+    case "reps": out.reps = num(raw); break;
+    case "weight": out.weight_kg = num(raw); break;
+    case "distance_km": out.distance_km = num(raw); break;
+    case "distance_m": out.distance_m = num(raw); break;
+    case "time": out.time_seconds = parseTimeToSeconds(raw); break;
+    case "calories": out.calories = num(raw); break;
+    case "incline": out.incline = num(raw); break;
+    case "resistance": out.resistance = num(raw); break;
+    case "sets_count": out.sets_count = num(raw); break;
+    case "height": out.height = num(raw); break;
+    case "floors": out.floors = num(raw); break;
+  }
+}
+
+function toSetInput(mode: Mode, ex: DraftExercise, s: DraftSet): SetInput {
+  if (mode === "strength") {
     return { reps: num(s.reps), weight_kg: num(s.weight) };
   }
   const out: SetInput = {};
-  for (const f of CARDIO_FIELDS[cardioType]) {
-    if (f === "distance_km") out.distance_km = num(s.distance_km);
-    else if (f === "distance_m") out.distance_m = num(s.distance_m);
-    else if (f === "time") out.time_seconds = parseTimeToSeconds(s.time);
-    else if (f === "incline") out.incline = num(s.incline);
-    else if (f === "resistance") out.resistance = num(s.resistance);
-    else if (f === "weight") out.weight_kg = num(s.weight);
+  for (const d of fieldDescriptors(mode, ex)) {
+    setFromDraftKey(out, d.draftKey, s[d.draftKey]);
   }
   return out;
 }
 
-// True if a draft set has any value entered, for whichever exercise type.
-function draftSetHasAny(
-  s: DraftSet,
-  cardio: boolean,
-  cardioType: CardioType,
-): boolean {
-  if (!cardio) return s.reps !== "" || s.weight !== "";
-  return CARDIO_FIELDS[cardioType].some((f) => s[FIELD_META[f].key] !== "");
+function entryHasAny(mode: Mode, ex: DraftExercise, s: DraftSet): boolean {
+  if (mode === "strength") return s.reps !== "" || s.weight !== "";
+  return fieldDescriptors(mode, ex).some((d) => s[d.draftKey] !== "");
 }
 
-// An exercise is saveable once it has a name OR at least one filled entry.
-// (Cardio counts distance/time/incline/resistance/weight, not just reps/weight.)
-function exerciseHasContent(ex: DraftExercise, cardio: boolean): boolean {
+function exerciseHasContent(mode: Mode, ex: DraftExercise): boolean {
   if (ex.name.trim() !== "") return true;
-  return ex.sets.some((s) => draftSetHasAny(s, cardio, ex.cardioType));
+  return ex.sets.some((s) => entryHasAny(mode, ex, s));
 }
 
-export default function LogWizard({ date }: { date: string }) {
+function cardTitle(mode: Mode, ex: DraftExercise): string {
+  if (mode === "cardio") return CARDIO_TYPE_LABELS[ex.cardioType];
+  return ex.name.trim() || "New exercise";
+}
+
+// Compact one-line summary under the exercise title (e.g. "25 km · 100 kcal").
+function summarizeExercise(mode: Mode, ex: DraftExercise): string {
+  if (mode === "strength") {
+    const n = ex.sets.filter((s) => entryHasAny("strength", ex, s)).length;
+    return n === 0 ? "No sets yet" : `${n} set${n === 1 ? "" : "s"}`;
+  }
+  const s = ex.sets[0];
+  if (!s) return "Tap to add details";
+  const parts: string[] = [];
+  for (const d of fieldDescriptors(mode, ex)) {
+    const v = s[d.draftKey];
+    if (v === "") continue;
+    if (d.kind === "time") {
+      const secs = parseTimeToSeconds(v);
+      parts.push(secs == null ? v : formatSeconds(secs));
+    } else {
+      parts.push(d.unit ? `${v} ${d.unit}` : `${d.label} ${v}`);
+    }
+  }
+  return parts.length ? parts.join(" · ") : "Tap to add details";
+}
+
+// Build a draft set from a circuit exercise's stored target metrics.
+function draftFromMetrics(metrics: Record<string, string | number>): DraftSet {
+  const base = emptySet();
+  for (const [k, v] of Object.entries(metrics)) {
+    if (k in base) (base as Record<string, string>)[k] = String(v);
+  }
+  return base;
+}
+
+export default function LogWizard({
+  date,
+  circuits = [],
+}: {
+  date: string;
+  circuits?: Circuit[];
+}) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
   const [selected, setSelected] = useState<MuscleGroup[]>([]);
   const [byGroup, setByGroup] = useState<Record<string, DraftExercise[]>>({});
   const [finishing, setFinishing] = useState(false);
+
+  // Load a saved circuit's exercises into the HIIT section as draft cards.
+  function loadCircuit(c: Circuit) {
+    setByGroup((prev) => {
+      const added = c.exercises.map((ce) =>
+        newExercise("hiit", {
+          name: ce.name,
+          sets: [draftFromMetrics(ce.metrics)],
+          collapsed: true,
+        }),
+      );
+      return { ...prev, hiit: [...(prev.hiit ?? []), ...added] };
+    });
+  }
 
   function toggleGroup(g: MuscleGroup) {
     setSelected((prev) =>
@@ -142,10 +268,10 @@ export default function LogWizard({ date }: { date: string }) {
     }));
   }
 
-  function addExerciseCard(g: MuscleGroup) {
+  function addExerciseCard(g: MuscleGroup, init?: Partial<DraftExercise>) {
     setByGroup((prev) => ({
       ...prev,
-      [g]: [...(prev[g] ?? []), newExercise()],
+      [g]: [...(prev[g] ?? []), newExercise(g, init)],
     }));
   }
 
@@ -164,11 +290,9 @@ export default function LogWizard({ date }: { date: string }) {
   }
 
   async function saveExercise(g: MuscleGroup, ex: DraftExercise) {
-    const cardio = isCardio(g);
-    // Cardio exercises can save without a typed name — fall back to the type
-    // label (e.g. "Running") so the Save button isn't blocked on naming.
+    const mode = modeFor(g);
     const name =
-      ex.name.trim() || (cardio ? CARDIO_TYPE_LABELS[ex.cardioType] : "");
+      ex.name.trim() || (mode === "cardio" ? CARDIO_TYPE_LABELS[ex.cardioType] : "");
     if (!name) return;
     updateExercise(g, ex.id, { saving: true, name });
     try {
@@ -176,15 +300,11 @@ export default function LogWizard({ date }: { date: string }) {
         id: ex.savedId,
         date,
         muscle_group: g,
-        cardio_type: cardio ? ex.cardioType : null,
+        cardio_type: mode === "cardio" ? ex.cardioType : null,
         name,
-        sets: ex.sets.map((s) => toSetInput(cardio, ex.cardioType, s)),
+        sets: ex.sets.map((s) => toSetInput(mode, ex, s)),
       });
-      updateExercise(g, ex.id, {
-        savedId: id,
-        collapsed: true,
-        saving: false,
-      });
+      updateExercise(g, ex.id, { savedId: id, collapsed: true, saving: false });
     } catch (e) {
       updateExercise(g, ex.id, { saving: false });
       throw e;
@@ -193,11 +313,10 @@ export default function LogWizard({ date }: { date: string }) {
 
   async function finish() {
     setFinishing(true);
-    // Auto-save any still-open card that has real content, so nothing is lost.
     for (const g of selected) {
-      const cardio = isCardio(g);
+      const mode = modeFor(g);
       for (const ex of byGroup[g] ?? []) {
-        if (!ex.collapsed && exerciseHasContent(ex, cardio)) {
+        if (!ex.collapsed && exerciseHasContent(mode, ex)) {
           try {
             await saveExercise(g, ex);
           } catch {
@@ -221,9 +340,11 @@ export default function LogWizard({ date }: { date: string }) {
           title={`Log workout · ${shortDate(date)}`}
           onBack={() => router.push("/")}
         />
-        <p className="mb-4 text-sm text-muted">
-          What did you train? Select all that apply
-        </p>
+
+        <h2 className="text-2xl font-bold tracking-tight text-ink">
+          What did you train?
+        </h2>
+        <p className="mb-4 mt-1 text-sm text-muted">Select all that apply</p>
 
         <div className="grid grid-cols-2 gap-3">
           {MUSCLE_GROUPS.map((g) => {
@@ -234,17 +355,39 @@ export default function LogWizard({ date }: { date: string }) {
                 type="button"
                 onClick={() => toggleGroup(g)}
                 className={[
-                  "flex items-center justify-center gap-1.5 rounded-2xl px-3 py-4 text-base font-medium transition active:scale-[0.98]",
+                  "relative flex flex-col items-center justify-center gap-3 rounded-2xl border px-3 py-6 transition active:scale-[0.98]",
                   on
-                    ? "border-[1.5px] border-orange bg-orange-soft text-orange"
-                    : "border border-black/15 bg-white text-ink",
+                    ? "border-green bg-green-tint"
+                    : "border-black/10 bg-white",
                 ].join(" ")}
               >
-                {on && <span aria-hidden>✓</span>}
-                {MUSCLE_GROUP_LABELS[g]}
+                {on && (
+                  <span
+                    aria-hidden
+                    className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-green text-sm text-white"
+                  >
+                    ✓
+                  </span>
+                )}
+                <span
+                  className="h-10 w-10"
+                  style={{ color: MUSCLE_TONE[g] }}
+                >
+                  <MuscleIcon group={g} />
+                </span>
+                <span className="text-base font-semibold text-ink">
+                  {MUSCLE_GROUP_LABELS[g]}
+                </span>
               </button>
             );
           })}
+        </div>
+
+        <div className="mt-4 flex items-start gap-2 rounded-2xl bg-green-tint px-4 py-3 text-sm text-ink">
+          <span aria-hidden className="mt-0.5">
+            ℹ️
+          </span>
+          <p>You can add exercises for each muscle group in the next step.</p>
         </div>
 
         <BottomBar>
@@ -252,9 +395,9 @@ export default function LogWizard({ date }: { date: string }) {
             type="button"
             disabled={selected.length === 0}
             onClick={() => setStep(2)}
-            className="flex w-full items-center justify-center rounded-2xl bg-green px-4 py-4 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-40"
+            className="flex w-full items-center justify-center rounded-2xl bg-orange px-4 py-4 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-40"
           >
-            Continue{selected.length > 0 ? ` (${selected.length} selected)` : ""}
+            Continue
           </button>
         </BottomBar>
       </main>
@@ -265,13 +408,15 @@ export default function LogWizard({ date }: { date: string }) {
     <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
       <Header title={heading} onBack={() => setStep(1)} />
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         {selected.map((g) => (
-          <GroupCard
+          <GroupSection
             key={g}
             group={g}
             exercises={byGroup[g] ?? []}
-            onAdd={() => addExerciseCard(g)}
+            circuits={circuits}
+            onLoadCircuit={loadCircuit}
+            onAdd={(init) => addExerciseCard(g, init)}
             onChange={(exId, patch) => updateExercise(g, exId, patch)}
             onSave={(ex) => saveExercise(g, ex)}
             onRemove={(ex) => removeExercise(g, ex)}
@@ -288,8 +433,8 @@ export default function LogWizard({ date }: { date: string }) {
         >
           {finishing ? "Finishing…" : "✓ Save workout"}
         </button>
-        <p className="mt-1 text-center text-xs text-muted">
-          Each exercise is saved as you go. This returns to home.
+        <p className="mt-1 flex items-center justify-center gap-1 text-center text-xs text-muted">
+          <span aria-hidden>🔒</span> Each exercise is saved as you go
         </p>
       </BottomBar>
     </main>
@@ -320,9 +465,11 @@ function BottomBar({ children }: { children: React.ReactNode }) {
   );
 }
 
-function GroupCard({
+function GroupSection({
   group,
   exercises,
+  circuits,
+  onLoadCircuit,
   onAdd,
   onChange,
   onSave,
@@ -330,315 +477,504 @@ function GroupCard({
 }: {
   group: MuscleGroup;
   exercises: DraftExercise[];
-  onAdd: () => void;
+  circuits: Circuit[];
+  onLoadCircuit: (c: Circuit) => void;
+  onAdd: (init?: Partial<DraftExercise>) => void;
   onChange: (exId: string, patch: Partial<DraftExercise>) => void;
   onSave: (ex: DraftExercise) => void | Promise<void>;
   onRemove: (ex: DraftExercise) => void | Promise<void>;
 }) {
-  const cardio = isCardio(group);
+  const mode = modeFor(group);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+
+  function pick(item: LibraryItem) {
+    onAdd(
+      item.cardioType
+        ? { cardioType: item.cardioType, name: CARDIO_TYPE_LABELS[item.cardioType] }
+        : { name: item.name },
+    );
+    setLibraryOpen(false);
+  }
 
   return (
-    <section className="rounded-2xl border border-black/5 bg-white p-4">
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-orange">
-        {MUSCLE_GROUP_LABELS[group]}
-      </h2>
+    <section>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+          {MUSCLE_GROUP_LABELS[group]}
+          {exercises.length > 0 && (
+            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-soft px-1.5 text-xs font-semibold text-orange">
+              {exercises.length}
+            </span>
+          )}
+        </h2>
+        <button
+          type="button"
+          onClick={() => setLibraryOpen(true)}
+          className="text-sm font-semibold text-orange active:opacity-70"
+        >
+          + Add from library
+        </button>
+      </div>
+
+      {mode === "hiit" && (
+        <CircuitPanel circuits={circuits} onLoadCircuit={onLoadCircuit} />
+      )}
 
       <div className="space-y-3">
-        {exercises.map((ex) =>
-          ex.collapsed ? (
-            <SavedCard
-              key={ex.id}
-              ex={ex}
-              cardio={cardio}
-              onEdit={() => onChange(ex.id, { collapsed: false })}
-              onRemove={() => onRemove(ex)}
-            />
-          ) : (
-            <EditingCard
-              key={ex.id}
-              ex={ex}
-              cardio={cardio}
-              onChange={(patch) => onChange(ex.id, patch)}
-              onSave={() => onSave(ex)}
-              onRemove={() => onRemove(ex)}
-            />
-          ),
-        )}
+        {exercises.map((ex) => (
+          <ExerciseCard
+            key={ex.id}
+            group={group}
+            mode={mode}
+            ex={ex}
+            onChange={(patch) => onChange(ex.id, patch)}
+            onSave={() => onSave(ex)}
+            onRemove={() => onRemove(ex)}
+          />
+        ))}
       </div>
 
       <button
         type="button"
-        onClick={onAdd}
-        className="mt-3 text-sm font-medium text-green active:opacity-70"
+        onClick={() => onAdd()}
+        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-2xl border border-dashed border-orange/50 px-4 py-3 text-sm font-semibold text-orange active:bg-orange-soft"
       >
-        + Add exercise
+        + Add another exercise
       </button>
+
+      {libraryOpen && (
+        <LibrarySheet
+          group={group}
+          onPick={pick}
+          onClose={() => setLibraryOpen(false)}
+        />
+      )}
     </section>
   );
 }
 
-function EditingCard({
+function CircuitPanel({
+  circuits,
+  onLoadCircuit,
+}: {
+  circuits: Circuit[];
+  onLoadCircuit: (c: Circuit) => void;
+}) {
+  return (
+    <div className="mb-3 rounded-2xl border border-black/5 bg-white p-3">
+      <Link
+        href="/circuits/new"
+        className="flex flex-col items-center gap-1 rounded-xl border border-dashed border-green/50 px-4 py-4 text-center active:bg-green-tint"
+      >
+        <span aria-hidden className="text-xl text-green">
+          ⊕
+        </span>
+        <span className="text-sm font-semibold text-green">Create Circuit</span>
+        <span className="text-xs text-muted">Build a reusable HIIT circuit</span>
+      </Link>
+
+      {circuits.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted">
+            My circuits
+          </p>
+          <ul className="space-y-2">
+            {circuits.map((c) => (
+              <li
+                key={c.id}
+                className="flex items-center gap-3 rounded-xl bg-page/60 px-3 py-2.5"
+              >
+                <span aria-hidden className="text-lg">
+                  ⚡
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink">
+                    {c.name}
+                  </p>
+                  <p className="truncate text-xs text-muted">
+                    {c.exercises.length} exercise
+                    {c.exercises.length === 1 ? "" : "s"} · {c.set_times.length}{" "}
+                    set{c.set_times.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onLoadCircuit(c)}
+                  className="shrink-0 rounded-lg bg-green px-3 py-1.5 text-sm font-semibold text-white active:scale-95"
+                >
+                  Add
+                </button>
+              </li>
+            ))}
+          </ul>
+          <Link
+            href="/circuits"
+            className="mt-2 inline-block text-xs font-medium text-orange active:opacity-70"
+          >
+            Manage circuits →
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExerciseCard({
+  group,
+  mode,
   ex,
-  cardio,
   onChange,
   onSave,
   onRemove,
 }: {
+  group: MuscleGroup;
+  mode: Mode;
   ex: DraftExercise;
-  cardio: boolean;
   onChange: (patch: Partial<DraftExercise>) => void;
   onSave: () => void | Promise<void>;
   onRemove: () => void | Promise<void>;
 }) {
-  const canSave = exerciseHasContent(ex, cardio);
+  const expanded = !ex.collapsed;
+  const canSave = exerciseHasContent(mode, ex);
 
   return (
-    <div className="rounded-2xl border-[1.5px] border-orange/60 p-3">
-      <input
-        value={ex.name}
-        onChange={(e) => onChange({ name: e.target.value })}
-        placeholder={
-          cardio ? "Exercise (e.g. Treadmill)" : "Exercise (e.g. Bench press)"
-        }
-        className="w-full bg-transparent text-base font-semibold text-ink outline-none placeholder:font-normal placeholder:text-muted"
-      />
-
-      {cardio && (
-        <select
-          value={ex.cardioType}
-          onChange={(e) => onChange({ cardioType: e.target.value as CardioType })}
-          className="mt-2 w-full rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm text-ink outline-none focus:border-green"
+    <div className="overflow-hidden rounded-2xl border border-black/10 bg-white">
+      {/* Header */}
+      <div
+        className={[
+          "flex items-center gap-3 px-3 py-3",
+          expanded ? "bg-green-tint/50" : "",
+        ].join(" ")}
+      >
+        <GripDots />
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-tint p-1.5"
+          style={{ color: MUSCLE_TONE[group] }}
         >
-          {CARDIO_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {CARDIO_TYPE_LABELS[t]}
-            </option>
-          ))}
-        </select>
-      )}
-
-      <SetEditor
-        cardio={cardio}
-        cardioType={ex.cardioType}
-        sets={ex.sets}
-        onChange={(sets) => onChange({ sets })}
-      />
-
-      <div className="mt-3 flex items-center gap-2">
+          <MuscleIcon group={group} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold text-ink">
+            {cardTitle(mode, ex)}
+          </p>
+          <p className="truncate text-sm text-muted">
+            {summarizeExercise(mode, ex)}
+          </p>
+        </div>
         <button
           type="button"
-          disabled={!canSave || ex.saving}
-          onClick={() => onSave()}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-green px-3 py-2.5 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-40"
+          onClick={() => onChange({ collapsed: false })}
+          aria-label="Edit exercise"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-orange active:bg-black/5"
         >
-          {ex.saving ? "Saving…" : "💾 Save exercise"}
+          ✎
         </button>
         <button
           type="button"
-          onClick={() => onRemove()}
-          aria-label="Remove exercise"
-          className="rounded-xl px-3 py-2.5 text-sm text-muted active:text-orange"
+          onClick={() => onChange({ collapsed: expanded })}
+          aria-label={expanded ? "Collapse" : "Expand"}
+          className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-black/5"
         >
-          ✕
+          {expanded ? "⌃" : "⌄"}
         </button>
       </div>
+
+      {expanded && (
+        <div className="border-t border-black/5 p-4">
+          <ExerciseForm mode={mode} ex={ex} onChange={onChange} />
+
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onRemove()}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-orange/40 px-3 py-2.5 text-sm font-semibold text-orange active:bg-orange-soft"
+            >
+              🗑 Delete
+            </button>
+            <button
+              type="button"
+              disabled={!canSave || ex.saving}
+              onClick={() => onSave()}
+              className="flex flex-[1.4] items-center justify-center rounded-xl bg-orange px-3 py-2.5 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-40"
+            >
+              {ex.saving ? "Saving…" : "Save exercise"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function SavedCard({
+const SELECT_CLASS =
+  "w-full appearance-none rounded-xl border border-black/10 bg-white px-3 py-2.5 pr-9 text-base text-ink outline-none focus:border-green";
+
+function ExerciseForm({
+  mode,
   ex,
-  cardio,
-  onEdit,
-  onRemove,
+  onChange,
 }: {
+  mode: Mode;
   ex: DraftExercise;
-  cardio: boolean;
-  onEdit: () => void;
-  onRemove: () => void;
+  onChange: (patch: Partial<DraftExercise>) => void;
+}) {
+  const inputClass =
+    "w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-green";
+
+  // Cardio/HIIT keep a single inline entry bound to sets[0].
+  const entry = ex.sets[0] ?? emptySet();
+  function patchEntry(key: keyof DraftSet, value: string) {
+    const next = { ...entry, [key]: value };
+    onChange({ sets: [next, ...ex.sets.slice(1)] });
+  }
+
+  const descriptors = fieldDescriptors(mode, ex);
+
+  return (
+    <div className="space-y-3">
+      <Field label="Exercise">
+        {mode === "cardio" ? (
+          <SelectField
+            value={ex.cardioType}
+            onChange={(v) =>
+              onChange({
+                cardioType: v as CardioType,
+                name: CARDIO_TYPE_LABELS[v as CardioType],
+              })
+            }
+            options={CARDIO_TYPES.map((t) => ({
+              value: t,
+              label: CARDIO_TYPE_LABELS[t],
+            }))}
+          />
+        ) : mode === "hiit" ? (
+          <SelectField
+            value={ex.name}
+            onChange={(v) => onChange({ name: v })}
+            options={HIIT_EXERCISES.map((e) => ({
+              value: e.name,
+              label: e.name,
+            }))}
+          />
+        ) : (
+          <input
+            value={ex.name}
+            onChange={(e) => onChange({ name: e.target.value })}
+            placeholder="e.g. Bench press"
+            className={inputClass}
+          />
+        )}
+      </Field>
+
+      {mode === "strength" ? (
+        <StrengthSets sets={ex.sets} onChange={(sets) => onChange({ sets })} />
+      ) : (
+        descriptors.map((d, i) => {
+          const isTime = d.kind === "time";
+          return (
+            <Field key={d.draftKey} label={d.label} optional={i > 0}>
+              <div className="relative">
+                <input
+                  value={entry[d.draftKey]}
+                  onChange={(e) => patchEntry(d.draftKey, e.target.value)}
+                  type={isTime ? "text" : "number"}
+                  inputMode={isTime ? "text" : "decimal"}
+                  min={isTime ? undefined : 0}
+                  placeholder={isTime ? "00:45:00" : "0"}
+                  className={`${inputClass} ${d.unit ? "pr-12" : ""}`}
+                />
+                {d.unit && (
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">
+                    {d.unit}
+                  </span>
+                )}
+              </div>
+            </Field>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+function SelectField({
+  value,
+  onChange,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
 }) {
   return (
-    <div className="rounded-2xl bg-beige/60 p-3">
-      <div className="flex items-center justify-between">
-        <h3 className="flex items-center gap-1.5 font-semibold text-ink">
-          <span aria-hidden className="text-green">
-            ✓
-          </span>
-          {ex.name}
-        </h3>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={onEdit}
-            aria-label="Edit exercise"
-            className="px-2 py-1 text-orange active:opacity-70"
-          >
-            ✎
-          </button>
-          <button
-            type="button"
-            onClick={onRemove}
-            aria-label="Remove exercise"
-            className="px-2 py-1 text-muted active:text-orange"
-          >
-            ✕
-          </button>
-        </div>
-      </div>
-      {(() => {
-        const filled = ex.sets.filter((s) =>
-          draftSetHasAny(s, cardio, ex.cardioType),
-        );
-        if (filled.length === 0) return null;
-        return (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {filled.map((s) => (
-              <span
-                key={s.id}
-                className="rounded-lg bg-orange-soft px-2.5 py-1 text-xs font-medium text-orange"
-              >
-                {summarizeSet(cardio, ex.cardioType, s)}
-              </span>
-            ))}
-          </div>
-        );
-      })()}
+    <div className="relative">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={SELECT_CLASS}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <span
+        aria-hidden
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted"
+      >
+        ▾
+      </span>
     </div>
   );
 }
 
-function summarizeSet(
-  cardio: boolean,
-  cardioType: CardioType,
-  s: DraftSet,
-): string {
-  if (!cardio) {
-    return `${s.reps || "–"} × ${s.weight || "–"} kg`;
-  }
-  const parts: string[] = [];
-  for (const f of CARDIO_FIELDS[cardioType]) {
-    if (f === "distance_km" && s.distance_km) parts.push(`${s.distance_km} km`);
-    else if (f === "distance_m" && s.distance_m) parts.push(`${s.distance_m} m`);
-    else if (f === "time" && s.time) parts.push(s.time);
-    else if (f === "incline" && s.incline) parts.push(`incline ${s.incline}`);
-    else if (f === "resistance" && s.resistance)
-      parts.push(`resist ${s.resistance}`);
-    else if (f === "weight" && s.weight) parts.push(`${s.weight} kg`);
-  }
-  return parts.length ? parts.join(" · ") : "entry";
+function Field({
+  label,
+  optional,
+  children,
+}: {
+  label: string;
+  optional?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-semibold text-ink">
+        {label}
+        {optional && <span className="font-normal text-muted"> (optional)</span>}
+      </label>
+      {children}
+    </div>
+  );
 }
 
-const FIELD_META: Record<
-  CardioField,
-  {
-    key: keyof DraftSet;
-    placeholder: string;
-    type: "number" | "text";
-    step?: string;
-  }
-> = {
-  distance_km: { key: "distance_km", placeholder: "dist (km)", type: "number", step: "0.1" },
-  distance_m: { key: "distance_m", placeholder: "dist (m)", type: "number", step: "1" },
-  time: { key: "time", placeholder: "time (mm:ss)", type: "text" },
-  incline: { key: "incline", placeholder: "incline", type: "number", step: "0.5" },
-  resistance: { key: "resistance", placeholder: "resist.", type: "number", step: "1" },
-  weight: { key: "weight", placeholder: "weight", type: "number", step: "0.5" },
-};
-
-// Inline-editable set/entry rows. Each row's inputs write straight into the
-// exercise's `sets` array (no separate uncommitted draft), so cardio entries are
-// never lost and the parent's "Save exercise" button sees them immediately.
-function SetEditor({
-  cardio,
-  cardioType,
+function StrengthSets({
   sets,
   onChange,
 }: {
-  cardio: boolean;
-  cardioType: CardioType;
   sets: DraftSet[];
   onChange: (sets: DraftSet[]) => void;
 }) {
-  const fields: CardioField[] = cardio ? CARDIO_FIELDS[cardioType] : [];
+  const inputClass =
+    "min-w-0 flex-1 rounded-xl border border-black/10 bg-white px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-green";
 
-  function addRow() {
-    onChange([...sets, emptySet()]);
-  }
-  function removeRow(id: string) {
-    onChange(sets.filter((s) => s.id !== id));
-  }
-  function patchRow(id: string, key: keyof DraftSet, value: string) {
+  function patch(id: string, key: keyof DraftSet, value: string) {
     onChange(sets.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
   }
 
-  const inputClass =
-    "min-w-0 flex-1 rounded-lg border border-black/10 bg-page/40 px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus:border-green";
-
   return (
-    <div className="mt-2 space-y-2">
-      {sets.map((s, i) => (
-        <div key={s.id} className="flex items-center gap-2">
-          <span className="w-5 shrink-0 text-center text-xs font-medium text-muted">
-            {i + 1}
-          </span>
-          {cardio ? (
-            fields.map((f) => {
-              const meta = FIELD_META[f];
-              return (
-                <input
-                  key={f}
-                  type={meta.type}
-                  inputMode={meta.type === "number" ? "decimal" : "text"}
-                  min={meta.type === "number" ? 0 : undefined}
-                  step={meta.step}
-                  value={s[meta.key]}
-                  onChange={(e) => patchRow(s.id, meta.key, e.target.value)}
-                  placeholder={meta.placeholder}
-                  className={inputClass}
-                />
-              );
-            })
-          ) : (
-            <>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={0}
-                value={s.reps}
-                onChange={(e) => patchRow(s.id, "reps", e.target.value)}
-                placeholder="reps"
-                className={inputClass}
-              />
-              <input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step="0.5"
-                value={s.weight}
-                onChange={(e) => patchRow(s.id, "weight", e.target.value)}
-                placeholder="weight"
-                className={inputClass}
-              />
-            </>
-          )}
+    <Field label="Sets">
+      <div className="space-y-2">
+        {sets.map((s, i) => (
+          <div key={s.id} className="flex items-center gap-2">
+            <span className="w-5 shrink-0 text-center text-xs font-medium text-muted">
+              {i + 1}
+            </span>
+            <input
+              value={s.reps}
+              onChange={(e) => patch(s.id, "reps", e.target.value)}
+              type="number"
+              inputMode="numeric"
+              min={0}
+              placeholder="reps"
+              className={inputClass}
+            />
+            <input
+              value={s.weight}
+              onChange={(e) => patch(s.id, "weight", e.target.value)}
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.5"
+              placeholder="weight (kg)"
+              className={inputClass}
+            />
+            <button
+              type="button"
+              onClick={() => onChange(sets.filter((x) => x.id !== s.id))}
+              aria-label="Remove set"
+              className="shrink-0 px-1 text-muted active:text-orange"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => onChange([...sets, emptySet()])}
+          className="text-sm font-semibold text-green active:opacity-70"
+        >
+          + Add set
+        </button>
+      </div>
+    </Field>
+  );
+}
+
+function LibrarySheet({
+  group,
+  onPick,
+  onClose,
+}: {
+  group: MuscleGroup;
+  onPick: (item: LibraryItem) => void;
+  onClose: () => void;
+}) {
+  const items = libraryFor(group);
+  return (
+    <>
+      <div
+        onClick={onClose}
+        aria-hidden
+        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+      />
+      <div
+        role="dialog"
+        aria-label="Exercise library"
+        className="fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[70vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-page p-4 shadow-xl safe-bottom"
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-base font-semibold text-ink">
+            {MUSCLE_GROUP_LABELS[group]} library
+          </h3>
           <button
             type="button"
-            onClick={() => removeRow(s.id)}
-            aria-label="Remove set"
-            className="shrink-0 px-1 text-muted active:text-orange"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-black/5"
           >
             ✕
           </button>
         </div>
-      ))}
+        <ul className="space-y-2">
+          {items.map((item) => (
+            <li key={item.name}>
+              <button
+                type="button"
+                onClick={() => onPick(item)}
+                className="flex w-full items-center justify-between rounded-xl border border-black/5 bg-white px-4 py-3 text-left text-ink active:bg-black/5"
+              >
+                <span className="font-medium">{item.name}</span>
+                <span className="text-orange">+</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
 
-      <button
-        type="button"
-        onClick={addRow}
-        className="text-sm font-medium text-green active:opacity-70"
-      >
-        + {cardio ? "entry" : "set"}
-      </button>
-    </div>
+function GripDots() {
+  return (
+    <span
+      aria-hidden
+      className="grid shrink-0 grid-cols-2 gap-0.5 text-muted/50"
+    >
+      {Array.from({ length: 6 }).map((_, i) => (
+        <span key={i} className="h-1 w-1 rounded-full bg-current" />
+      ))}
+    </span>
   );
 }

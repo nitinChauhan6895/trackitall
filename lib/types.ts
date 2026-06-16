@@ -8,6 +8,7 @@ export const MUSCLE_GROUPS = [
   "core",
   "functional",
   "cardio",
+  "hiit",
   "olympic",
 ] as const;
 
@@ -15,14 +16,15 @@ export type MuscleGroup = (typeof MUSCLE_GROUPS)[number];
 
 export const MUSCLE_GROUP_LABELS: Record<MuscleGroup, string> = {
   chest: "Chest",
-  tricep: "Tricep",
+  tricep: "Triceps",
   back: "Back",
-  bicep: "Bicep",
+  bicep: "Biceps",
   shoulders: "Shoulders",
   legs: "Legs",
   core: "Core",
   functional: "Functional",
   cardio: "Cardio",
+  hiit: "HIIT",
   olympic: "Olympic lifting",
 };
 
@@ -59,28 +61,34 @@ export type CardioField =
   | "distance_km"
   | "distance_m"
   | "time"
+  | "calories"
   | "incline"
   | "resistance"
   | "weight";
 
 export const CARDIO_FIELDS: Record<CardioType, CardioField[]> = {
-  running: ["distance_km", "time", "incline"],
-  elliptical: ["distance_km", "time", "resistance"],
-  skierg: ["distance_m", "time"],
-  rowing: ["distance_m", "time"],
-  sledge_push: ["distance_m", "weight"],
-  sledge_pull: ["distance_m", "weight"],
-  farmer_walk: ["distance_m", "weight"],
-  generic: ["distance_km", "time"],
+  running: ["distance_km", "time", "calories", "incline"],
+  elliptical: ["distance_km", "time", "calories", "resistance"],
+  skierg: ["distance_m", "time", "calories"],
+  rowing: ["distance_m", "time", "calories"],
+  sledge_push: ["distance_m", "weight", "calories"],
+  sledge_pull: ["distance_m", "weight", "calories"],
+  farmer_walk: ["distance_m", "weight", "calories"],
+  generic: ["distance_km", "time", "calories"],
 };
 
-export const CARDIO_FIELD_LABELS: Record<CardioField, string> = {
-  distance_km: "Distance (km)",
-  distance_m: "Distance (m)",
-  time: "Time (mm:ss)",
-  incline: "Incline",
-  resistance: "Resistance",
-  weight: "Weight (kg)",
+// Short field label + unit suffix shown to the right of the input.
+export const CARDIO_FIELD_META: Record<
+  CardioField,
+  { label: string; unit: string }
+> = {
+  distance_km: { label: "Distance", unit: "km" },
+  distance_m: { label: "Distance", unit: "m" },
+  time: { label: "Duration", unit: "" },
+  calories: { label: "Calories", unit: "kcal" },
+  incline: { label: "Incline", unit: "%" },
+  resistance: { label: "Resistance", unit: "" },
+  weight: { label: "Weight", unit: "kg" },
 };
 
 export function defaultCardioType(): CardioType {
@@ -100,6 +108,12 @@ export type WorkoutSet = {
   incline: number | null;
   resistance: number | null;
   distance_m: number | null;
+  // Round 4 cardio field:
+  calories: number | null;
+  // Round 5 HIIT fields:
+  sets_count: number | null;
+  height: number | null;
+  floors: number | null;
 };
 
 export type Exercise = {
@@ -166,6 +180,28 @@ export const MEASUREMENT_FIELDS = [
 ] as const;
 export type MeasurementField = (typeof MEASUREMENT_FIELDS)[number]["key"];
 
+// ---- HIIT circuits (reusable library) ----
+export type CircuitExercise = {
+  id: string;
+  circuit_id: string;
+  user_id: string;
+  position: number;
+  name: string;
+  category: string | null;
+  metrics: Record<string, string | number>;
+  created_at: string;
+};
+
+export type Circuit = {
+  id: string;
+  user_id: string;
+  name: string;
+  set_times: number[]; // seconds per round
+  created_at: string;
+  updated_at: string;
+  exercises: CircuitExercise[];
+};
+
 // ---- PRs ----
 export const PR_UNIT_TYPES = ["kg", "time", "distance"] as const;
 export type PrUnitType = (typeof PR_UNIT_TYPES)[number];
@@ -200,17 +236,26 @@ export function formatPrValue(pr: Pick<Pr, "unit_type" | "value" | "distance_uni
 
 export function formatSeconds(total: number): string {
   const t = Math.max(0, Math.round(total));
-  const m = Math.floor(t / 60);
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
   const s = t % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 export function parseTimeToSeconds(input: string): number | null {
   const t = input.trim();
+  if (t === "") return null;
   if (/^\d+$/.test(t)) return Number(t); // bare seconds
-  const m = t.match(/^(\d{1,3}):([0-5]?\d)$/);
-  if (!m) return null;
-  return Number(m[1]) * 60 + Number(m[2]);
+  const hms = t.match(/^(\d{1,2}):([0-5]?\d):([0-5]?\d)$/);
+  if (hms) {
+    return Number(hms[1]) * 3600 + Number(hms[2]) * 60 + Number(hms[3]);
+  }
+  const ms = t.match(/^(\d{1,3}):([0-5]?\d)$/);
+  if (ms) return Number(ms[1]) * 60 + Number(ms[2]);
+  return null;
 }
 
 function trimNum(n: number): string {

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  getBadgeStats,
   getMeasurements,
   getMonthWorkoutSummary,
   getProfile,
@@ -7,7 +8,9 @@ import {
   getWorkoutStats,
 } from "@/lib/data";
 import { MEASUREMENT_FIELDS } from "@/lib/types";
+import { evaluateBadges, sortedByEarned } from "@/lib/badges";
 import { MetricTile, PrTile, metricIcon } from "@/components/Tiles";
+import { Badge } from "@/components/Badge";
 import {
   buildCalendarGrid,
   monthLabel,
@@ -30,14 +33,17 @@ export default async function HomePage({
   searchParams: { m?: string };
 }) {
   const { year, month } = parseMonthParam(searchParams.m);
-  const [profile, stats, workoutSummary, recentPrs, measurements] =
+  const [profile, stats, workoutSummary, recentPrs, measurements, badgeStats] =
     await Promise.all([
       getProfile(),
       getWorkoutStats(),
       getMonthWorkoutSummary(year, month),
       getRecentPrs(2),
       getMeasurements(),
+      getBadgeStats(),
     ]);
+
+  const previewBadges = sortedByEarned(evaluateBadges(badgeStats)).slice(0, 3);
 
   // Two headline measurement tiles: latest bodyweight + latest body-fat %.
   const measurementTiles = (["bodyweight", "body_fat_pct"] as const)
@@ -144,6 +150,15 @@ export default async function HomePage({
           })}
         </div>
       </section>
+
+      {/* Badges */}
+      <PreviewSection icon="🏅" title="Badges" href="/badges">
+        <div className="grid grid-cols-3 gap-3 rounded-2xl border border-black/5 bg-white px-2 py-4">
+          {previewBadges.map((b) => (
+            <Badge key={b.id} badge={b} size="sm" />
+          ))}
+        </div>
+      </PreviewSection>
 
       {/* PR corner preview */}
       <PreviewSection icon="🏆" title="PR corner" href="/prs">

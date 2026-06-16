@@ -34,6 +34,10 @@ export type SetInput = {
   incline?: number | null;
   resistance?: number | null;
   distance_m?: number | null;
+  calories?: number | null;
+  sets_count?: number | null;
+  height?: number | null;
+  floors?: number | null;
 };
 export type ExerciseInput = { name: string; sets: SetInput[] };
 export type GroupInput = { muscle_group: MuscleGroup; exercises: ExerciseInput[] };
@@ -47,7 +51,11 @@ function setHasValue(s: SetInput): boolean {
     cleanInt(s.time_seconds) != null ||
     cleanNum(s.incline) != null ||
     cleanNum(s.resistance) != null ||
-    cleanNum(s.distance_m) != null
+    cleanNum(s.distance_m) != null ||
+    cleanNum(s.calories) != null ||
+    cleanInt(s.sets_count) != null ||
+    cleanNum(s.height) != null ||
+    cleanNum(s.floors) != null
   );
 }
 
@@ -64,6 +72,10 @@ function setRow(s: SetInput, exerciseId: string, userId: string, position: numbe
     incline: cleanNum(s.incline),
     resistance: cleanNum(s.resistance),
     distance_m: cleanNum(s.distance_m),
+    calories: cleanNum(s.calories),
+    sets_count: cleanInt(s.sets_count),
+    height: cleanNum(s.height),
+    floors: cleanNum(s.floors),
   };
 }
 
@@ -226,6 +238,10 @@ export async function addSet(formData: FormData) {
     speed_kmh: numOrNull(formData.get("speed")),
     incline: numOrNull(formData.get("incline")),
     resistance: numOrNull(formData.get("resistance")),
+    calories: numOrNull(formData.get("calories")),
+    sets_count: numOrNull(formData.get("sets_count")),
+    height: numOrNull(formData.get("height")),
+    floors: numOrNull(formData.get("floors")),
     time_seconds: parseTimeToSeconds(String(formData.get("time") ?? "")),
   };
 
@@ -313,6 +329,82 @@ export async function deletePr(id: string) {
   if (error) throw error;
   revalidatePath("/prs");
   revalidatePath("/");
+}
+
+// ---------- HIIT circuits (reusable library) ----------
+
+export type CircuitExerciseInput = {
+  name: string;
+  category: string | null;
+  metrics: Record<string, string>;
+};
+
+export async function saveCircuit(input: {
+  id?: string;
+  name: string;
+  set_times: number[];
+  exercises: CircuitExerciseInput[];
+}): Promise<{ id: string }> {
+  const name = input.name.trim();
+  if (!name) throw new Error("Circuit name is required");
+  const { supabase, user } = await requireUser();
+
+  const setTimes = input.set_times.filter((t) => Number.isFinite(t) && t > 0);
+
+  let circuitId = input.id;
+  if (circuitId) {
+    const { error } = await supabase
+      .from("circuits")
+      .update({ name: name.slice(0, 120), set_times: setTimes, updated_at: new Date().toISOString() })
+      .eq("id", circuitId);
+    if (error) throw error;
+    const { error: delErr } = await supabase
+      .from("circuit_exercises")
+      .delete()
+      .eq("circuit_id", circuitId);
+    if (delErr) throw delErr;
+  } else {
+    const { data, error } = await supabase
+      .from("circuits")
+      .insert({ user_id: user.id, name: name.slice(0, 120), set_times: setTimes })
+      .select("id")
+      .single();
+    if (error) throw error;
+    circuitId = data.id as string;
+  }
+
+  const rows = input.exercises
+    .filter((e) => e.name.trim())
+    .map((e, i) => {
+      // Drop blank metric values so summaries stay clean.
+      const metrics: Record<string, string> = {};
+      for (const [k, v] of Object.entries(e.metrics)) {
+        if (String(v).trim() !== "") metrics[k] = String(v).trim();
+      }
+      return {
+        user_id: user.id,
+        circuit_id: circuitId!,
+        position: i,
+        name: e.name.trim().slice(0, 120),
+        category: e.category,
+        metrics,
+      };
+    });
+
+  if (rows.length > 0) {
+    const { error } = await supabase.from("circuit_exercises").insert(rows);
+    if (error) throw error;
+  }
+
+  revalidatePath("/circuits");
+  return { id: circuitId! };
+}
+
+export async function deleteCircuit(id: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.from("circuits").delete().eq("id", id);
+  if (error) throw error;
+  revalidatePath("/circuits");
 }
 
 export async function signOut() {
