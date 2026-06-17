@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { getBadgeStats } from "@/lib/data";
+import { getBadgeData } from "@/lib/data";
 import { evaluateBadges } from "@/lib/badges";
 import { Badge } from "@/components/Badge";
 
 export default async function BadgesPage() {
-  const stats = await getBadgeStats();
-  const badges = evaluateBadges(stats);
+  const { stats, earnedDates } = await getBadgeData();
+  const badges = evaluateBadges(stats, earnedDates);
   const earnedCount = badges.filter((b) => b.earned).length;
 
   return (

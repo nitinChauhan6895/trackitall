@@ -11,14 +11,14 @@ const config: Config = {
           tint: "#EAF3DE",
         },
         orange: {
-          DEFAULT: "#D85A30",
-          soft: "#FAECE7",
+          DEFAULT: "#FF571F",
+          soft: "#FDEADF",
         },
         beige: {
           DEFAULT: "#FAEEDA",
           pr: "#FAECE7",
         },
-        page: "#F1EEE6",
+        page: "#F5F5F5",
         ink: "#1F1B16",
         muted: "#8A8275",
       },

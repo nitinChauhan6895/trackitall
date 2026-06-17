@@ -139,8 +139,10 @@ export async function upsertExercise(input: {
     if (error) throw error;
   }
 
-  revalidatePath("/");
-  revalidatePath(`/day/${input.date}`);
+  // NOTE: deliberately no revalidatePath here. This action is called mid-flow
+  // from the log wizard; revalidating would refresh the /log route, re-suspend
+  // its async parent (getCircuits) and remount the wizard, dropping its state.
+  // Freshness is handled by router.refresh() when the wizard navigates away.
   return { id: exerciseId! };
 }
 
@@ -148,8 +150,7 @@ export async function deleteExerciseById(id: string, date: string) {
   const { supabase } = await requireUser();
   const { error } = await supabase.from("exercises").delete().eq("id", id);
   if (error) throw error;
-  revalidatePath("/");
-  revalidatePath(`/day/${date}`);
+  // No revalidatePath — called from the log wizard (see upsertExercise note).
 }
 
 export async function saveWorkout(date: string, groups: GroupInput[]) {

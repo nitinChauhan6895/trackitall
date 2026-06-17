@@ -1,16 +1,19 @@
 import Link from "next/link";
 import {
-  getBadgeStats,
+  getBadgeData,
   getMeasurements,
   getMonthWorkoutSummary,
   getProfile,
   getRecentPrs,
   getWorkoutStats,
 } from "@/lib/data";
-import { MEASUREMENT_FIELDS } from "@/lib/types";
+import {
+  MEASUREMENT_FIELDS,
+  displayName,
+  type Measurement,
+  type MeasurementField,
+} from "@/lib/types";
 import { evaluateBadges, sortedByEarned } from "@/lib/badges";
-import { MetricTile, PrTile, metricIcon } from "@/components/Tiles";
-import { Badge } from "@/components/Badge";
 import {
   buildCalendarGrid,
   monthLabel,
@@ -20,12 +23,30 @@ import {
   prevMonth,
   toDateKey,
 } from "@/lib/date";
-import { MUSCLE_GROUP_LABELS, displayName } from "@/lib/types";
-import ProfilePane from "@/components/ProfilePane";
-import HomeTabs from "./HomeTabs";
-import Community from "./Community";
+import { Badge } from "@/components/Badge";
+import { MeasurementCard, PrCard } from "@/components/HomeCards";
 
 const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
+
+// Oldest→newest values for a metric, plus this-month delta vs. last month.
+function metricSeries(measurements: Measurement[], key: MeasurementField) {
+  const asc = measurements.filter((m) => m[key] != null).slice().reverse();
+  const values = asc.map((m) => m[key] as number);
+  const latest = values.length ? values[values.length - 1] : null;
+
+  const now = new Date();
+  const firstOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  let baseline: number | null = null;
+  for (const m of asc) {
+    if (m.entry_date < firstOfMonth) baseline = m[key] as number;
+    else break;
+  }
+  const delta =
+    latest != null && baseline != null
+      ? Math.round((latest - baseline) * 10) / 10
+      : null;
+  return { values, latest, delta };
+}
 
 export default async function HomePage({
   searchParams,
@@ -33,75 +54,74 @@ export default async function HomePage({
   searchParams: { m?: string };
 }) {
   const { year, month } = parseMonthParam(searchParams.m);
-  const [profile, stats, workoutSummary, recentPrs, measurements, badgeStats] =
+  const [profile, stats, workoutSummary, recentPrs, measurements, badgeData] =
     await Promise.all([
       getProfile(),
       getWorkoutStats(),
       getMonthWorkoutSummary(year, month),
       getRecentPrs(2),
       getMeasurements(),
-      getBadgeStats(),
+      getBadgeData(),
     ]);
 
-  const previewBadges = sortedByEarned(evaluateBadges(badgeStats)).slice(0, 3);
-
-  // Two headline measurement tiles: latest bodyweight + latest body-fat %.
-  const measurementTiles = (["bodyweight", "body_fat_pct"] as const)
-    .map((key) => {
-      const field = MEASUREMENT_FIELDS.find((f) => f.key === key)!;
-      const hit = measurements.find((m) => m[key] != null);
-      return hit ? { field, value: hit[key]! } : null;
-    })
-    .filter((t): t is { field: (typeof MEASUREMENT_FIELDS)[number]; value: number } => t !== null);
-
   const grid = buildCalendarGrid(year, month);
-  const today = new Date();
-  const todayKey = toDateKey(today);
+  const todayKey = toDateKey(new Date());
   const prev = prevMonth(year, month);
   const next = nextMonth(year, month);
-
-  const todayLabel = today.toLocaleDateString(undefined, {
-    weekday: "long",
+  const firstName = profile.first_name || displayName(profile);
+  const todayLabel = new Date().toLocaleDateString(undefined, {
     day: "numeric",
     month: "long",
+    year: "numeric",
+    weekday: "long",
   });
 
-  const firstName = profile.first_name || displayName(profile);
+  const previewBadges = sortedByEarned(
+    evaluateBadges(badgeData.stats, badgeData.earnedDates),
+  ).slice(0, 4);
 
-  const mySpace = (
-    <>
-      {/* Stats */}
-      <div className="mt-4 grid grid-cols-3 gap-3">
-        <StatCard value={stats.last7} label="last 7 days" />
-        <StatCard value={stats.last14} label="last 14 days" />
-        <StatCard value={stats.month} label="this month" />
-      </div>
+  const bw = metricSeries(measurements, "bodyweight");
+  const bf = metricSeries(measurements, "body_fat_pct");
+  const measureCards: React.ReactNode[] = [];
+  if (bw.latest != null)
+    measureCards.push(
+      <MeasurementCard key="bw" icon="⚖️" label="Bodyweight" value={String(bw.latest)} unit="kg" delta={bw.delta} series={bw.values} colorClass="text-green" />,
+    );
+  if (bf.latest != null)
+    measureCards.push(
+      <MeasurementCard key="bf" icon="📊" label="Body fat" value={String(bf.latest)} unit="%" delta={bf.delta} series={bf.values} colorClass="text-[#3E7CC2]" />,
+    );
+
+  return (
+    <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
+      {/* Header */}
+      <header className="flex items-start justify-between gap-3 pb-3 pt-5">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight">Hi, {firstName}! 👋</h1>
+          <p className="mt-0.5 text-sm text-muted">{todayLabel}</p>
+        </div>
+        <Link
+          href="/badges"
+          className="flex shrink-0 items-center gap-1.5 rounded-full border border-orange/30 bg-orange-soft px-3 py-2 text-sm font-semibold text-orange active:scale-95"
+        >
+          <span aria-hidden>🔥</span> {badgeData.stats.currentStreak} Day Streak
+          <span aria-hidden className="text-muted">›</span>
+        </Link>
+      </header>
 
       {/* Calendar */}
-      <section className="mt-4 rounded-2xl border border-black/5 bg-white p-4">
+      <section className="rounded-2xl border border-black/5 bg-white p-4">
         <div className="mb-3 flex items-center justify-between">
-          <Link
-            href={`/?m=${monthParam(prev.year, prev.month)}`}
-            aria-label="Previous month"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-black/5"
-          >
-            ‹
-          </Link>
           <h2 className="text-base font-semibold">{monthLabel(year, month)}</h2>
-          <Link
-            href={`/?m=${monthParam(next.year, next.month)}`}
-            aria-label="Next month"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-black/5"
-          >
-            ›
-          </Link>
+          <div className="flex items-center gap-1">
+            <Link href={`/?m=${monthParam(prev.year, prev.month)}`} aria-label="Previous month" className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-black/5">‹</Link>
+            <Link href={`/?m=${monthParam(next.year, next.month)}`} aria-label="Next month" className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-black/5">›</Link>
+          </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-muted">
+        <div className="grid grid-cols-7 text-center text-xs font-medium text-muted">
           {WEEKDAYS.map((w, i) => (
-            <div key={i} className="py-1">
-              {w}
-            </div>
+            <div key={i} className="py-1">{w}</div>
           ))}
         </div>
 
@@ -109,63 +129,57 @@ export default async function HomePage({
           {grid.map((d) => {
             const key = toDateKey(d);
             const inMonth = d.getMonth() === month - 1;
+            if (!inMonth) return <div key={key} aria-hidden />;
             const groups = workoutSummary.get(key) ?? [];
             const hasWorkout = groups.length > 0;
             const isToday = key === todayKey;
-
-            if (!inMonth) return <div key={key} aria-hidden />;
-
             return (
               <div key={key} className="flex flex-col items-center gap-1 py-0.5">
                 <Link
                   href={hasWorkout ? `/day/${key}` : `/log/${key}`}
-                  title={
-                    hasWorkout
-                      ? groups.map((g) => MUSCLE_GROUP_LABELS[g]).join(", ")
-                      : undefined
-                  }
                   className={[
                     "flex h-9 w-9 items-center justify-center rounded-full text-sm transition active:scale-95",
-                    hasWorkout
-                      ? "bg-orange font-semibold text-white"
-                      : "border border-black/15 text-ink",
-                    isToday && !hasWorkout ? "ring-2 ring-green" : "",
-                    isToday && hasWorkout ? "ring-2 ring-green ring-offset-1" : "",
+                    isToday ? "bg-orange font-bold text-white ring-2 ring-green ring-offset-2" : "bg-black/[0.04] text-ink",
                   ].join(" ")}
                 >
                   {d.getDate()}
                 </Link>
                 <div className="flex h-1.5 items-center gap-0.5">
                   {hasWorkout &&
-                    groups.slice(0, 4).map((g) => (
-                      <span
-                        key={g}
-                        className="h-1 w-1 rounded-full bg-orange"
-                        aria-hidden
-                      />
+                    groups.slice(0, 3).map((g, i) => (
+                      <span key={g + i} className={["h-1 w-1 rounded-full", i % 2 === 0 ? "bg-green" : "bg-orange"].join(" ")} aria-hidden />
                     ))}
                 </div>
               </div>
             );
           })}
         </div>
+
+        <div className="mt-3 flex items-center justify-between border-t border-black/5 pt-3 text-sm">
+          <span className="flex items-center gap-1.5 font-medium text-ink">
+            <span aria-hidden>📊</span> {stats.month} Workouts this month
+          </span>
+          <span className="flex items-center gap-1.5 text-muted">
+            <span aria-hidden>🏆</span> Keep it up!
+          </span>
+        </div>
       </section>
 
       {/* Badges */}
       <PreviewSection icon="🏅" title="Badges" href="/badges">
-        <div className="grid grid-cols-3 gap-3 rounded-2xl border border-black/5 bg-white px-2 py-4">
+        <div className="grid grid-cols-4 gap-2">
           {previewBadges.map((b) => (
             <Badge key={b.id} badge={b} size="sm" />
           ))}
         </div>
       </PreviewSection>
 
-      {/* PR corner preview */}
-      <PreviewSection icon="🏆" title="PR corner" href="/prs">
+      {/* PR corner */}
+      <PreviewSection icon="🏆" title="PR Corner" href="/prs">
         {recentPrs.length > 0 ? (
           <div className="grid grid-cols-2 gap-3">
             {recentPrs.map((pr) => (
-              <PrTile key={pr.id} pr={pr} />
+              <PrCard key={pr.id} pr={pr} />
             ))}
           </div>
         ) : (
@@ -173,58 +187,15 @@ export default async function HomePage({
         )}
       </PreviewSection>
 
-      {/* Measurements preview */}
+      {/* Measurements */}
       <PreviewSection icon="📏" title="Measurements" href="/measurements">
-        {measurementTiles.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3">
-            {measurementTiles.map(({ field, value }) => (
-              <MetricTile
-                key={field.key}
-                icon={metricIcon(field.key)}
-                label={field.label}
-                value={String(value)}
-                unit={field.unit}
-              />
-            ))}
-          </div>
+        {measureCards.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3">{measureCards}</div>
         ) : (
           <EmptyHint href="/measurements">Log your first measurement →</EmptyHint>
         )}
       </PreviewSection>
-
-      {/* Log workout */}
-      <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md px-4 pb-5 pt-2 safe-bottom">
-        <Link
-          href={`/log/${todayKey}`}
-          className="flex w-full items-center justify-center rounded-2xl bg-green px-4 py-4 text-base font-semibold text-white shadow-sm transition active:scale-[0.98]"
-        >
-          + Log workout
-        </Link>
-      </div>
-    </>
-  );
-
-  return (
-    <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
-      <header className="flex items-start justify-between pb-1 pt-5">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Hi, {firstName}</h1>
-          <p className="mt-0.5 text-sm text-muted">{todayLabel}</p>
-        </div>
-        <ProfilePane profile={profile} />
-      </header>
-
-      <HomeTabs mySpace={mySpace} community={<Community />} />
     </main>
-  );
-}
-
-function StatCard({ value, label }: { value: number; label: string }) {
-  return (
-    <div className="rounded-2xl bg-beige px-3 py-4 text-center">
-      <div className="text-2xl font-bold text-ink">{value}</div>
-      <div className="mt-0.5 text-xs text-orange">{label}</div>
-    </div>
   );
 }
 
@@ -246,7 +217,7 @@ function PreviewSection({
           <span aria-hidden>{icon}</span> {title}
         </h2>
         <Link href={href} className="text-sm font-medium text-orange active:opacity-70">
-          View all →
+          View all ›
         </Link>
       </div>
       {children}
@@ -254,13 +225,7 @@ function PreviewSection({
   );
 }
 
-function EmptyHint({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
+function EmptyHint({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <Link
       href={href}

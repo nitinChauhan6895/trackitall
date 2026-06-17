@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import BottomNav from "@/components/BottomNav";
 
 export const metadata: Metadata = {
   title: "TrackItAll",
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#F1EEE6",
+  themeColor: "#F5F5F5",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -36,6 +37,7 @@ export default function RootLayout({
         <div className="mx-auto flex min-h-full w-full max-w-md flex-col">
           {children}
         </div>
+        <BottomNav />
         <ServiceWorkerRegister />
       </body>
     </html>

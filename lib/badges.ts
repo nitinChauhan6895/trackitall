@@ -3,6 +3,7 @@
 
 export type BadgeStats = {
   totalWorkouts: number; // distinct days with a logged workout
+  currentStreak: number; // active consecutive-day streak ending today/yesterday
   longestStreak: number; // longest run of consecutive workout days
   maxWorkoutsInWeek: number; // most workout days in any rolling 7-day window
   hasPerfectWeek: boolean; // every day of a Mon–Sun calendar week trained
@@ -17,38 +18,58 @@ export type BadgeStats = {
   prCount: number;
 };
 
+export type BadgeProgress = { current: number; target: number; unit: string };
+
 export type BadgeDef = {
   id: string;
   label: string;
   icon: string;
   description: string;
-  earned: (s: BadgeStats) => boolean;
+  progress: (s: BadgeStats) => BadgeProgress;
 };
 
-export type EvaluatedBadge = Omit<BadgeDef, "earned"> & { earned: boolean };
+export type EvaluatedBadge = Omit<BadgeDef, "progress"> &
+  BadgeProgress & { earned: boolean; earnedDate: string | null };
+
+const bool = (flag: boolean): BadgeProgress => ({
+  current: flag ? 1 : 0,
+  target: 1,
+  unit: "",
+});
 
 export const BADGES: BadgeDef[] = [
-  { id: "streak3", label: "3-Day Streak", icon: "🔥", description: "3 days in a row", earned: (s) => s.longestStreak >= 3 },
-  { id: "streak5", label: "5-Day Streak", icon: "🔥", description: "5 days in a row", earned: (s) => s.longestStreak >= 5 },
-  { id: "run3k", label: "3K Runner", icon: "🏃", description: "Complete a 3 km run", earned: (s) => s.maxRunKm >= 3 },
-  { id: "run5k", label: "5K Runner", icon: "🏃", description: "Complete a 5 km run", earned: (s) => s.maxRunKm >= 5 },
-  { id: "deadlift100", label: "100kg Deadlift", icon: "🏋️", description: "Deadlift 100 kg", earned: (s) => s.maxDeadliftKg >= 100 },
-  { id: "weekWarrior", label: "Week Warrior", icon: "🗓️", description: "7 workouts in a week", earned: (s) => s.maxWorkoutsInWeek >= 7 },
-  { id: "ironRookie", label: "Iron Rookie", icon: "💪", description: "First 10 strength sessions", earned: (s) => s.strengthSessions >= 10 },
-  { id: "cardioCrusher", label: "Cardio Crusher", icon: "🌡️", description: "100 km of cardio total", earned: (s) => s.totalCardioKm >= 100 },
-  { id: "halfCentury", label: "Half Century", icon: "🏅", description: "50 workouts", earned: (s) => s.totalWorkouts >= 50 },
-  { id: "variety", label: "Variety Master", icon: "🎨", description: "5 different categories", earned: (s) => s.categories >= 5 },
-  { id: "perfectWeek", label: "Perfect Week", icon: "✅", description: "Train all 7 days of a week", earned: (s) => s.hasPerfectWeek },
-  { id: "comeback", label: "Comeback Kid", icon: "🔄", description: "Return after 14+ day break", earned: (s) => s.longestGapDays >= 15 },
-  { id: "cardioKing", label: "Cardio King", icon: "👟", description: "15 cardio sessions", earned: (s) => s.cardioSessions >= 15 },
-  { id: "firstRep", label: "First Rep", icon: "🎉", description: "Your first workout", earned: (s) => s.totalWorkouts >= 1 },
-  { id: "personalBest", label: "Personal Best", icon: "🏆", description: "Beat a previous best", earned: (s) => s.pbBeaten },
-  { id: "century", label: "Century Club", icon: "💯", description: "100 workouts", earned: (s) => s.totalWorkouts >= 100 },
-  { id: "unstoppable", label: "Unstoppable", icon: "⚡", description: "30-day streak", earned: (s) => s.longestStreak >= 30 },
+  { id: "streak3", label: "3-Day Streak", icon: "🔥", description: "3 days in a row", progress: (s) => ({ current: s.longestStreak, target: 3, unit: "days" }) },
+  { id: "streak5", label: "5-Day Streak", icon: "🔥", description: "5 days in a row", progress: (s) => ({ current: s.longestStreak, target: 5, unit: "days" }) },
+  { id: "run3k", label: "3K Runner", icon: "🏃", description: "Complete a 3 km run", progress: (s) => ({ current: s.maxRunKm, target: 3, unit: "km" }) },
+  { id: "run5k", label: "5K Runner", icon: "🏃", description: "Complete a 5 km run", progress: (s) => ({ current: s.maxRunKm, target: 5, unit: "km" }) },
+  { id: "deadlift100", label: "100kg Deadlift", icon: "🏋️", description: "Deadlift 100 kg", progress: (s) => ({ current: s.maxDeadliftKg, target: 100, unit: "kg" }) },
+  { id: "weekWarrior", label: "Week Warrior", icon: "🗓️", description: "7 workouts in a week", progress: (s) => ({ current: s.maxWorkoutsInWeek, target: 7, unit: "days" }) },
+  { id: "ironRookie", label: "Iron Rookie", icon: "💪", description: "First 10 strength sessions", progress: (s) => ({ current: s.strengthSessions, target: 10, unit: "sessions" }) },
+  { id: "cardioCrusher", label: "Cardio Crusher", icon: "🌡️", description: "100 km of cardio total", progress: (s) => ({ current: s.totalCardioKm, target: 100, unit: "km" }) },
+  { id: "halfCentury", label: "Half Century", icon: "🏅", description: "50 workouts", progress: (s) => ({ current: s.totalWorkouts, target: 50, unit: "workouts" }) },
+  { id: "variety", label: "Variety Master", icon: "🎨", description: "5 different categories", progress: (s) => ({ current: s.categories, target: 5, unit: "categories" }) },
+  { id: "perfectWeek", label: "Perfect Week", icon: "✅", description: "Train all 7 days of a week", progress: (s) => bool(s.hasPerfectWeek) },
+  { id: "comeback", label: "Comeback Kid", icon: "🔄", description: "Return after 14+ day break", progress: (s) => bool(s.longestGapDays >= 15) },
+  { id: "cardioKing", label: "Cardio King", icon: "👟", description: "15 cardio sessions", progress: (s) => ({ current: s.cardioSessions, target: 15, unit: "sessions" }) },
+  { id: "firstRep", label: "First Rep", icon: "🎉", description: "Your first workout", progress: (s) => ({ current: s.totalWorkouts, target: 1, unit: "workout" }) },
+  { id: "personalBest", label: "Personal Best", icon: "🏆", description: "Beat a previous best", progress: (s) => bool(s.pbBeaten) },
+  { id: "century", label: "Century Club", icon: "💯", description: "100 workouts", progress: (s) => ({ current: s.totalWorkouts, target: 100, unit: "workouts" }) },
+  { id: "unstoppable", label: "Unstoppable", icon: "⚡", description: "30-day streak", progress: (s) => ({ current: s.longestStreak, target: 30, unit: "days" }) },
 ];
 
-export function evaluateBadges(s: BadgeStats): EvaluatedBadge[] {
-  return BADGES.map(({ earned, ...rest }) => ({ ...rest, earned: earned(s) }));
+export function evaluateBadges(
+  s: BadgeStats,
+  earnedDates: Record<string, string | null> = {},
+): EvaluatedBadge[] {
+  return BADGES.map(({ progress, ...rest }) => {
+    const p = progress(s);
+    return {
+      ...rest,
+      ...p,
+      earned: p.current >= p.target,
+      earnedDate: earnedDates[rest.id] ?? null,
+    };
+  });
 }
 
 // Earned badges first (preserving order), then locked — handy for previews.
@@ -79,6 +100,28 @@ export function longestStreak(dateKeys: string[]): number {
     if (run > best) best = run;
   }
   return best;
+}
+
+// Active streak: consecutive days ending today (or yesterday if not trained yet).
+export function currentStreak(dateKeys: string[], todayKey: string): number {
+  const set = new Set(dateKeys);
+  const [ty, tm, td] = todayKey.split("-").map(Number);
+  let cursor = Date.UTC(ty, tm - 1, td);
+  if (!set.has(msToKey(cursor))) {
+    cursor -= DAY; // allow a not-yet-trained today
+    if (!set.has(msToKey(cursor))) return 0;
+  }
+  let count = 0;
+  while (set.has(msToKey(cursor))) {
+    count++;
+    cursor -= DAY;
+  }
+  return count;
+}
+
+function msToKey(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
 // Most distinct workout days inside any rolling window (default 7 days).

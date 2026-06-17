@@ -236,6 +236,7 @@ export default function LogWizard({
   const [selected, setSelected] = useState<MuscleGroup[]>([]);
   const [byGroup, setByGroup] = useState<Record<string, DraftExercise[]>>({});
   const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState("");
 
   // Load a saved circuit's exercises into the HIIT section as draft cards.
   function loadCircuit(c: Circuit) {
@@ -313,19 +314,35 @@ export default function LogWizard({
 
   async function finish() {
     setFinishing(true);
+    setFinishError("");
+    let failed = false;
+    let savedAny = false;
     for (const g of selected) {
       const mode = modeFor(g);
       for (const ex of byGroup[g] ?? []) {
+        // Save any card still open that has real content (await each so the
+        // write + revalidation complete before we navigate away).
         if (!ex.collapsed && exerciseHasContent(mode, ex)) {
           try {
             await saveExercise(g, ex);
+            savedAny = true;
           } catch {
-            /* keep going */
+            failed = true;
           }
+        } else if (ex.savedId) {
+          savedAny = true;
         }
       }
     }
-    router.push("/");
+    if (failed) {
+      setFinishError("Some exercises couldn't be saved. Please try again.");
+      setFinishing(false);
+      return;
+    }
+    // Land on the day page so the freshly-saved exercises are visible.
+    // refresh() busts the client router cache since saves no longer revalidate.
+    router.push(savedAny ? `/day/${date}` : "/");
+    router.refresh();
   }
 
   const heading = useMemo(
@@ -425,6 +442,11 @@ export default function LogWizard({
       </div>
 
       <BottomBar>
+        {finishError && (
+          <p className="mb-2 text-center text-sm font-medium text-orange">
+            {finishError}
+          </p>
+        )}
         <button
           type="button"
           disabled={finishing}
@@ -500,6 +522,9 @@ function GroupSection({
     <section>
       <div className="mb-3 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+          <span className="h-6 w-6" style={{ color: MUSCLE_TONE[group] }}>
+            <MuscleIcon group={group} />
+          </span>
           {MUSCLE_GROUP_LABELS[group]}
           {exercises.length > 0 && (
             <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-orange-soft px-1.5 text-xs font-semibold text-orange">
@@ -635,7 +660,10 @@ function ExerciseCard({
   onRemove: () => void | Promise<void>;
 }) {
   const expanded = !ex.collapsed;
-  const canSave = exerciseHasContent(mode, ex);
+  // Strength needs a typed name; cardio/HIIT derive their name automatically.
+  const canSave =
+    exerciseHasContent(mode, ex) &&
+    (mode !== "strength" || ex.name.trim() !== "");
 
   return (
     <div className="overflow-hidden rounded-2xl border border-black/10 bg-white">

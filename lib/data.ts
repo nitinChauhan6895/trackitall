@@ -9,6 +9,7 @@ import {
   type Profile,
 } from "@/lib/types";
 import {
+  currentStreak,
   hasPerfectWeek,
   longestGapDays,
   longestStreak,
@@ -188,13 +189,112 @@ export async function getAllPrs(): Promise<Pr[]> {
   return (data ?? []) as Pr[];
 }
 
-export async function getBadgeStats(): Promise<BadgeStats> {
+type DayAgg = {
+  date: string;
+  groups: Set<string>;
+  cardio: boolean;
+  strength: boolean;
+  maxRunKm: number;
+  cardioKm: number;
+  maxDeadlift: number;
+};
+
+const DAY_MS = 86400000;
+function keyToMs(k: string): number {
+  const [y, m, d] = k.split("-").map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+// Replays days in chronological order to find the date each badge was first earned.
+function computeEarnedDates(
+  dayList: DayAgg[],
+  prs: any[],
+): Record<string, string | null> {
+  const earned: Record<string, string> = {};
+  const set = (id: string, date: string) => {
+    if (!earned[id]) earned[id] = date;
+  };
+
+  let workouts = 0;
+  let strengthSessions = 0;
+  let cardioSessions = 0;
+  let cumCardioKm = 0;
+  let maxRun = 0;
+  let maxDl = 0;
+  let run = 0;
+  let prevMs: number | null = null;
+  const cats = new Set<string>();
+  const dayMsSeen: number[] = [];
+  const weeks = new Map<number, Set<number>>();
+
+  for (const d of dayList) {
+    const ms = keyToMs(d.date);
+    workouts++;
+    if (workouts === 1) set("firstRep", d.date);
+    if (workouts === 50) set("halfCentury", d.date);
+    if (workouts === 100) set("century", d.date);
+
+    for (const g of d.groups) cats.add(g);
+    if (cats.size >= 5) set("variety", d.date);
+
+    if (d.strength && ++strengthSessions >= 10) set("ironRookie", d.date);
+    if (d.cardio && ++cardioSessions >= 15) set("cardioKing", d.date);
+
+    cumCardioKm += d.cardioKm;
+    if (cumCardioKm >= 100) set("cardioCrusher", d.date);
+
+    maxRun = Math.max(maxRun, d.maxRunKm);
+    if (maxRun >= 3) set("run3k", d.date);
+    if (maxRun >= 5) set("run5k", d.date);
+
+    maxDl = Math.max(maxDl, d.maxDeadlift);
+    if (maxDl >= 100) set("deadlift100", d.date);
+
+    if (prevMs != null && (ms - prevMs) / DAY_MS >= 15) set("comeback", d.date);
+    run = prevMs != null && ms - prevMs === DAY_MS ? run + 1 : 1;
+    if (run >= 3) set("streak3", d.date);
+    if (run >= 5) set("streak5", d.date);
+    if (run >= 30) set("unstoppable", d.date);
+
+    dayMsSeen.push(ms);
+    if (dayMsSeen.filter((x) => x >= ms - 6 * DAY_MS && x <= ms).length >= 7)
+      set("weekWarrior", d.date);
+
+    const dow = new Date(ms).getUTCDay();
+    const monday = ms - ((dow + 6) % 7) * DAY_MS;
+    if (!weeks.has(monday)) weeks.set(monday, new Set());
+    weeks.get(monday)!.add(ms);
+    if (weeks.get(monday)!.size >= 7) set("perfectWeek", d.date);
+
+    prevMs = ms;
+  }
+
+  let pbDate: string | null = null;
+  for (const p of prs) {
+    if (
+      p.updated_at &&
+      p.created_at &&
+      new Date(p.updated_at).getTime() - new Date(p.created_at).getTime() > 60000
+    ) {
+      const k = toDateKey(new Date(p.updated_at));
+      if (!pbDate || k < pbDate) pbDate = k;
+    }
+  }
+  if (pbDate) earned["personalBest"] = pbDate;
+
+  return earned;
+}
+
+export async function getBadgeData(): Promise<{
+  stats: BadgeStats;
+  earnedDates: Record<string, string | null>;
+}> {
   const supabase = createClient();
   const [exRes, prRes] = await Promise.all([
     supabase
       .from("exercises")
       .select(
-        "workout_date, muscle_group, name, cardio_type, created_at, sets(distance_km, distance_m, weight_kg)",
+        "workout_date, muscle_group, name, cardio_type, sets(distance_km, distance_m, weight_kg)",
       ),
     supabase.from("prs").select("created_at, updated_at"),
   ]);
@@ -202,31 +302,52 @@ export async function getBadgeStats(): Promise<BadgeStats> {
   const exs = (exRes.data ?? []) as any[];
   const days = exs.map((e) => e.workout_date as string);
 
+  // Per-day aggregation (drives both totals and the chronological replay).
+  const dayMap = new Map<string, DayAgg>();
+  const groups = new Set<string>();
   let maxRunKm = 0;
   let totalCardioKm = 0;
   let maxDeadliftKg = 0;
-  const cardioDays = new Set<string>();
-  const strengthDays = new Set<string>();
-  const groups = new Set<string>();
 
   for (const e of exs) {
+    const date = e.workout_date as string;
     const g = e.muscle_group as string;
     groups.add(g);
     const cardioish = g === "cardio" || g === "hiit";
-    if (cardioish) cardioDays.add(e.workout_date);
-    else strengthDays.add(e.workout_date);
-
     const isRun = /run/i.test(e.name ?? "") || e.cardio_type === "running";
     const isDeadlift = /deadlift/i.test(e.name ?? "");
 
-    for (const s of e.sets ?? []) {
-      if (isRun && s.distance_km != null)
-        maxRunKm = Math.max(maxRunKm, s.distance_km);
-      if (cardioish)
-        totalCardioKm += (s.distance_km ?? 0) + (s.distance_m ?? 0) / 1000;
-      if (isDeadlift && s.weight_kg != null)
-        maxDeadliftKg = Math.max(maxDeadliftKg, s.weight_kg);
+    let agg = dayMap.get(date);
+    if (!agg) {
+      agg = { date, groups: new Set(), cardio: false, strength: false, maxRunKm: 0, cardioKm: 0, maxDeadlift: 0 };
+      dayMap.set(date, agg);
     }
+    agg.groups.add(g);
+    if (cardioish) agg.cardio = true;
+    else agg.strength = true;
+
+    for (const s of e.sets ?? []) {
+      if (isRun && s.distance_km != null) {
+        maxRunKm = Math.max(maxRunKm, s.distance_km);
+        agg.maxRunKm = Math.max(agg.maxRunKm, s.distance_km);
+      }
+      if (cardioish) {
+        const km = (s.distance_km ?? 0) + (s.distance_m ?? 0) / 1000;
+        totalCardioKm += km;
+        agg.cardioKm += km;
+      }
+      if (isDeadlift && s.weight_kg != null) {
+        maxDeadliftKg = Math.max(maxDeadliftKg, s.weight_kg);
+        agg.maxDeadlift = Math.max(agg.maxDeadlift, s.weight_kg);
+      }
+    }
+  }
+
+  const cardioDays = new Set<string>();
+  const strengthDays = new Set<string>();
+  for (const a of dayMap.values()) {
+    if (a.cardio) cardioDays.add(a.date);
+    if (a.strength) strengthDays.add(a.date);
   }
 
   const prs = (prRes.data ?? []) as any[];
@@ -234,12 +355,12 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     (p) =>
       p.updated_at &&
       p.created_at &&
-      new Date(p.updated_at).getTime() - new Date(p.created_at).getTime() >
-        60000,
+      new Date(p.updated_at).getTime() - new Date(p.created_at).getTime() > 60000,
   );
 
-  return {
+  const stats: BadgeStats = {
     totalWorkouts: new Set(days).size,
+    currentStreak: currentStreak(days, toDateKey(new Date())),
     longestStreak: longestStreak(days),
     maxWorkoutsInWeek: maxWorkoutsInWindow(days, 7),
     hasPerfectWeek: hasPerfectWeek(days),
@@ -253,6 +374,11 @@ export async function getBadgeStats(): Promise<BadgeStats> {
     pbBeaten,
     prCount: prs.length,
   };
+
+  const dayList = Array.from(dayMap.values()).sort((a, b) =>
+    a.date < b.date ? -1 : 1,
+  );
+  return { stats, earnedDates: computeEarnedDates(dayList, prs) };
 }
 
 export async function getCircuits(): Promise<Circuit[]> {

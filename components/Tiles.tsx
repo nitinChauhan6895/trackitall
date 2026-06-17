@@ -1,4 +1,5 @@
 import { formatPrValue, prIcon, type Pr } from "@/lib/types";
+import ExerciseLogo from "@/components/ExerciseLogo";
 
 // Square PR tile (2-col grid). Beige/orange PR styling (#FAECE7).
 // `onEdit` is optional — when provided, a small pencil shows in the top-right.
@@ -18,8 +19,8 @@ export function PrTile({ pr, onEdit }: { pr: Pr; onEdit?: () => void }) {
         </button>
       )}
       <div className="flex items-center gap-1.5">
-        <span aria-hidden className="text-base">
-          {prIcon(pr)}
+        <span className="h-5 w-5 shrink-0">
+          <ExerciseLogo name={pr.exercise_name} fallback={prIcon(pr)} className="h-full w-full text-base" />
         </span>
         <p className="truncate text-xs font-medium text-ink">
           {pr.exercise_name}
