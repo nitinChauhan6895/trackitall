@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   CARDIO_FIELDS,
   CARDIO_FIELD_META,
-  CARDIO_TYPES,
   CARDIO_TYPE_LABELS,
   MUSCLE_GROUPS,
   MUSCLE_GROUP_LABELS,
@@ -26,6 +25,9 @@ import {
 import { libraryFor, type LibraryItem } from "@/lib/presets";
 import { HIIT_EXERCISES, resolveHiitMetrics } from "@/lib/hiit";
 import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
+
+// Cardio "Exercise" dropdown options (JSON cardio names → field type).
+const CARDIO_LIBRARY = libraryFor("cardio");
 
 type Mode = "cardio" | "hiit" | "strength";
 function modeFor(g: MuscleGroup): Mode {
@@ -189,7 +191,7 @@ function exerciseHasContent(mode: Mode, ex: DraftExercise): boolean {
 }
 
 function cardTitle(mode: Mode, ex: DraftExercise): string {
-  if (mode === "cardio") return CARDIO_TYPE_LABELS[ex.cardioType];
+  if (mode === "cardio") return ex.name.trim() || CARDIO_TYPE_LABELS[ex.cardioType];
   return ex.name.trim() || "New exercise";
 }
 
@@ -509,12 +511,17 @@ function GroupSection({
   const mode = modeFor(group);
   const [libraryOpen, setLibraryOpen] = useState(false);
 
-  function pick(item: LibraryItem) {
-    onAdd(
-      item.cardioType
-        ? { cardioType: item.cardioType, name: CARDIO_TYPE_LABELS[item.cardioType] }
-        : { name: item.name },
-    );
+  function addFromLibrary(items: LibraryItem[]) {
+    // When adding several at once, drop them in collapsed so they stack neatly;
+    // a single pick stays expanded for immediate logging.
+    const collapsed = items.length > 1;
+    for (const item of items) {
+      onAdd(
+        item.cardioType
+          ? { cardioType: item.cardioType, name: item.name, collapsed }
+          : { name: item.name, collapsed },
+      );
+    }
     setLibraryOpen(false);
   }
 
@@ -570,7 +577,7 @@ function GroupSection({
       {libraryOpen && (
         <LibrarySheet
           group={group}
-          onPick={pick}
+          onConfirm={addFromLibrary}
           onClose={() => setLibraryOpen(false)}
         />
       )}
@@ -763,17 +770,12 @@ function ExerciseForm({
       <Field label="Exercise">
         {mode === "cardio" ? (
           <SelectField
-            value={ex.cardioType}
-            onChange={(v) =>
-              onChange({
-                cardioType: v as CardioType,
-                name: CARDIO_TYPE_LABELS[v as CardioType],
-              })
-            }
-            options={CARDIO_TYPES.map((t) => ({
-              value: t,
-              label: CARDIO_TYPE_LABELS[t],
-            }))}
+            value={ex.name}
+            onChange={(v) => {
+              const item = CARDIO_LIBRARY.find((i) => i.name === v);
+              onChange({ name: v, cardioType: item?.cardioType ?? "generic" });
+            }}
+            options={CARDIO_LIBRARY.map((i) => ({ value: i.name, label: i.name }))}
           />
         ) : mode === "hiit" ? (
           <SelectField
@@ -942,14 +944,26 @@ function StrengthSets({
 
 function LibrarySheet({
   group,
-  onPick,
+  onConfirm,
   onClose,
 }: {
   group: MuscleGroup;
-  onPick: (item: LibraryItem) => void;
+  onConfirm: (items: LibraryItem[]) => void;
   onClose: () => void;
 }) {
   const items = libraryFor(group);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  function toggle(name: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  }
+
+  const chosen = items.filter((i) => selected.has(i.name));
+
   return (
     <>
       <div
@@ -960,12 +974,15 @@ function LibrarySheet({
       <div
         role="dialog"
         aria-label="Exercise library"
-        className="fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[70vh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-page p-4 shadow-xl safe-bottom"
+        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[75vh] w-full max-w-md flex-col rounded-t-3xl bg-page shadow-xl safe-bottom"
       >
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-ink">
-            {MUSCLE_GROUP_LABELS[group]} library
-          </h3>
+        <div className="flex items-center justify-between px-4 pb-2 pt-4">
+          <div>
+            <h3 className="text-base font-semibold text-ink">
+              {MUSCLE_GROUP_LABELS[group]} library
+            </h3>
+            <p className="text-xs text-muted">Tap to select one or more</p>
+          </div>
           <button
             type="button"
             onClick={onClose}
@@ -975,20 +992,51 @@ function LibrarySheet({
             ✕
           </button>
         </div>
-        <ul className="space-y-2">
-          {items.map((item) => (
-            <li key={item.name}>
-              <button
-                type="button"
-                onClick={() => onPick(item)}
-                className="flex w-full items-center justify-between rounded-xl border border-black/5 bg-white px-4 py-3 text-left text-ink active:bg-black/5"
-              >
-                <span className="font-medium">{item.name}</span>
-                <span className="text-orange">+</span>
-              </button>
-            </li>
-          ))}
+
+        <ul className="flex-1 space-y-2 overflow-y-auto px-4 py-1">
+          {items.map((item) => {
+            const on = selected.has(item.name);
+            return (
+              <li key={item.name}>
+                <button
+                  type="button"
+                  onClick={() => toggle(item.name)}
+                  aria-pressed={on}
+                  className={[
+                    "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left",
+                    on
+                      ? "border-orange bg-orange-soft text-ink"
+                      : "border-black/5 bg-white text-ink active:bg-black/5",
+                  ].join(" ")}
+                >
+                  <span className="font-medium">{item.name}</span>
+                  <span
+                    className={[
+                      "flex h-5 w-5 items-center justify-center rounded-full text-xs",
+                      on ? "bg-orange text-white" : "border border-black/20 text-transparent",
+                    ].join(" ")}
+                    aria-hidden
+                  >
+                    ✓
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
+
+        <div className="border-t border-black/5 px-4 pb-5 pt-3">
+          <button
+            type="button"
+            disabled={chosen.length === 0}
+            onClick={() => onConfirm(chosen)}
+            className="w-full rounded-2xl bg-orange px-4 py-3.5 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-40"
+          >
+            {chosen.length === 0
+              ? "Select exercises"
+              : `Add ${chosen.length} ${chosen.length === 1 ? "exercise" : "exercises"}`}
+          </button>
+        </div>
       </div>
     </>
   );

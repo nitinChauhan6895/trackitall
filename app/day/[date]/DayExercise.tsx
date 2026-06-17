@@ -40,13 +40,26 @@ export default function DayExercise({
             )}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setEditing((v) => !v)}
-          className="shrink-0 rounded-lg border border-green/40 px-3 py-1.5 text-sm font-semibold text-green active:bg-green/5"
-        >
-          {editing ? "Done" : "Edit"}
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+            className="rounded-lg border border-green/40 px-3 py-1.5 text-sm font-semibold text-green active:bg-green/5"
+          >
+            {editing ? "Done" : "Edit"}
+          </button>
+          <form action={deleteExercise}>
+            <input type="hidden" name="id" value={exerciseId} />
+            <input type="hidden" name="date" value={date} />
+            <button
+              type="submit"
+              aria-label="Delete exercise"
+              className="rounded-lg border border-orange/40 px-2.5 py-1.5 text-orange active:bg-orange-soft"
+            >
+              🗑
+            </button>
+          </form>
+        </div>
       </div>
 
       {editing && (
@@ -83,14 +96,6 @@ export default function DayExercise({
             ))}
             <button type="submit" className="shrink-0 rounded-lg bg-green px-3 py-2 text-sm font-semibold text-white active:scale-95">
               + set
-            </button>
-          </form>
-
-          <form action={deleteExercise}>
-            <input type="hidden" name="id" value={exerciseId} />
-            <input type="hidden" name="date" value={date} />
-            <button type="submit" className="text-sm font-medium text-orange active:opacity-70">
-              🗑 Delete exercise
             </button>
           </form>
         </div>

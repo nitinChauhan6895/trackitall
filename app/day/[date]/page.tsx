@@ -105,8 +105,8 @@ export default async function DayPage({ params }: { params: { date: string } }) 
           <div className="mb-4 grid grid-cols-4 divide-x divide-black/5 rounded-2xl border border-black/5 bg-white py-3">
             <Stat icon="📋" tone="text-green" value={String(totalSets)} label="Total Sets" />
             <Stat icon="🏋️" tone="text-orange" value={String(exercises.length)} label="Exercises" />
-            <Stat icon="💪" tone="text-[#A06CC9]" value={String(byGroup.size)} label="Muscle Groups" />
-            <Stat icon="🟢" tone="text-green" value={fmtVolume(totalVolume)} label="Total Volume" unit="kg" />
+            <Stat icon="💪" tone="text-[#9B5CC9]" value={String(byGroup.size)} label="Muscle Groups" />
+            <Stat icon={<KettlebellIcon className="h-5 w-5" />} tone="text-green" value={fmtVolume(totalVolume)} label="Total Volume" unit="kg" />
           </div>
 
           <div className="space-y-4">
@@ -171,7 +171,7 @@ function Stat({
   label,
   unit,
 }: {
-  icon: string;
+  icon: React.ReactNode;
   tone: string;
   value: string;
   label: string;
@@ -179,7 +179,9 @@ function Stat({
 }) {
   return (
     <div className="flex flex-col items-center px-1 text-center">
-      <span aria-hidden className={`text-lg ${tone}`}>{icon}</span>
+      <span aria-hidden className={`flex h-5 items-center justify-center text-lg ${tone}`}>
+        {icon}
+      </span>
       <span className="mt-1 text-lg font-bold leading-none text-ink">
         {value}
         {unit && <span className="text-xs font-semibold text-muted"> {unit}</span>}
@@ -191,6 +193,24 @@ function Stat({
 
 function fmtVolume(v: number): string {
   return Math.round(v).toLocaleString();
+}
+
+function KettlebellIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M9.5 8.5V7a2.5 2.5 0 0 1 5 0v1.5" />
+      <path d="M8 8.5h8c.7 1.4 2 3.1 2 5.5a6 6 0 0 1-12 0c0-2.4 1.3-4.1 2-5.5z" />
+    </svg>
+  );
 }
 
 const HIIT_INPUTS: Record<ResolvedMetric["draftKey"], InputSpec> = {

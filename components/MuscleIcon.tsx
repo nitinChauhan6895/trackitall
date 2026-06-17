@@ -1,18 +1,19 @@
 import type { MuscleGroup } from "@/lib/types";
 
 // Accent color per group (used for the icon stroke).
+// Distinct hue per group (no two alike) spread around the color wheel.
 export const MUSCLE_TONE: Record<MuscleGroup, string> = {
-  chest: "#E2603F",
-  tricep: "#E07B43",
-  back: "#3E7CC2",
-  bicep: "#5A8FD6",
-  shoulders: "#E0A23B",
-  legs: "#D8B23B",
-  core: "#3B6D11",
-  functional: "#3B6D11",
-  cardio: "#3B6D11",
-  hiit: "#D85A30",
-  olympic: "#A06CC9",
+  chest: "#E04F3D", // red
+  tricep: "#EE7A2E", // orange
+  shoulders: "#E0A52A", // gold
+  legs: "#C9B028", // olive
+  functional: "#5BA12E", // lime
+  core: "#2E9E6B", // emerald
+  cardio: "#1FA6A0", // teal
+  back: "#2F80C2", // blue
+  bicep: "#5A6FE0", // indigo
+  olympic: "#9B5CC9", // purple
+  hiit: "#D6489E", // magenta
 };
 
 const COMMON = {
