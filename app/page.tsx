@@ -190,9 +190,9 @@ function StreakPillSkeleton() {
 
 async function BadgesPreview() {
   const { stats, earnedDates } = await loadBadges();
-  const previewBadges = sortedByEarned(evaluateBadges(stats, earnedDates)).slice(0, 4);
+  const previewBadges = sortedByEarned(evaluateBadges(stats, earnedDates)).slice(0, 3);
   return (
-    <div className="grid grid-cols-4 gap-2">
+    <div className="grid grid-cols-3 gap-3">
       {previewBadges.map((b) => (
         <Badge key={b.id} badge={b} size="sm" />
       ))}
@@ -202,9 +202,9 @@ async function BadgesPreview() {
 
 function BadgesSkeleton() {
   return (
-    <div className="grid grid-cols-4 gap-2">
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="h-[112px] animate-pulse rounded-2xl bg-black/5" />
+    <div className="grid grid-cols-3 gap-3">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="h-[120px] animate-pulse rounded-2xl bg-black/5" />
       ))}
     </div>
   );

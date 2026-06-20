@@ -223,7 +223,6 @@ function computeEarnedDates(
   let maxDl = 0;
   let run = 0;
   let prevMs: number | null = null;
-  const cats = new Set<string>();
   const dayMsSeen: number[] = [];
   const weeks = new Map<number, Set<number>>();
 
@@ -234,8 +233,8 @@ function computeEarnedDates(
     if (workouts === 50) set("halfCentury", d.date);
     if (workouts === 100) set("century", d.date);
 
-    for (const g of d.groups) cats.add(g);
-    if (cats.size >= 5) set("variety", d.date);
+    // Variety Master: 5 distinct muscle groups trained on a single day.
+    if (d.groups.size >= 5) set("variety", d.date);
 
     if (d.strength && ++strengthSessions >= 10) set("ironRookie", d.date);
     if (d.cardio && ++cardioSessions >= 15) set("cardioKing", d.date);
@@ -304,7 +303,6 @@ export async function getBadgeData(): Promise<{
 
   // Per-day aggregation (drives both totals and the chronological replay).
   const dayMap = new Map<string, DayAgg>();
-  const groups = new Set<string>();
   let maxRunKm = 0;
   let totalCardioKm = 0;
   let maxDeadliftKg = 0;
@@ -312,7 +310,6 @@ export async function getBadgeData(): Promise<{
   for (const e of exs) {
     const date = e.workout_date as string;
     const g = e.muscle_group as string;
-    groups.add(g);
     const cardioish = g === "cardio" || g === "hiit";
     const isRun = /run/i.test(e.name ?? "") || e.cardio_type === "running";
     const isDeadlift = /deadlift/i.test(e.name ?? "");
@@ -345,9 +342,11 @@ export async function getBadgeData(): Promise<{
 
   const cardioDays = new Set<string>();
   const strengthDays = new Set<string>();
+  let maxGroupsInDay = 0;
   for (const a of dayMap.values()) {
     if (a.cardio) cardioDays.add(a.date);
     if (a.strength) strengthDays.add(a.date);
+    maxGroupsInDay = Math.max(maxGroupsInDay, a.groups.size);
   }
 
   const prs = (prRes.data ?? []) as any[];
@@ -370,7 +369,7 @@ export async function getBadgeData(): Promise<{
     cardioSessions: cardioDays.size,
     strengthSessions: strengthDays.size,
     maxDeadliftKg,
-    categories: groups.size,
+    maxGroupsInDay,
     pbBeaten,
     prCount: prs.length,
   };

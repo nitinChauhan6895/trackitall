@@ -62,7 +62,7 @@ export function Badge({
         )}
       </div>
 
-      <p className="text-center text-xs font-semibold leading-tight text-ink">
+      <p className="flex min-h-[2rem] items-center text-center text-xs font-semibold leading-tight text-ink">
         {badge.label}
       </p>
       {badge.earned ? (

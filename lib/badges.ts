@@ -13,7 +13,7 @@ export type BadgeStats = {
   cardioSessions: number; // distinct days with a cardio/HIIT session
   strengthSessions: number; // distinct days with a strength session
   maxDeadliftKg: number; // heaviest deadlift set
-  categories: number; // distinct muscle groups ever trained
+  maxGroupsInDay: number; // most distinct muscle groups trained in a single day
   pbBeaten: boolean; // improved a previously-set PR
   prCount: number;
 };
@@ -47,7 +47,7 @@ export const BADGES: BadgeDef[] = [
   { id: "ironRookie", label: "Iron Rookie", icon: "💪", description: "First 10 strength sessions", progress: (s) => ({ current: s.strengthSessions, target: 10, unit: "sessions" }) },
   { id: "cardioCrusher", label: "Cardio Crusher", icon: "🌡️", description: "100 km of cardio total", progress: (s) => ({ current: s.totalCardioKm, target: 100, unit: "km" }) },
   { id: "halfCentury", label: "Half Century", icon: "🏅", description: "50 workouts", progress: (s) => ({ current: s.totalWorkouts, target: 50, unit: "workouts" }) },
-  { id: "variety", label: "Variety Master", icon: "🎨", description: "5 different categories", progress: (s) => ({ current: s.categories, target: 5, unit: "categories" }) },
+  { id: "variety", label: "Variety Master", icon: "🎨", description: "5 muscle groups in a day", progress: (s) => ({ current: s.maxGroupsInDay, target: 5, unit: "groups" }) },
   { id: "perfectWeek", label: "Perfect Week", icon: "✅", description: "Train all 7 days of a week", progress: (s) => bool(s.hasPerfectWeek) },
   { id: "comeback", label: "Comeback Kid", icon: "🔄", description: "Return after 14+ day break", progress: (s) => bool(s.longestGapDays >= 15) },
   { id: "cardioKing", label: "Cardio King", icon: "👟", description: "15 cardio sessions", progress: (s) => ({ current: s.cardioSessions, target: 15, unit: "sessions" }) },
