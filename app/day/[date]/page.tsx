@@ -17,6 +17,7 @@ import {
 import { resolveHiitMetrics, type ResolvedMetric } from "@/lib/hiit";
 import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
 import DayExercise from "./DayExercise";
+import GroupMenu from "./GroupMenu";
 
 type SetKind = "cardio" | "hiit" | "strength";
 type InputSpec = { name: string; placeholder: string; type: "number" | "text"; step?: string };
@@ -116,7 +117,7 @@ export default async function DayPage({ params }: { params: { date: string } }) 
               return (
                 <section
                   key={group}
-                  className="overflow-hidden rounded-2xl border border-black/5 bg-white"
+                  className="relative overflow-hidden rounded-2xl border border-black/5 bg-white"
                   style={{ borderLeft: `4px solid ${MUSCLE_TONE[group]}` }}
                 >
                   <div className="flex items-center gap-2 px-4 pt-4">
@@ -129,6 +130,9 @@ export default async function DayPage({ params }: { params: { date: string } }) 
                     <span className="rounded-full bg-orange-soft px-2 py-0.5 text-xs font-semibold text-orange">
                       {list.length} {list.length === 1 ? "Exercise" : "Exercises"}
                     </span>
+                    <div className="ml-auto">
+                      <GroupMenu date={date} group={group} groupLabel={MUSCLE_GROUP_LABELS[group]} />
+                    </div>
                   </div>
                   <div className="px-4">
                     {list.map((ex) => (

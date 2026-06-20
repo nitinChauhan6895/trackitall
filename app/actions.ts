@@ -10,6 +10,7 @@ import {
   type CardioType,
   type MuscleGroup,
   type PrUnitType,
+  type ShareableUser,
 } from "@/lib/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -494,6 +495,61 @@ export async function saveMeasurement(input: {
   }
 
   revalidatePath("/measurements");
+}
+
+// ---------- Workout sharing ----------
+
+export async function loadShareableUsers(): Promise<ShareableUser[]> {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase.rpc("list_shareable_users");
+  if (error) throw error;
+  return (data ?? []) as ShareableUser[];
+}
+
+export async function shareWorkout(input: {
+  toUserId: string;
+  date: string;
+  group: MuscleGroup;
+}) {
+  if (!DATE_RE.test(input.date)) throw new Error("Invalid date");
+  if (!MUSCLE_GROUPS.includes(input.group))
+    throw new Error("Invalid muscle group");
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("share_workout", {
+    p_to: input.toUserId,
+    p_date: input.date,
+    p_group: input.group,
+  });
+  if (error) throw error;
+}
+
+export async function acceptShare(id: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("accept_workout_share", { p_share: id });
+  if (error) throw error;
+  revalidatePath("/community");
+  revalidatePath("/");
+}
+
+export async function declineShare(id: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.rpc("decline_workout_share", { p_share: id });
+  if (error) throw error;
+  revalidatePath("/community");
+}
+
+export async function deleteGroup(date: string, group: MuscleGroup) {
+  if (!MUSCLE_GROUPS.includes(group)) throw new Error("Invalid muscle group");
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase
+    .from("exercises")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("workout_date", date)
+    .eq("muscle_group", group);
+  if (error) throw error;
+  revalidatePath(`/day/${date}`);
+  revalidatePath("/");
 }
 
 export async function deleteMeasurement(id: string) {

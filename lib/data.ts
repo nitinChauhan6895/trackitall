@@ -3,6 +3,7 @@ import {
   MUSCLE_GROUPS,
   type Circuit,
   type Exercise,
+  type IncomingShare,
   type Measurement,
   type MuscleGroup,
   type Pr,
@@ -412,6 +413,38 @@ export async function getCircuit(id: string): Promise<Circuit | null> {
       (a: any, b: any) => a.position - b.position,
     ),
   } as Circuit;
+}
+
+export async function getIncomingShares(): Promise<IncomingShare[]> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from("workout_shares")
+    .select("id, from_name, workout_date, muscle_group, payload")
+    .eq("to_user_id", user.id)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  if (error) return [];
+
+  return (data ?? []).map((r: any) => {
+    const payload = Array.isArray(r.payload) ? r.payload : [];
+    const setCount = payload.reduce(
+      (n: number, ex: any) => n + (Array.isArray(ex.sets) ? ex.sets.length : 0),
+      0,
+    );
+    return {
+      id: r.id as string,
+      from_name: r.from_name as string,
+      workout_date: r.workout_date as string,
+      muscle_group: r.muscle_group as MuscleGroup,
+      exercise_count: payload.length,
+      set_count: setCount,
+    };
+  });
 }
 
 export async function getMeasurements(): Promise<Measurement[]> {

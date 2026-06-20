@@ -148,6 +148,23 @@ export function profileInitial(p: Pick<Profile, "first_name" | "username">): str
   return (base[0] || "?").toUpperCase();
 }
 
+// ---- Workout sharing ----
+export type ShareableUser = {
+  user_id: string;
+  username: string;
+  first_name: string | null;
+  last_name: string | null;
+};
+
+export type IncomingShare = {
+  id: string;
+  from_name: string;
+  workout_date: string;
+  muscle_group: MuscleGroup;
+  exercise_count: number;
+  set_count: number;
+};
+
 // ---- Measurements ----
 export type Measurement = {
   id: string;

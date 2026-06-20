@@ -60,9 +60,8 @@ function Menu({
         <p className="text-sm text-muted">@{profile.username}</p>
       </div>
 
-      <ShareToggle initial={profile.share_to_community} />
-
-      <div className="mt-2 overflow-hidden rounded-2xl border border-black/5 bg-white">
+      <div className="overflow-hidden rounded-2xl border border-black/5 bg-white">
+        <ShareRow initial={profile.share_to_community} />
         <Row icon="👤" label="Edit profile" onClick={onEdit} />
         <Row icon="✉️" label={profile.email ?? "No email on file"} muted />
         <Row icon="🔒" label="Change password" onClick={onPassword} />
@@ -80,7 +79,7 @@ function Menu({
   );
 }
 
-function ShareToggle({ initial }: { initial: boolean }) {
+function ShareRow({ initial }: { initial: boolean }) {
   const [on, setOn] = useState(initial);
   const [busy, setBusy] = useState(false);
 
@@ -98,10 +97,10 @@ function ShareToggle({ initial }: { initial: boolean }) {
   }
 
   return (
-    <div className="rounded-2xl bg-green-tint p-4">
+    <div className="border-b border-black/5 px-4 py-3.5">
       <div className="flex items-center gap-3">
-        <span aria-hidden className="text-lg">👥</span>
-        <span className="flex-1 font-medium text-ink">Share with community</span>
+        <span aria-hidden className="w-5 text-center">👥</span>
+        <span className="flex-1 text-base text-ink">Share with community</span>
         <button
           type="button"
           role="switch"
@@ -116,16 +115,16 @@ function ShareToggle({ initial }: { initial: boolean }) {
         >
           <span
             className={[
-              "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
-              on ? "translate-x-[22px]" : "translate-x-0.5",
+              "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+              on ? "translate-x-5" : "translate-x-0",
             ].join(" ")}
           />
         </button>
       </div>
-      <p className="mt-1.5 text-xs text-muted">
+      <p className="ml-8 mt-1 text-xs text-muted">
         {on
           ? "Your stats appear in Community, and you can see others'."
-          : "Off — your stats stay private and Community stays hidden."}
+          : "Off — your stats stay private."}
       </p>
     </div>
   );
