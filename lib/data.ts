@@ -17,6 +17,7 @@ import {
   maxWorkoutsInWindow,
   type BadgeStats,
 } from "@/lib/badges";
+import { computeStats, type StatsData } from "@/lib/stats";
 import { toDateKey } from "@/lib/date";
 
 export async function getProfile(): Promise<Profile> {
@@ -445,6 +446,17 @@ export async function getIncomingShares(): Promise<IncomingShare[]> {
       set_count: setCount,
     };
   });
+}
+
+export async function getStatsData(): Promise<StatsData> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("exercises")
+    .select(
+      "workout_date, muscle_group, name, cardio_type, sets(reps, weight_kg, distance_km, distance_m)",
+    );
+  if (error) throw error;
+  return computeStats((data ?? []) as any[], new Date());
 }
 
 export async function getMeasurements(): Promise<Measurement[]> {

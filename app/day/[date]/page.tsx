@@ -63,6 +63,8 @@ export default async function DayPage({ params }: { params: { date: string } }) 
 
   const [y, m] = date.split("-").map(Number);
   const backHref = `/?m=${monthParam(y, m)}`;
+  const prevKey = shiftKey(date, -1);
+  const nextKey = shiftKey(date, 1);
   const heading = new Date(y, m - 1, Number(date.split("-")[2])).toLocaleDateString(undefined, {
     weekday: "long",
     month: "long",
@@ -96,20 +98,24 @@ export default async function DayPage({ params }: { params: { date: string } }) 
         </Link>
       </header>
 
+      {/* Day summary stats, with prev/next-day arrows flush in the banner */}
+      <div className="mb-4 flex items-stretch overflow-hidden rounded-2xl border border-black/5 bg-white">
+        <DayArrow href={`/day/${prevKey}`} label="Previous day" glyph="‹" side="left" />
+        <div className="grid flex-1 grid-cols-4 divide-x divide-black/5 py-3">
+          <Stat icon="📋" tone="text-green" value={String(totalSets)} label="Sets" />
+          <Stat icon="🏋️" tone="text-orange" value={String(exercises.length)} label="Exercises" />
+          <Stat icon="💪" tone="text-[#9B5CC9]" value={String(byGroup.size)} label="Muscles" />
+          <Stat icon={<KettlebellIcon className="h-5 w-5" />} tone="text-green" value={fmtVolume(totalVolume)} label="Volume" unit="kg" />
+        </div>
+        <DayArrow href={`/day/${nextKey}`} label="Next day" glyph="›" side="right" />
+      </div>
+
       {exercises.length === 0 ? (
         <p className="mb-6 rounded-2xl border border-dashed border-black/15 px-4 py-8 text-center text-sm text-muted">
           No workout saved for this day yet.
         </p>
       ) : (
         <>
-          {/* Day summary stats */}
-          <div className="mb-4 grid grid-cols-4 divide-x divide-black/5 rounded-2xl border border-black/5 bg-white py-3">
-            <Stat icon="📋" tone="text-green" value={String(totalSets)} label="Total Sets" />
-            <Stat icon="🏋️" tone="text-orange" value={String(exercises.length)} label="Exercises" />
-            <Stat icon="💪" tone="text-[#9B5CC9]" value={String(byGroup.size)} label="Muscle Groups" />
-            <Stat icon={<KettlebellIcon className="h-5 w-5" />} tone="text-green" value={fmtVolume(totalVolume)} label="Total Volume" unit="kg" />
-          </div>
-
           <div className="space-y-4">
             {MUSCLE_GROUPS.filter((g) => byGroup.has(g)).map((group) => {
               const list = byGroup.get(group)!;
@@ -197,6 +203,40 @@ function Stat({
 
 function fmtVolume(v: number): string {
   return Math.round(v).toLocaleString();
+}
+
+function shiftKey(key: string, n: number): string {
+  const [y, m, d] = key.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + n);
+  const mm = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  return `${dt.getFullYear()}-${mm}-${dd}`;
+}
+
+function DayArrow({
+  href,
+  label,
+  glyph,
+  side,
+}: {
+  href: string;
+  label: string;
+  glyph: string;
+  side: "left" | "right";
+}) {
+  return (
+    <Link
+      href={href}
+      aria-label={label}
+      className={[
+        "flex w-10 shrink-0 items-center justify-center text-2xl text-muted active:bg-black/5",
+        side === "left" ? "border-r border-black/5" : "border-l border-black/5",
+      ].join(" ")}
+    >
+      {glyph}
+    </Link>
+  );
 }
 
 function KettlebellIcon({ className }: { className?: string }) {
