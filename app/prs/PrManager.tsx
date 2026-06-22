@@ -12,7 +12,7 @@ import {
 } from "@/lib/types";
 import { toDateKey } from "@/lib/date";
 import { deletePr, savePr } from "@/app/actions";
-import { PrTile } from "@/components/Tiles";
+import { PrCard } from "@/components/HomeCards";
 
 function fmtDate(key: string) {
   const [y, m, d] = key.split("-").map(Number);
@@ -83,7 +83,7 @@ export default function PrManager({ initialPrs }: { initialPrs: Pr[] }) {
             <>
               <div className="grid grid-cols-2 gap-3">
                 {initialPrs.map((pr) => (
-                  <PrTile key={pr.id} pr={pr} onEdit={() => setEditing(pr)} />
+                  <PrCard key={pr.id} pr={pr} />
                 ))}
               </div>
 

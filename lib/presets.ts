@@ -21,16 +21,17 @@ const CARDIO_NAME_TO_TYPE: Record<string, CardioType> = {
   "Jump Rope": "generic",
 };
 
+const byName = (a: LibraryItem, b: LibraryItem) => a.name.localeCompare(b.name);
+
 export function libraryFor(group: MuscleGroup): LibraryItem[] {
   if (group === "hiit") {
-    return HIIT_EXERCISES.map((e) => ({ name: e.name }));
+    return HIIT_EXERCISES.map((e) => ({ name: e.name })).sort(byName);
   }
   const exercises = libraryExercisesFor(group);
   if (group === "cardio") {
-    return exercises.map((e) => ({
-      name: e.name,
-      cardioType: CARDIO_NAME_TO_TYPE[e.name] ?? "generic",
-    }));
+    return exercises
+      .map((e) => ({ name: e.name, cardioType: CARDIO_NAME_TO_TYPE[e.name] ?? "generic" }))
+      .sort(byName);
   }
-  return exercises.map((e) => ({ name: e.name }));
+  return exercises.map((e) => ({ name: e.name })).sort(byName);
 }

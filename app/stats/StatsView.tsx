@@ -2,19 +2,25 @@
 
 import { useState } from "react";
 import { toDateKey } from "@/lib/date";
-import type { DayCell, SeriesPoint, StatsData, WeekStats } from "@/lib/stats";
+import type { SeriesPoint, StatsData, WeekStats } from "@/lib/stats";
 
 const GREEN = "#3B6D11";
 const ORANGE = "#FF571F";
 const TEAL_OLD = "#1F7D63";
 const TEAL_NEW = "#3FAE8E";
 const AMBER = "#E0A52A";
-const GREY = "#E2DED7";
-const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
+
+type Range = "this" | "last" | "last7";
+const RANGE_LABEL: Record<Range, string> = {
+  this: "This week",
+  last: "Last week",
+  last7: "Last 7 days",
+};
 
 export default function StatsView({ stats }: { stats: StatsData }) {
-  const [range, setRange] = useState<"this" | "last">("this");
-  const week = range === "this" ? stats.thisWeek : stats.lastWeek;
+  const [range, setRange] = useState<Range>("this");
+  const week =
+    range === "this" ? stats.thisWeek : range === "last" ? stats.lastWeek : stats.last7;
   const [exercise, setExercise] = useState(stats.strengthExercises[0] ?? "");
   const series = stats.strengthSeries[exercise] ?? [];
 
@@ -33,7 +39,7 @@ export default function StatsView({ stats }: { stats: StatsData }) {
 
       {/* Time range toggle */}
       <div className="mt-4 flex rounded-xl bg-black/[0.05] p-1">
-        {(["this", "last"] as const).map((r) => (
+        {(["this", "last", "last7"] as Range[]).map((r) => (
           <button
             key={r}
             type="button"
@@ -43,7 +49,7 @@ export default function StatsView({ stats }: { stats: StatsData }) {
               range === r ? "bg-white text-green shadow-sm" : "text-muted",
             ].join(" ")}
           >
-            {r === "this" ? "This week" : "Last week"}
+            {RANGE_LABEL[r]}
           </button>
         ))}
       </div>
@@ -51,7 +57,7 @@ export default function StatsView({ stats }: { stats: StatsData }) {
       {/* Summary */}
       <SectionLabel>Summary</SectionLabel>
       <div className="grid grid-cols-2 gap-2">
-        <Card value={String(week.workoutDays)} unit="days" label={`Workouts ${range === "this" ? "this week" : "last week"}`} />
+        <Card value={String(week.workoutDays)} unit="days" label={`Workouts · ${RANGE_LABEL[range].toLowerCase()}`} />
         <Card green value={String(stats.monthTotal)} unit="sessions" label="This month total" />
         <Card value={String(week.totalSets)} unit="sets" label={`Total sets · ${week.totalReps} reps`} />
         <Card green value={weightVal} unit={weightUnit} label="Total weight lifted" />
@@ -69,12 +75,6 @@ export default function StatsView({ stats }: { stats: StatsData }) {
           <div className="mt-0.5 text-[10px] text-green/80">Best streak ever</div>
         </div>
       </div>
-
-      {/* Workout frequency */}
-      <SectionLabel>Workout frequency</SectionLabel>
-      <ChartBox title="Sessions per day" hint="Mon → Sun">
-        <FrequencyBars perDay={week.perDay} />
-      </ChartBox>
 
       {/* Strength progress */}
       <SectionLabel>Strength progress</SectionLabel>
@@ -106,10 +106,10 @@ export default function StatsView({ stats }: { stats: StatsData }) {
         )}
       </ChartBox>
 
-      {/* Cardio progress */}
+      {/* Cardio progress — daily distance */}
       <SectionLabel>Cardio progress</SectionLabel>
-      <ChartBox title="Weekly distance" hint="km">
-        <CardioBars weeks={stats.cardio} />
+      <ChartBox title="Daily distance" hint="km">
+        <DailyCardio km={week.cardioPerDay} labels={week.dayLabels} />
       </ChartBox>
 
       {/* Muscle group breakdown */}
@@ -182,48 +182,28 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="py-6 text-center text-xs text-muted">{children}</p>;
 }
 
-function FrequencyBars({ perDay }: { perDay: DayCell[] }) {
-  const max = Math.max(...perDay.map((c) => c.value), 1);
-  return (
-    <div className="flex h-[70px] items-end gap-1.5">
-      {perDay.map((c, i) => {
-        let color = GREY;
-        let height = 18;
-        if (c.state === "workout") {
-          color = GREEN;
-          height = 30 + (c.value / max) * 70;
-        } else if (c.state === "today") {
-          color = ORANGE;
-          height = 30 + (c.value / max) * 70;
-        } else if (c.state === "future") {
-          color = "#EFEBE4";
-        }
-        return (
-          <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-            <div className="w-full rounded-t" style={{ height: `${height}%`, background: color }} />
-            <span className="text-[9px] text-muted">{WEEKDAYS[i]}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
+function fmtKm(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function CardioBars({ weeks }: { weeks: { label: string; km: number }[] }) {
-  const max = Math.max(...weeks.map((w) => w.km), 0);
-  if (max === 0) return <Empty>No cardio logged yet.</Empty>;
+function DailyCardio({ km, labels }: { km: number[]; labels: string[] }) {
+  const max = Math.max(...km, 0);
+  if (max === 0) return <Empty>No cardio logged in this window.</Empty>;
   return (
-    <div className="flex h-[70px] items-end gap-1.5">
-      {weeks.map((w, i) => (
-        <div key={w.label} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
+    <div className="flex h-[140px] items-end gap-1.5">
+      {km.map((v, i) => (
+        <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
+          <span className="text-[9px] font-semibold text-ink/70">
+            {v > 0 ? fmtKm(v) : ""}
+          </span>
           <div
             className="w-full rounded-t"
             style={{
-              height: `${Math.max(6, (w.km / max) * 100)}%`,
-              background: i >= weeks.length - 2 ? TEAL_NEW : TEAL_OLD,
+              height: v > 0 ? `${Math.max(6, (v / max) * 100)}%` : "2%",
+              background: v > 0 ? (i >= km.length - 2 ? TEAL_NEW : TEAL_OLD) : "#E2DED7",
             }}
           />
-          <span className="text-[9px] text-muted">{w.label}</span>
+          <span className="text-[9px] text-muted">{labels[i]}</span>
         </div>
       ))}
     </div>
@@ -283,20 +263,21 @@ function LineChart({ points }: { points: SeriesPoint[] }) {
 }
 
 function MuscleBreakdown({ week }: { week: WeekStats }) {
-  if (week.muscles.length === 0)
-    return <Empty>No muscle groups trained this week.</Empty>;
-  const max = week.muscles[0].count;
+  const max = Math.max(...week.muscles.map((m) => m.count), 1);
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
       {week.muscles.map((m, i) => {
         let color = AMBER;
-        if (m.group === "cardio") color = TEAL_OLD;
+        if (m.count === 0) color = "#CFCABF";
+        else if (m.group === "cardio") color = TEAL_OLD;
         else if (i < 2) color = ORANGE;
         else if (m.count <= 1) color = "#9A876F";
         return (
           <div key={m.group} className="flex flex-col gap-1">
             <div className="flex items-center justify-between text-[11px]">
-              <span className="font-medium text-ink">{m.label}</span>
+              <span className={`font-medium ${m.count === 0 ? "text-muted" : "text-ink"}`}>
+                {m.label}
+              </span>
               <span className="text-muted">{m.count}×</span>
             </div>
             <div className="h-1.5 overflow-hidden rounded-full bg-black/[0.06]">

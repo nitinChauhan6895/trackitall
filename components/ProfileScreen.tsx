@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { setShareToCommunity, updateProfile, signOut } from "@/app/actions";
 import { displayName, profileInitial, type Profile } from "@/lib/types";
+import { APP_VERSION } from "@/lib/version";
 
 const inputClass =
   "w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
@@ -75,6 +76,10 @@ function Menu({
           <span aria-hidden>⎋</span> Sign out
         </button>
       </form>
+
+      <p className="mt-6 text-center text-xs text-muted">
+        TrackItAll · v{APP_VERSION}
+      </p>
     </div>
   );
 }

@@ -20,11 +20,6 @@ export type RawStatsExercise = {
   }[];
 };
 
-export type DayCell = {
-  value: number; // muscle groups trained that day
-  state: "workout" | "today" | "rest" | "future";
-};
-
 export type MuscleCount = { group: MuscleGroup; label: string; count: number };
 
 export type WeekStats = {
@@ -32,8 +27,9 @@ export type WeekStats = {
   totalSets: number;
   totalReps: number;
   totalVolumeKg: number;
-  perDay: DayCell[]; // 7, Mon→Sun
-  muscles: MuscleCount[]; // trained groups, desc
+  cardioPerDay: number[]; // 7 daily km totals across the window
+  dayLabels: string[]; // weekday letter per day
+  muscles: MuscleCount[]; // every tracked group (incl. 0), desc by count
   neglected: string[]; // group labels with 0 sessions
 };
 
@@ -46,10 +42,14 @@ export type StatsData = {
   bestStreak: number;
   thisWeek: WeekStats;
   lastWeek: WeekStats;
+  last7: WeekStats;
   strengthExercises: string[];
   strengthSeries: Record<string, SeriesPoint[]>;
-  cardio: { label: string; km: number }[];
 };
+
+// Muscle groups shown in the breakdown / neglected list (HIIT excluded).
+const TRACKED_GROUPS = MUSCLE_GROUPS.filter((g) => g !== "hiit");
+const WEEKDAY_LETTER = ["S", "M", "T", "W", "T", "F", "S"];
 
 function keyToDate(k: string): Date {
   const [y, m, d] = k.split("-").map(Number);
@@ -69,32 +69,26 @@ type DayAgg = {
   cardioKm: number;
 };
 
-function weekStats(
-  monKey: string,
-  byDate: Map<string, DayAgg>,
-  todayKey: string,
-  isThisWeek: boolean,
-): WeekStats {
-  const dayKeys = Array.from({ length: 7 }, (_, i) => addDays(monKey, i));
+function weekStats(startKey: string, byDate: Map<string, DayAgg>): WeekStats {
+  const dayKeys = Array.from({ length: 7 }, (_, i) => addDays(startKey, i));
   let workoutDays = 0;
   let totalSets = 0;
   let totalReps = 0;
   let totalVolumeKg = 0;
+  const cardioPerDay: number[] = [];
+  const dayLabels: string[] = [];
 
-  const perDay: DayCell[] = dayKeys.map((k) => {
+  for (const k of dayKeys) {
     const a = byDate.get(k);
-    let state: DayCell["state"];
-    if (isThisWeek && k > todayKey) state = "future";
-    else if (a) state = k === todayKey ? "today" : "workout";
-    else state = "rest";
+    cardioPerDay.push(a ? Math.round(a.cardioKm * 10) / 10 : 0);
+    dayLabels.push(WEEKDAY_LETTER[keyToDate(k).getDay()]);
     if (a) {
       workoutDays++;
       totalSets += a.sets;
       totalReps += a.reps;
       totalVolumeKg += a.volume;
     }
-    return { value: a ? a.groups.size : 0, state };
-  });
+  }
 
   const counts = new Map<MuscleGroup, number>();
   for (const k of dayKeys) {
@@ -105,14 +99,23 @@ function weekStats(
       counts.set(mg, (counts.get(mg) ?? 0) + 1);
     }
   }
-  const muscles = MUSCLE_GROUPS.filter((g) => (counts.get(g) ?? 0) > 0)
-    .map((g) => ({ group: g, label: MUSCLE_GROUP_LABELS[g], count: counts.get(g)! }))
-    .sort((a, b) => b.count - a.count);
-  const neglected = MUSCLE_GROUPS.filter(
-    (g) => g !== "hiit" && (counts.get(g) ?? 0) === 0,
-  ).map((g) => MUSCLE_GROUP_LABELS[g]);
+  const muscles = TRACKED_GROUPS.map((g) => ({
+    group: g,
+    label: MUSCLE_GROUP_LABELS[g],
+    count: counts.get(g) ?? 0,
+  })).sort((a, b) => b.count - a.count);
+  const neglected = muscles.filter((m) => m.count === 0).map((m) => m.label);
 
-  return { workoutDays, totalSets, totalReps, totalVolumeKg, perDay, muscles, neglected };
+  return {
+    workoutDays,
+    totalSets,
+    totalReps,
+    totalVolumeKg,
+    cardioPerDay,
+    dayLabels,
+    muscles,
+    neglected,
+  };
 }
 
 export function computeStats(exs: RawStatsExercise[], today: Date): StatsData {
@@ -139,6 +142,7 @@ export function computeStats(exs: RawStatsExercise[], today: Date): StatsData {
   const dow = (today.getDay() + 6) % 7; // Mon = 0
   const thisMon = addDays(todayKey, -dow);
   const lastMon = addDays(thisMon, -7);
+  const last7Start = addDays(todayKey, -6);
 
   const monthPrefix = todayKey.slice(0, 7);
   const monthTotal = allDates.filter((d) => d.startsWith(monthPrefix)).length;
@@ -165,27 +169,15 @@ export function computeStats(exs: RawStatsExercise[], today: Date): StatsData {
       .sort((a, b) => (a.date < b.date ? -1 : 1));
   }
 
-  // Cardio distance per week, last 6 weeks (oldest → newest).
-  const cardio: { label: string; km: number }[] = [];
-  for (let i = 5; i >= 0; i--) {
-    const wkMon = addDays(thisMon, -i * 7);
-    let km = 0;
-    for (let d = 0; d < 7; d++) {
-      const a = byDate.get(addDays(wkMon, d));
-      if (a) km += a.cardioKm;
-    }
-    cardio.push({ label: `W${6 - i}`, km: Math.round(km * 10) / 10 });
-  }
-
   return {
     hasAnyData: exs.length > 0,
     monthTotal,
     currentStreak: currentStreak(allDates, todayKey),
     bestStreak: longestStreak(allDates),
-    thisWeek: weekStats(thisMon, byDate, todayKey, true),
-    lastWeek: weekStats(lastMon, byDate, todayKey, false),
+    thisWeek: weekStats(thisMon, byDate),
+    lastWeek: weekStats(lastMon, byDate),
+    last7: weekStats(last7Start, byDate),
     strengthExercises,
     strengthSeries,
-    cardio,
   };
 }
