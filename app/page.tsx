@@ -11,6 +11,7 @@ import {
 import {
   MEASUREMENT_FIELDS,
   displayName,
+  profileInitial,
   type Measurement,
   type MeasurementField,
 } from "@/lib/types";
@@ -86,9 +87,13 @@ export default async function HomePage({
           <h1 className="text-2xl font-bold tracking-tight">Hi, {firstName}! 👋</h1>
           <p className="mt-0.5 text-sm text-muted">{todayLabel}</p>
         </div>
-        <Suspense fallback={<StreakPillSkeleton />}>
-          <StreakPill />
-        </Suspense>
+        <Link
+          href="/profile"
+          aria-label="Profile"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-beige text-lg font-bold text-ink active:scale-95"
+        >
+          {profileInitial(profile)}
+        </Link>
       </header>
 
       {/* Calendar */}
@@ -169,23 +174,6 @@ export default async function HomePage({
       </PreviewSection>
     </main>
   );
-}
-
-async function StreakPill() {
-  const { stats } = await loadBadges();
-  return (
-    <Link
-      href="/badges"
-      className="flex shrink-0 items-center gap-1.5 rounded-full border border-orange/30 bg-orange-soft px-3 py-2 text-sm font-semibold text-orange active:scale-95"
-    >
-      <span aria-hidden>🔥</span> {stats.currentStreak} Day Streak
-      <span aria-hidden className="text-muted">›</span>
-    </Link>
-  );
-}
-
-function StreakPillSkeleton() {
-  return <div className="h-9 w-28 shrink-0 animate-pulse rounded-full bg-orange-soft" />;
 }
 
 async function BadgesPreview() {
