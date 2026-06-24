@@ -12,6 +12,26 @@ import {
   type PrUnitType,
   type ShareableUser,
 } from "@/lib/types";
+import {
+  getCoachLibrary,
+  getCoachProfile,
+  getCoachTemplates,
+  buildCoachHistory,
+} from "@/lib/data";
+import { generate } from "@/lib/coach/engine";
+import {
+  COACH_TO_APP,
+  EQUIPMENTS,
+  EXPERIENCES,
+  GOALS,
+  INJURIES,
+  type CoachGroup,
+  type Equipment,
+  type Experience,
+  type GenItem,
+  type GenerationResult,
+  type Goal,
+} from "@/lib/coach/types";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -550,6 +570,121 @@ export async function deleteGroup(date: string, group: MuscleGroup) {
   if (error) throw error;
   revalidatePath(`/day/${date}`);
   revalidatePath("/");
+}
+
+// ---------- Coach: workout generator ----------
+
+export async function saveCoachProfile(input: {
+  goal: Goal;
+  experience: Experience;
+  equipment: Equipment;
+  injuries: string[];
+}) {
+  if (!GOALS.includes(input.goal)) throw new Error("Invalid goal");
+  if (!EXPERIENCES.includes(input.experience)) throw new Error("Invalid experience");
+  if (!EQUIPMENTS.includes(input.equipment)) throw new Error("Invalid equipment");
+  const injuries = input.injuries.filter((i) => (INJURIES as readonly string[]).includes(i));
+
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase.from("coach_profiles").upsert(
+    {
+      user_id: user.id,
+      goal: input.goal,
+      experience: input.experience,
+      equipment: input.equipment,
+      injuries,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+  if (error) {
+    if (error.code === "PGRST205")
+      throw new Error("Coach isn't set up yet — run migration_010_coach.sql in Supabase.");
+    throw new Error(error.message);
+  }
+  revalidatePath("/coach");
+}
+
+export async function generateWorkout(groups: CoachGroup[]): Promise<GenerationResult> {
+  await requireUser();
+  if (groups.length === 0) throw new Error("Pick at least one muscle group.");
+  const profile = await getCoachProfile();
+  if (!profile) return { onboarded: false };
+
+  const [library, templates, history] = await Promise.all([
+    getCoachLibrary(),
+    getCoachTemplates(),
+    buildCoachHistory(groups),
+  ]);
+  const template =
+    templates.find((t) => t.goal === profile.goal) ?? templates[0];
+  if (!template) throw new Error("No workout template found — run the seed migration.");
+
+  return generate({ groups, profile, template, library, history });
+}
+
+function cardioTypeFor(name: string): CardioType {
+  const n = name.toLowerCase();
+  if (/ski/.test(n)) return "skierg";
+  if (/row/.test(n)) return "rowing";
+  if (/run/.test(n)) return "running";
+  if (/elliptical/.test(n)) return "elliptical";
+  return "generic";
+}
+
+// Pre-populate today's log with the accepted session, then the user edits actuals.
+export async function logGeneratedWorkout(date: string, items: GenItem[]) {
+  if (!DATE_RE.test(date)) throw new Error("Invalid date");
+  const { supabase, user } = await requireUser();
+
+  const { count } = await supabase
+    .from("exercises")
+    .select("id", { count: "exact", head: true })
+    .eq("workout_date", date);
+  let pos = count ?? 0;
+
+  for (const item of items) {
+    const muscle: MuscleGroup = item.isCardio ? "cardio" : COACH_TO_APP[item.group];
+    const { data: ex, error: exErr } = await supabase
+      .from("exercises")
+      .insert({
+        user_id: user.id,
+        workout_date: date,
+        muscle_group: muscle,
+        name: item.name.slice(0, 120),
+        cardio_type: item.isCardio ? cardioTypeFor(item.name) : null,
+        position: pos++,
+      })
+      .select("id")
+      .single();
+    if (exErr) throw exErr;
+
+    const rows: any[] = [];
+    if (item.isCardio) {
+      rows.push({
+        exercise_id: ex.id,
+        user_id: user.id,
+        position: 0,
+        time_seconds: item.cardioMin ? item.cardioMin * 60 : null,
+      });
+    } else {
+      const reps = item.repMax > 0 ? item.repMax : null;
+      for (let i = 0; i < Math.max(1, item.sets); i++) {
+        rows.push({
+          exercise_id: ex.id,
+          user_id: user.id,
+          position: i,
+          reps,
+          weight_kg: item.suggestedWeight,
+        });
+      }
+    }
+    const { error: setErr } = await supabase.from("sets").insert(rows);
+    if (setErr) throw setErr;
+  }
+
+  revalidatePath("/");
+  revalidatePath(`/day/${date}`);
 }
 
 export async function deleteMeasurement(id: string) {

@@ -18,6 +18,15 @@ import {
   type BadgeStats,
 } from "@/lib/badges";
 import { computeStats, type StatsData } from "@/lib/stats";
+import {
+  COACH_GROUPS,
+  COACH_TO_APP,
+  type CoachGroup,
+  type CoachProfile,
+  type LibraryExercise,
+  type WorkoutTemplate,
+} from "@/lib/coach/types";
+import { type History } from "@/lib/coach/engine";
 import { toDateKey } from "@/lib/date";
 
 export async function getProfile(): Promise<Profile> {
@@ -457,6 +466,166 @@ export async function getStatsData(): Promise<StatsData> {
     );
   if (error) throw error;
   return computeStats((data ?? []) as any[], new Date());
+}
+
+// ---------- Coach ----------
+
+export async function getCoachProfile(): Promise<CoachProfile | null> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("coach_profiles")
+    .select("*")
+    .eq("user_id", user.id)
+    .single();
+  if (!data || !data.goal || !data.experience || !data.equipment) return null;
+  return data as CoachProfile;
+}
+
+export async function getCoachLibrary(): Promise<LibraryExercise[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from("exercises_library").select("*");
+  if (error) throw error;
+  return (data ?? []) as LibraryExercise[];
+}
+
+export async function getCoachTemplates(): Promise<WorkoutTemplate[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase.from("workout_templates").select("*");
+  if (error) throw error;
+  return (data ?? []).map((t: any) => ({
+    ...t,
+    structure: typeof t.structure === "string" ? JSON.parse(t.structure) : t.structure,
+  })) as WorkoutTemplate[];
+}
+
+const dayDiff = (todayKey: string, dateKey: string) =>
+  Math.round((keyMs(todayKey) - keyMs(dateKey)) / DAY_MS);
+function keyMs(k: string): number {
+  const [y, m, d] = k.split("-").map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+// Per-user history that drives the engine's scoring & weight suggestions.
+export async function buildCoachHistory(groups: CoachGroup[]): Promise<History> {
+  const supabase = createClient();
+  const todayKey = toDateKey(new Date());
+
+  const [exRes, prRes] = await Promise.all([
+    supabase
+      .from("exercises")
+      .select("workout_date, name, muscle_group, sets(reps, weight_kg)"),
+    supabase.from("prs").select("exercise_name, achieved_date, updated_at"),
+  ]);
+  const exs = (exRes.data ?? []) as any[];
+  const prs = (prRes.data ?? []) as any[];
+
+  const dates = Array.from(new Set(exs.map((e) => e.workout_date as string))).sort(
+    (a, b) => (a < b ? 1 : -1),
+  ); // newest first
+  const lastDate = dates[0];
+  const prevDate = dates[1];
+
+  const freqByName = new Map<string, number>();
+  const freqDateSeen = new Set<string>();
+  const daysSince = new Map<string, number>();
+  const lastPerf = new Map<string, { topReps: number; weight: number }>();
+  const lastWorkoutNames = new Set<string>();
+  const prev2Names = new Set<string>();
+  const prevCardioNames = new Set<string>();
+  const lastDateByName = new Map<string, string>();
+
+  for (const e of exs) {
+    const key = String(e.name ?? "").trim().toLowerCase();
+    const date = e.workout_date as string;
+    // distinct-session frequency
+    const fk = `${key}|${date}`;
+    if (!freqDateSeen.has(fk)) {
+      freqDateSeen.add(fk);
+      freqByName.set(key, (freqByName.get(key) ?? 0) + 1);
+    }
+    // most recent date per exercise
+    const prevSeen = lastDateByName.get(key);
+    if (!prevSeen || date > prevSeen) {
+      lastDateByName.set(key, date);
+      // best set on its latest date
+      let best: { topReps: number; weight: number } | null = null;
+      for (const s of e.sets ?? []) {
+        if (s.weight_kg == null) continue;
+        if (!best || s.weight_kg > best.weight)
+          best = { topReps: s.reps ?? 0, weight: s.weight_kg };
+      }
+      if (best) lastPerf.set(key, best);
+    }
+    if (date === lastDate) {
+      lastWorkoutNames.add(key);
+      if (e.muscle_group === "cardio") prevCardioNames.add(key);
+    }
+    if (date === prevDate) prev2Names.add(key);
+  }
+  for (const [key, date] of lastDateByName) daysSince.set(key, dayDiff(todayKey, date));
+
+  // recent PRs (last 30 days)
+  const prNames = new Set<string>();
+  for (const p of prs) {
+    const d = (p.achieved_date as string) ?? toDateKey(new Date(p.updated_at));
+    if (d && dayDiff(todayKey, d) <= 30)
+      prNames.add(String(p.exercise_name ?? "").trim().toLowerCase());
+  }
+
+  // days since each selected group was last trained
+  const lastByApp = new Map<string, string>();
+  for (const e of exs) {
+    const prev = lastByApp.get(e.muscle_group);
+    if (!prev || e.workout_date > prev) lastByApp.set(e.muscle_group, e.workout_date);
+  }
+  const groupLastDays = new Map<string, number | null>();
+  for (const g of groups) {
+    const last = lastByApp.get(COACH_TO_APP[g]);
+    groupLastDays.set(g, last ? dayDiff(todayKey, last) : null);
+  }
+
+  const vals = [...freqByName.values()].sort((a, b) => b - a);
+  const freqCutoff = vals.length ? vals[Math.min(Math.floor(vals.length / 3), vals.length - 1)] : Infinity;
+
+  return {
+    lastWorkoutNames,
+    prev2Names,
+    freqByName,
+    daysSince,
+    prNames,
+    lastPerf,
+    groupLastDays,
+    prevCardioNames,
+    freqCutoff,
+  };
+}
+
+// 1–2 coach groups the user hasn't trained recently (for "Suggested focus").
+export async function getSuggestedFocus(): Promise<CoachGroup[]> {
+  const supabase = createClient();
+  const todayKey = toDateKey(new Date());
+  const { data } = await supabase.from("exercises").select("workout_date, muscle_group");
+  const rows = (data ?? []) as any[];
+
+  const lastByApp = new Map<string, string>();
+  for (const r of rows) {
+    const prev = lastByApp.get(r.muscle_group);
+    if (!prev || r.workout_date > prev) lastByApp.set(r.muscle_group, r.workout_date);
+  }
+
+  const ranked = COACH_GROUPS.map((g) => {
+    const last = lastByApp.get(COACH_TO_APP[g]);
+    const days = last ? dayDiff(todayKey, last) : Infinity;
+    return { g, days };
+  })
+    .filter((x) => x.days >= 3) // only genuinely neglected
+    .sort((a, b) => b.days - a.days);
+
+  return ranked.slice(0, 2).map((x) => x.g);
 }
 
 export async function getMeasurements(): Promise<Measurement[]> {
