@@ -6,6 +6,8 @@ import {
   saveCoachProfile,
   generateWorkout,
   logGeneratedWorkout,
+  refineWorkout,
+  setExercisePrefs,
 } from "@/app/actions";
 import {
   COACH_GROUPS,
@@ -23,15 +25,18 @@ import {
 } from "@/lib/coach/types";
 
 type OnboardedResult = Extract<GenerationResult, { onboarded: true }>;
+type LibraryLite = { id: string; name: string; muscle_group: CoachGroup };
 
 export default function CoachClient({
   profile,
   focus,
   today,
+  library,
 }: {
   profile: CoachProfile | null;
   focus: CoachGroup[];
   today: string;
+  library: LibraryLite[];
 }) {
   const [tab, setTab] = useState<"exercise" | "diet">("exercise");
 
@@ -63,7 +68,7 @@ export default function CoachClient({
       </div>
 
       {tab === "exercise" ? (
-        <ExerciseTab profile={profile} focus={focus} today={today} />
+        <ExerciseTab profile={profile} focus={focus} today={today} library={library} />
       ) : (
         <DietTab />
       )}
@@ -75,13 +80,16 @@ function ExerciseTab({
   profile,
   focus,
   today,
+  library,
 }: {
   profile: CoachProfile | null;
   focus: CoachGroup[];
   today: string;
+  library: LibraryLite[];
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [managing, setManaging] = useState(false);
 
   if (!profile || editing) {
     return (
@@ -96,12 +104,26 @@ function ExerciseTab({
     );
   }
 
+  if (managing) {
+    return (
+      <ManageExercises
+        library={library}
+        profile={profile}
+        onDone={() => {
+          setManaging(false);
+          router.refresh();
+        }}
+      />
+    );
+  }
+
   return (
     <Generator
       profile={profile}
       focus={focus}
       today={today}
       onEditPrefs={() => setEditing(true)}
+      onManage={() => setManaging(true)}
     />
   );
 }
@@ -199,11 +221,13 @@ function Generator({
   focus,
   today,
   onEditPrefs,
+  onManage,
 }: {
   profile: CoachProfile;
   focus: CoachGroup[];
   today: string;
   onEditPrefs: () => void;
+  onManage: () => void;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<CoachGroup[]>(focus.length ? [focus[0]] : []);
@@ -215,6 +239,31 @@ function Generator({
   const [addOpen, setAddOpen] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [err, setErr] = useState("");
+  const [note, setNote] = useState("");
+  const [refining, startRefine] = useTransition();
+
+  function loadResult(r: OnboardedResult) {
+    setResult(r);
+    setSlots(r.items.map((it) => ({ options: [it, ...it.alternatives], idx: 0 })));
+  }
+
+  function refine() {
+    if (selected.length === 0 || !note.trim()) return;
+    setErr("");
+    startRefine(async () => {
+      try {
+        const r = await refineWorkout(selected, note);
+        if (!r.onboarded) {
+          onEditPrefs();
+          return;
+        }
+        loadResult(r);
+        setNote("");
+      } catch (e: any) {
+        setErr(e?.message ?? "Could not refine.");
+      }
+    });
+  }
 
   const items = slots.map((s) => s.options[s.idx]);
   const duration = items.reduce((n, i) => n + i.estDuration, 0);
@@ -231,8 +280,7 @@ function Generator({
           onEditPrefs();
           return;
         }
-        setResult(r);
-        setSlots(r.items.map((it) => ({ options: [it, ...it.alternatives], idx: 0 })));
+        loadResult(r);
       } catch (e: any) {
         setErr(e?.message ?? "Could not generate.");
       }
@@ -258,9 +306,14 @@ function Generator({
         <p className="text-xs text-muted">
           Goal: <strong className="text-ink">{profile.goal}</strong>
         </p>
-        <button type="button" onClick={onEditPrefs} className="text-xs font-semibold text-orange">
-          Edit preferences
-        </button>
+        <div className="flex gap-3">
+          <button type="button" onClick={onManage} className="text-xs font-semibold text-orange">
+            ★ Favourites
+          </button>
+          <button type="button" onClick={onEditPrefs} className="text-xs font-semibold text-orange">
+            Edit preferences
+          </button>
+        </div>
       </div>
 
       {focus.length > 0 && (
@@ -346,6 +399,31 @@ function Generator({
           >
             + Add exercise
           </button>
+
+          {/* AI refine */}
+          <div className="mt-4 rounded-2xl border border-black/5 bg-white p-3">
+            <p className="mb-2 text-xs font-semibold text-ink">✨ Refine with a note</p>
+            <div className="flex gap-2">
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && refine()}
+                placeholder="e.g. only dumbbells, 30 min, sore shoulder"
+                className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus:border-orange"
+              />
+              <button
+                type="button"
+                disabled={refining || !note.trim()}
+                onClick={refine}
+                className="shrink-0 rounded-xl bg-orange px-4 py-2 text-sm font-semibold text-white active:scale-95 disabled:opacity-40"
+              >
+                {refining ? "…" : "Refine"}
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-muted">
+              AI adjusts the plan; the engine still picks exercises &amp; weights.
+            </p>
+          </div>
 
           <button
             type="button"
@@ -458,6 +536,130 @@ function AddSheet({
         )}
       </div>
     </>
+  );
+}
+
+function ManageExercises({
+  library,
+  profile,
+  onDone,
+}: {
+  library: LibraryLite[];
+  profile: CoachProfile;
+  onDone: () => void;
+}) {
+  const [preferred, setPreferred] = useState<Set<string>>(
+    new Set(profile.preferred_exercise_ids),
+  );
+  const [excluded, setExcluded] = useState<Set<string>>(
+    new Set(profile.excluded_exercise_ids),
+  );
+  const [busy, setBusy] = useState(false);
+
+  function togglePref(id: string) {
+    setPreferred((p) => {
+      const n = new Set(p);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+    setExcluded((e) => {
+      if (!e.has(id)) return e;
+      const n = new Set(e);
+      n.delete(id);
+      return n;
+    });
+  }
+  function toggleExcl(id: string) {
+    setExcluded((e) => {
+      const n = new Set(e);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+    setPreferred((p) => {
+      if (!p.has(id)) return p;
+      const n = new Set(p);
+      n.delete(id);
+      return n;
+    });
+  }
+
+  async function save() {
+    setBusy(true);
+    try {
+      await setExercisePrefs({ preferred: [...preferred], excluded: [...excluded] });
+      onDone();
+    } catch {
+      setBusy(false);
+    }
+  }
+
+  const groups = COACH_GROUPS.filter((g) => library.some((l) => l.muscle_group === g));
+
+  return (
+    <div className="mt-5">
+      <div className="mb-1 flex items-center justify-between">
+        <h2 className="text-base font-bold text-ink">Favourites &amp; exclusions</h2>
+        <button type="button" onClick={onDone} className="text-sm text-muted">
+          Cancel
+        </button>
+      </div>
+      <p className="mb-4 text-xs text-muted">
+        ★ favourites are prioritised. 🚫 excluded are never suggested.
+      </p>
+
+      <div className="space-y-4">
+        {groups.map((g) => (
+          <section key={g}>
+            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-muted">{g}</p>
+            <ul className="space-y-1.5">
+              {library
+                .filter((l) => l.muscle_group === g)
+                .map((ex) => {
+                  const fav = preferred.has(ex.id);
+                  const ban = excluded.has(ex.id);
+                  return (
+                    <li
+                      key={ex.id}
+                      className="flex items-center justify-between rounded-xl border border-black/5 bg-white px-3 py-2"
+                    >
+                      <span className={`text-sm ${ban ? "text-muted line-through" : "text-ink"}`}>
+                        {ex.name}
+                      </span>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => togglePref(ex.id)}
+                          aria-label="Favourite"
+                          className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${fav ? "bg-orange text-white" : "border border-black/10 text-muted"}`}
+                        >
+                          ★
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleExcl(ex.id)}
+                          aria-label="Exclude"
+                          className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${ban ? "bg-orange-soft" : "border border-black/10 opacity-50"}`}
+                        >
+                          🚫
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+            </ul>
+          </section>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        disabled={busy}
+        onClick={save}
+        className="mt-5 w-full rounded-2xl bg-green px-4 py-3.5 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
+      >
+        {busy ? "Saving…" : "Save"}
+      </button>
+    </div>
   );
 }
 

@@ -18,6 +18,7 @@ import {
   getCoachTemplates,
   buildCoachHistory,
 } from "@/lib/data";
+import Anthropic from "@anthropic-ai/sdk";
 import { generate } from "@/lib/coach/engine";
 import {
   COACH_TO_APP,
@@ -605,6 +606,25 @@ export async function saveCoachProfile(input: {
   revalidatePath("/coach");
 }
 
+export async function setExercisePrefs(input: {
+  preferred: string[];
+  excluded: string[];
+}) {
+  const { supabase, user } = await requireUser();
+  const clean = (a: string[]) =>
+    Array.from(new Set(a.filter((s) => typeof s === "string"))).slice(0, 300);
+  const { error } = await supabase
+    .from("coach_profiles")
+    .update({
+      preferred_exercise_ids: clean(input.preferred),
+      excluded_exercise_ids: clean(input.excluded),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("user_id", user.id);
+  if (error) throw error;
+  revalidatePath("/coach");
+}
+
 export async function generateWorkout(groups: CoachGroup[]): Promise<GenerationResult> {
   await requireUser();
   if (groups.length === 0) throw new Error("Pick at least one muscle group.");
@@ -621,6 +641,177 @@ export async function generateWorkout(groups: CoachGroup[]): Promise<GenerationR
   if (!template) throw new Error("No workout template found — run the seed migration.");
 
   return generate({ groups, profile, template, library, history });
+}
+
+// ---- AI refine: translate a free-text note into engine overrides ----
+// The model only TRANSLATES intent into structured params; the deterministic
+// engine still owns exercise selection and weights. Fails safe to no overrides.
+
+type RefineOverrides = {
+  equipment?: Equipment;
+  addInjuries: string[];
+  durationCapMin?: number;
+  avoidExercises: string[];
+  intensity: "easier" | "harder" | "same";
+  summary?: string;
+};
+
+async function getRefineOverrides(
+  note: string,
+  currentEquipment: Equipment,
+): Promise<RefineOverrides> {
+  const empty: RefineOverrides = { addInjuries: [], avoidExercises: [], intensity: "same" };
+  if (!process.env.ANTHROPIC_API_KEY || !note.trim()) return empty;
+
+  try {
+    const client = new Anthropic();
+    const resp = await client.messages.create({
+      model: "claude-opus-4-8",
+      max_tokens: 500,
+      system:
+        "You convert a gym user's short note into structured workout overrides for a deterministic workout generator. " +
+        "Only set a field when the note clearly implies it. Map soreness/pain to addInjuries (Shoulder, Knee, Lower Back). " +
+        "Map 'no equipment'/'at home'/'bodyweight'/'only dumbbells' to equipment. Map a time limit to durationCapMin. " +
+        "Never invent exercises or weights — only fill the tool fields.",
+      messages: [
+        { role: "user", content: `Current equipment: ${currentEquipment}.\nNote: ${note}` },
+      ],
+      tools: [
+        {
+          name: "set_overrides",
+          description: "Record the workout overrides implied by the user's note.",
+          input_schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              equipment: { type: "string", enum: [...EQUIPMENTS] },
+              addInjuries: { type: "array", items: { type: "string", enum: [...INJURIES] } },
+              durationCapMin: { type: "integer" },
+              avoidExercises: { type: "array", items: { type: "string" } },
+              intensity: { type: "string", enum: ["easier", "harder", "same"] },
+            },
+            required: [],
+          },
+        },
+      ],
+      tool_choice: { type: "tool", name: "set_overrides" },
+    });
+
+    const block = resp.content.find((b) => b.type === "tool_use") as any;
+    const raw = (block?.input ?? {}) as any;
+
+    const equipment = (EQUIPMENTS as readonly string[]).includes(raw.equipment)
+      ? (raw.equipment as Equipment)
+      : undefined;
+    const addInjuries = Array.isArray(raw.addInjuries)
+      ? raw.addInjuries.filter((i: any) => (INJURIES as readonly string[]).includes(i))
+      : [];
+    const durationCapMin =
+      typeof raw.durationCapMin === "number" && raw.durationCapMin >= 15 && raw.durationCapMin <= 180
+        ? Math.round(raw.durationCapMin)
+        : undefined;
+    const avoidExercises = Array.isArray(raw.avoidExercises)
+      ? raw.avoidExercises.filter((s: any) => typeof s === "string").slice(0, 10)
+      : [];
+    const intensity = ["easier", "harder", "same"].includes(raw.intensity)
+      ? (raw.intensity as RefineOverrides["intensity"])
+      : "same";
+
+    const parts: string[] = [];
+    if (equipment) parts.push(equipment);
+    if (addInjuries.length) parts.push(`protect ${addInjuries.join(", ")}`);
+    if (durationCapMin) parts.push(`≤ ${durationCapMin} min`);
+    if (avoidExercises.length) parts.push(`avoid ${avoidExercises.join(", ")}`);
+    if (intensity !== "same") parts.push(intensity);
+
+    return {
+      equipment,
+      addInjuries,
+      durationCapMin,
+      avoidExercises,
+      intensity,
+      summary: parts.length ? `Adjusted: ${parts.join(" · ")}` : undefined,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+function trimToDuration(items: GenItem[], cap: number): GenItem[] {
+  // Higher = dropped first. Compounds are never dropped.
+  const droppability = (i: GenItem): number => {
+    if (i.category === "Compound") return -1;
+    if (i.category === "Finisher") return 3;
+    if (i.category === "Isolation") return 2;
+    if (i.isCardio) return 1;
+    return 0;
+  };
+  const kept = [...items];
+  const total = () => kept.reduce((n, i) => n + i.estDuration, 0);
+  while (total() > cap && kept.length > 1) {
+    let idx = -1;
+    let worst = 0;
+    kept.forEach((it, j) => {
+      const d = droppability(it);
+      if (d > worst) {
+        worst = d;
+        idx = j;
+      }
+    });
+    if (idx === -1) break; // nothing droppable left (only compounds)
+    kept.splice(idx, 1);
+  }
+  return kept;
+}
+
+export async function refineWorkout(
+  groups: CoachGroup[],
+  note: string,
+): Promise<GenerationResult> {
+  await requireUser();
+  if (groups.length === 0) throw new Error("Pick at least one muscle group.");
+  const profile = await getCoachProfile();
+  if (!profile) return { onboarded: false };
+
+  const [library, templates, history] = await Promise.all([
+    getCoachLibrary(),
+    getCoachTemplates(),
+    buildCoachHistory(groups),
+  ]);
+  const template = templates.find((t) => t.goal === profile.goal) ?? templates[0];
+  if (!template) throw new Error("No workout template found — run the seed migration.");
+
+  const ov = await getRefineOverrides(note, profile.equipment);
+
+  // Resolve avoided exercise names to library ids.
+  const avoidIds = library
+    .filter((ex) =>
+      ov.avoidExercises.some((term) => {
+        const t = term.toLowerCase();
+        const n = ex.name.toLowerCase();
+        return n.includes(t) || t.includes(n);
+      }),
+    )
+    .map((ex) => ex.id);
+
+  const effectiveProfile = {
+    ...profile,
+    equipment: ov.equipment ?? profile.equipment,
+    injuries: Array.from(new Set([...profile.injuries, ...ov.addInjuries])),
+    excluded_exercise_ids: Array.from(new Set([...profile.excluded_exercise_ids, ...avoidIds])),
+  };
+
+  const result = generate({ groups, profile: effectiveProfile, template, library, history });
+  if (!result.onboarded) return result;
+
+  let items = result.items;
+  if (ov.intensity === "easier") items = items.filter((i) => !i.toFailure);
+  if (ov.durationCapMin) items = trimToDuration(items, ov.durationCapMin);
+
+  const reasons = ov.summary ? [ov.summary, ...result.reasons].slice(0, 4) : result.reasons;
+  const durationMin = items.reduce((n, i) => n + i.estDuration, 0);
+
+  return { ...result, items, reasons, durationMin };
 }
 
 function cardioTypeFor(name: string): CardioType {

@@ -28,10 +28,26 @@ export type Experience = (typeof EXPERIENCES)[number];
 export const EQUIPMENTS = ["Full Gym", "Home Gym", "Dumbbells Only", "Bodyweight"] as const;
 export type Equipment = (typeof EQUIPMENTS)[number];
 
-export const INJURIES = ["Shoulder", "Knee", "Lower Back"] as const;
+export const INJURIES = [
+  "Shoulder",
+  "Knee",
+  "Lower Back",
+  "Elbow",
+  "Neck",
+  "Hip Flexor",
+] as const;
 export type Injury = (typeof INJURIES)[number];
 
-export type Category =
+export const RECOVERY_LOADS = ["Low", "Medium", "High"] as const;
+export type RecoveryLoad = (typeof RECOVERY_LOADS)[number];
+
+// Library exercise categories (v1).
+export type Category = "Compound" | "Isolation" | "Finisher" | "Cardio";
+
+// Template slot categories — how the goal template prescribes sets/reps.
+// (The first compound in a group maps to "Primary Compound", the rest to
+// "Secondary Compound"; isolation/finisher map straight through.)
+export type SlotCategory =
   | "Primary Compound"
   | "Secondary Compound"
   | "Isolation"
@@ -42,17 +58,19 @@ export type LibraryExercise = {
   id: string;
   name: string;
   muscle_group: CoachGroup;
+  muscle_region: string | null;
   category: Category;
-  equipment: Equipment;
+  equipment: string[]; // contexts: "gym", "home"
   difficulty: Experience;
   goal_tags: string[];
   alternative_exercise_ids: string[];
-  estimated_duration_min: number;
+  recovery_load: RecoveryLoad | null;
+  estimated_duration_min: number | null;
   injury_flags: string[];
 };
 
 export type TemplateSlot = {
-  category: Category;
+  category: SlotCategory;
   sets: number;
   rep_min: number;
   rep_max: number;
@@ -121,15 +139,12 @@ export const COACH_TO_APP: Record<CoachGroup, MuscleGroup> = {
   Cardio: "cardio",
 };
 
-// Equipment hierarchy: a user with a higher tier can perform lower-tier moves.
-const EQUIP_RANK: Record<Equipment, number> = {
-  Bodyweight: 0,
-  "Dumbbells Only": 1,
-  "Home Gym": 2,
-  "Full Gym": 3,
-};
-export function equipmentAllows(user: Equipment, ex: Equipment): boolean {
-  return EQUIP_RANK[ex] <= EQUIP_RANK[user];
+// Library equipment is a set of contexts ("gym", "home"). A Full-Gym user can
+// do anything; everyone else needs an exercise that's tagged "home".
+export function equipmentAllows(user: Equipment, exContexts: string[]): boolean {
+  if (!exContexts || exContexts.length === 0) return true;
+  if (user === "Full Gym") return true;
+  return exContexts.includes("home");
 }
 
 export function goalTag(goal: Goal): string {
