@@ -25,7 +25,7 @@ export default function GroupMenu({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Group options"
-        className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-black/5"
+        className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-white/10"
       >
         ⋮
       </button>
@@ -33,7 +33,7 @@ export default function GroupMenu({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute right-3 top-12 z-50 w-40 overflow-hidden rounded-xl border border-black/10 bg-white py-1 shadow-lg">
+          <div className="absolute right-3 top-12 z-50 w-40 overflow-hidden rounded-xl border border-white/10 bg-surface py-1 shadow-lg">
             <MenuItem
               label="Edit"
               onClick={() => {
@@ -89,7 +89,7 @@ function MenuItem({
       type="button"
       onClick={onClick}
       className={[
-        "block w-full px-4 py-2.5 text-left text-sm font-medium active:bg-black/5",
+        "block w-full px-4 py-2.5 text-left text-sm font-medium active:bg-white/10",
         danger ? "text-orange" : "text-ink",
       ].join(" ")}
     >
@@ -146,7 +146,7 @@ function ShareModal({
 
   return (
     <>
-      <div onClick={onClose} aria-hidden className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" />
+      <div onClick={onClose} aria-hidden className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" />
       <div
         role="dialog"
         aria-label="Share workout"
@@ -157,7 +157,7 @@ function ShareModal({
             <h3 className="text-base font-semibold text-ink">Share {groupLabel}</h3>
             <p className="text-xs text-muted">They can accept it into their day.</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-black/5">
+          <button type="button" onClick={onClose} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-white/10">
             ✕
           </button>
         </div>
@@ -185,7 +185,7 @@ function ShareModal({
                     aria-pressed={on}
                     className={[
                       "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left",
-                      on ? "border-orange bg-orange-soft" : "border-black/5 bg-white active:bg-black/5",
+                      on ? "border-orange bg-orange-soft" : "border-white/10 bg-surface active:bg-white/10",
                     ].join(" ")}
                   >
                     <span className="min-w-0">
@@ -195,7 +195,7 @@ function ShareModal({
                     <span
                       className={[
                         "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs",
-                        on ? "bg-orange text-white" : "border border-black/20 text-transparent",
+                        on ? "bg-orange text-white" : "border border-white/20 text-transparent",
                       ].join(" ")}
                       aria-hidden
                     >
@@ -209,7 +209,7 @@ function ShareModal({
         )}
 
         {sharedCount === 0 && users && users.length > 0 && (
-          <div className="border-t border-black/5 px-4 pb-5 pt-3">
+          <div className="border-t border-white/10 px-4 pb-5 pt-3">
             {error && <p className="mb-2 text-center text-sm text-orange">{error}</p>}
             <button
               type="button"

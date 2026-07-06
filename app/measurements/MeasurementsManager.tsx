@@ -21,7 +21,7 @@ function latestValues(entries: Measurement[]) {
 }
 
 const inputClass =
-  "w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
+  "w-full rounded-xl border border-white/10 bg-surface px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
 
 function fmtDate(key: string) {
   const [y, m, d] = key.split("-").map(Number);
@@ -53,7 +53,7 @@ export default function MeasurementsManager({
         <Link
           href="/"
           aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-xl active:bg-black/5"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-xl active:bg-white/10"
         >
           ←
         </Link>
@@ -93,7 +93,7 @@ export default function MeasurementsManager({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="mb-4 w-full rounded-2xl bg-green px-4 py-3.5 text-base font-semibold text-white transition active:scale-[0.98]"
+            className="mb-4 w-full rounded-2xl bg-green px-4 py-3.5 text-base font-semibold text-ink-inverse transition active:scale-[0.98]"
           >
             + Add entry
           </button>
@@ -101,7 +101,7 @@ export default function MeasurementsManager({
           <h2 className="mb-2 text-sm font-semibold text-muted">History</h2>
 
           {initial.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-black/15 px-4 py-8 text-center text-sm text-muted">
+            <p className="rounded-2xl border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted">
               No measurements yet. Add your first entry above.
             </p>
           ) : (
@@ -111,7 +111,7 @@ export default function MeasurementsManager({
                   <button
                     type="button"
                     onClick={() => setEditing(m)}
-                    className="w-full rounded-2xl border border-black/5 bg-white px-4 py-3.5 text-left active:bg-black/5"
+                    className="w-full rounded-2xl border border-white/10 bg-surface px-4 py-3.5 text-left active:bg-white/10"
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-ink">
@@ -251,7 +251,7 @@ function MeasurementForm({
       <button
         type="submit"
         disabled={busy}
-        className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
+        className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
       >
         {busy ? "Saving…" : editing ? "Update entry" : "Save entry"}
       </button>
@@ -261,7 +261,7 @@ function MeasurementForm({
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="flex-1 rounded-xl border border-black/10 px-4 py-2.5 text-sm text-muted active:bg-black/5"
+          className="flex-1 rounded-xl border border-white/10 px-4 py-2.5 text-sm text-muted active:bg-white/10"
         >
           Cancel
         </button>

@@ -27,7 +27,7 @@ export default function CircuitsManager({ circuits }: { circuits: Circuit[] }) {
         <Link
           href="/"
           aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-xl active:bg-black/5"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-xl active:bg-white/10"
         >
           ←
         </Link>
@@ -54,7 +54,7 @@ export default function CircuitsManager({ circuits }: { circuits: Circuit[] }) {
       </h2>
 
       {circuits.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-black/15 px-4 py-8 text-center text-sm text-muted">
+        <p className="rounded-2xl border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted">
           No circuits yet. Create your first one above.
         </p>
       ) : (
@@ -62,7 +62,7 @@ export default function CircuitsManager({ circuits }: { circuits: Circuit[] }) {
           {circuits.map((c) => (
             <li
               key={c.id}
-              className="rounded-2xl border border-black/5 bg-white"
+              className="rounded-2xl border border-white/10 bg-surface"
             >
               <div className="flex items-center gap-3 px-4 py-3.5">
                 <span

@@ -51,7 +51,7 @@ export default function CoachClient({
         </p>
       </header>
 
-      <div className="mt-4 flex rounded-xl bg-black/[0.05] p-1">
+      <div className="mt-4 flex rounded-xl bg-white/[0.06] p-1">
         {(["exercise", "diet"] as const).map((t) => (
           <button
             key={t}
@@ -59,7 +59,7 @@ export default function CoachClient({
             onClick={() => setTab(t)}
             className={[
               "flex-1 rounded-lg py-2 text-sm font-semibold capitalize transition",
-              tab === t ? "bg-white text-green shadow-sm" : "text-muted",
+              tab === t ? "bg-surface text-green shadow-sm" : "text-muted",
             ].join(" ")}
           >
             {t}
@@ -199,7 +199,7 @@ function OnboardingForm({
         type="button"
         disabled={busy}
         onClick={submit}
-        className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
+        className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60"
       >
         {busy ? "Saving…" : "Save preferences"}
       </button>
@@ -207,7 +207,7 @@ function OnboardingForm({
         <button
           type="button"
           onClick={onCancel}
-          className="w-full rounded-xl border border-black/10 px-4 py-2.5 text-sm text-muted active:bg-black/5"
+          className="w-full rounded-xl border border-white/10 px-4 py-2.5 text-sm text-muted active:bg-white/10"
         >
           Cancel
         </button>
@@ -401,7 +401,7 @@ function Generator({
           </button>
 
           {/* AI refine */}
-          <div className="mt-4 rounded-2xl border border-black/5 bg-white p-3">
+          <div className="mt-4 rounded-2xl border border-white/10 bg-surface p-3">
             <p className="mb-2 text-xs font-semibold text-ink">✨ Refine with a note</p>
             <div className="flex gap-2">
               <input
@@ -409,7 +409,7 @@ function Generator({
                 onChange={(e) => setNote(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && refine()}
                 placeholder="e.g. only dumbbells, 30 min, sore shoulder"
-                className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus:border-orange"
+                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus:border-orange"
               />
               <button
                 type="button"
@@ -429,7 +429,7 @@ function Generator({
             type="button"
             disabled={accepting || items.length === 0}
             onClick={accept}
-            className="mt-4 w-full rounded-2xl bg-green px-4 py-4 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
+            className="mt-4 w-full rounded-2xl bg-green px-4 py-4 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
           >
             {accepting ? "Logging…" : "✓ Accept & Log to today"}
           </button>
@@ -467,7 +467,7 @@ function ItemCard({
       ? `${item.sets} × to failure`
       : `${item.sets} × ${item.repMin}–${item.repMax}`;
   return (
-    <div className="rounded-2xl border border-black/5 bg-white p-3.5">
+    <div className="rounded-2xl border border-white/10 bg-surface p-3.5">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-semibold text-ink">{item.name}</p>
@@ -484,7 +484,7 @@ function ItemCard({
         </div>
         <div className="flex shrink-0 gap-1.5">
           {canReplace && (
-            <button type="button" onClick={onReplace} aria-label="Replace" className="rounded-lg border border-black/10 px-2.5 py-1 text-xs font-medium text-ink active:bg-black/5">
+            <button type="button" onClick={onReplace} aria-label="Replace" className="rounded-lg border border-white/10 px-2.5 py-1 text-xs font-medium text-ink active:bg-white/10">
               ⟳
             </button>
           )}
@@ -508,11 +508,11 @@ function AddSheet({
 }) {
   return (
     <>
-      <div onClick={onClose} aria-hidden className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" />
+      <div onClick={onClose} aria-hidden className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" />
       <div className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[70vh] w-full max-w-md flex-col rounded-t-3xl bg-page shadow-xl safe-bottom">
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
           <h3 className="text-base font-semibold text-ink">Add exercise</h3>
-          <button type="button" onClick={onClose} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-black/5">
+          <button type="button" onClick={onClose} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-white/10">
             ✕
           </button>
         </div>
@@ -525,7 +525,7 @@ function AddSheet({
                 <button
                   type="button"
                   onClick={() => onPick(it)}
-                  className="flex w-full items-center justify-between rounded-xl border border-black/5 bg-white px-4 py-3 text-left active:bg-black/5"
+                  className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-surface px-4 py-3 text-left active:bg-white/10"
                 >
                   <span className="font-medium text-ink">{it.name}</span>
                   <span className="text-xs text-muted">{it.category}</span>
@@ -620,7 +620,7 @@ function ManageExercises({
                   return (
                     <li
                       key={ex.id}
-                      className="flex items-center justify-between rounded-xl border border-black/5 bg-white px-3 py-2"
+                      className="flex items-center justify-between rounded-xl border border-white/10 bg-surface px-3 py-2"
                     >
                       <span className={`text-sm ${ban ? "text-muted line-through" : "text-ink"}`}>
                         {ex.name}
@@ -630,7 +630,7 @@ function ManageExercises({
                           type="button"
                           onClick={() => togglePref(ex.id)}
                           aria-label="Favourite"
-                          className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${fav ? "bg-orange text-white" : "border border-black/10 text-muted"}`}
+                          className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${fav ? "bg-orange text-white" : "border border-white/10 text-muted"}`}
                         >
                           ★
                         </button>
@@ -638,7 +638,7 @@ function ManageExercises({
                           type="button"
                           onClick={() => toggleExcl(ex.id)}
                           aria-label="Exclude"
-                          className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${ban ? "bg-orange-soft" : "border border-black/10 opacity-50"}`}
+                          className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${ban ? "bg-orange-soft" : "border border-white/10 opacity-50"}`}
                         >
                           🚫
                         </button>
@@ -655,7 +655,7 @@ function ManageExercises({
         type="button"
         disabled={busy}
         onClick={save}
-        className="mt-5 w-full rounded-2xl bg-green px-4 py-3.5 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
+        className="mt-5 w-full rounded-2xl bg-green px-4 py-3.5 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60"
       >
         {busy ? "Saving…" : "Save"}
       </button>
@@ -666,7 +666,7 @@ function ManageExercises({
 function DietTab() {
   return (
     <div className="mt-5 space-y-5">
-      <section className="rounded-2xl border border-black/5 bg-white p-5">
+      <section className="rounded-2xl border border-white/10 bg-surface p-5">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-tint text-2xl">🥗</div>
         <h2 className="mt-3 flex items-center gap-2 text-base font-bold text-ink">
           Personalised diet plans{" "}
@@ -708,6 +708,6 @@ function Choice<T extends string>({
 function chipClass(on: boolean): string {
   return [
     "rounded-full border px-3 py-1.5 text-sm font-medium transition",
-    on ? "border-orange bg-orange text-white" : "border-black/10 bg-white text-ink active:bg-black/5",
+    on ? "border-orange bg-orange text-white" : "border-white/10 bg-surface text-ink active:bg-white/10",
   ].join(" ");
 }

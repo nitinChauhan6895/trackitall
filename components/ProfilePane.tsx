@@ -11,7 +11,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
+  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
 
 type View = "menu" | "edit" | "password";
 
@@ -41,7 +41,7 @@ export default function ProfilePane({ profile }: { profile: Profile }) {
         onClick={close}
         aria-hidden
         className={[
-          "fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity",
+          "fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity",
           open ? "opacity-100" : "pointer-events-none opacity-0",
         ].join(" ")}
       />
@@ -67,7 +67,7 @@ export default function ProfilePane({ profile }: { profile: Profile }) {
             type="button"
             onClick={view === "menu" ? close : () => setView("menu")}
             aria-label={view === "menu" ? "Close" : "Back"}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-muted active:bg-black/5"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-muted active:bg-white/10"
           >
             {view === "menu" ? "✕" : "←"}
           </button>
@@ -112,13 +112,13 @@ function Menu({
 
       <ShareToggle initial={profile.share_to_community} />
 
-      <div className="border-t border-black/5">
+      <div className="border-t border-white/10">
         <Row icon="👤" label="Edit profile" onClick={onEdit} />
         <Row icon="✉️" label={profile.email ?? "No email on file"} muted />
         <Row icon="🔒" label="Change password" onClick={onPassword} />
       </div>
 
-      <div className="mt-auto border-t border-black/5 pt-2">
+      <div className="mt-auto border-t border-white/10 pt-2">
         <form action={signOut}>
           <button
             type="submit"
@@ -165,12 +165,12 @@ function ShareToggle({ initial }: { initial: boolean }) {
           onClick={toggle}
           className={[
             "relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60",
-            on ? "bg-green" : "bg-black/20",
+            on ? "bg-green" : "bg-white/15",
           ].join(" ")}
         >
           <span
             className={[
-              "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+              "absolute top-0.5 h-5 w-5 rounded-full bg-surface shadow transition-transform",
               on ? "translate-x-[22px]" : "translate-x-0.5",
             ].join(" ")}
           />
@@ -267,7 +267,7 @@ function EditProfile({
       <button
         type="submit"
         disabled={busy}
-        className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
+        className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60"
       >
         {busy ? "Saving…" : "Save changes"}
       </button>
@@ -329,7 +329,7 @@ function ChangePassword({ onDone }: { onDone: () => void }) {
       <button
         type="submit"
         disabled={busy || done}
-        className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
+        className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60"
       >
         {busy ? "Saving…" : "Update password"}
       </button>

@@ -26,7 +26,7 @@ export default function SwipeExerciseHeader({
   return (
     <SwipeToDelete onDelete={remove} label="Delete exercise">
       {(requestDelete) => (
-        <div className="flex items-center justify-between bg-white py-0.5">
+        <div className="flex items-center justify-between bg-surface py-0.5">
           <h3 className="font-semibold">{name}</h3>
           <button
             type="button"

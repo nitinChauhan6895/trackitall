@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toDateKey } from "@/lib/date";
 import type { SeriesPoint, StatsData, WeekStats } from "@/lib/stats";
 
-const GREEN = "#3B6D11";
+const GREEN = "#A8E830";
 const ORANGE = "#FF571F";
 const TEAL_OLD = "#1F7D63";
 const TEAL_NEW = "#3FAE8E";
@@ -38,7 +38,7 @@ export default function StatsView({ stats }: { stats: StatsData }) {
       </header>
 
       {/* Time range toggle */}
-      <div className="mt-4 flex rounded-xl bg-black/[0.05] p-1">
+      <div className="mt-4 flex rounded-xl bg-white/[0.06] p-1">
         {(["this", "last", "last7"] as Range[]).map((r) => (
           <button
             key={r}
@@ -46,7 +46,7 @@ export default function StatsView({ stats }: { stats: StatsData }) {
             onClick={() => setRange(r)}
             className={[
               "flex-1 rounded-lg py-2 text-xs font-semibold transition",
-              range === r ? "bg-white text-green shadow-sm" : "text-muted",
+              range === r ? "bg-surface text-green shadow-sm" : "text-muted",
             ].join(" ")}
           >
             {RANGE_LABEL[r]}
@@ -89,7 +89,7 @@ export default function StatsView({ stats }: { stats: StatsData }) {
             <select
               value={exercise}
               onChange={(e) => setExercise(e.target.value)}
-              className="mb-3 w-full rounded-lg border border-black/10 bg-white px-3 py-2 text-sm text-ink outline-none focus:border-orange"
+              className="mb-3 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-orange"
             >
               {stats.strengthExercises.map((name) => (
                 <option key={name} value={name}>
@@ -145,13 +145,13 @@ function Card({
 }) {
   return (
     <div className={`rounded-xl p-3 ${green ? "bg-green-tint" : "bg-beige"}`}>
-      <div className={`text-[22px] font-bold leading-none ${green ? "text-[#27500A]" : "text-[#854F0B]"}`}>
+      <div className={`text-[22px] font-bold leading-none ${green ? "text-green" : "text-[#E8B04B]"}`}>
         {value}{" "}
-        <span className={`text-[11px] font-normal ${green ? "text-green" : "text-[#BA7517]"}`}>
+        <span className={`text-[11px] font-normal ${green ? "text-green" : "text-[#E8B04B]"}`}>
           {unit}
         </span>
       </div>
-      <div className={`mt-1.5 text-[11px] ${green ? "text-green" : "text-[#BA7517]"}`}>
+      <div className={`mt-1.5 text-[11px] ${green ? "text-green" : "text-[#E8B04B]"}`}>
         {label}
       </div>
     </div>
@@ -168,7 +168,7 @@ function ChartBox({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-black/5 bg-white p-3">
+    <div className="rounded-xl border border-white/10 bg-surface p-3">
       <div className="mb-2.5 flex items-center justify-between text-xs font-semibold text-ink">
         <span className="truncate">{title}</span>
         <span className="shrink-0 pl-2 font-normal text-muted">{hint}</span>
@@ -200,7 +200,7 @@ function DailyCardio({ km, labels }: { km: number[]; labels: string[] }) {
             className="w-full rounded-t"
             style={{
               height: v > 0 ? `${Math.max(6, (v / max) * 100)}%` : "2%",
-              background: v > 0 ? (i >= km.length - 2 ? TEAL_NEW : TEAL_OLD) : "#E2DED7",
+              background: v > 0 ? (i >= km.length - 2 ? TEAL_NEW : TEAL_OLD) : "#2A2D24",
             }}
           />
           <span className="text-[9px] text-muted">{labels[i]}</span>
@@ -268,10 +268,10 @@ function MuscleBreakdown({ week }: { week: WeekStats }) {
     <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
       {week.muscles.map((m, i) => {
         let color = AMBER;
-        if (m.count === 0) color = "#CFCABF";
+        if (m.count === 0) color = "#33362C";
         else if (m.group === "cardio") color = TEAL_OLD;
         else if (i < 2) color = ORANGE;
-        else if (m.count <= 1) color = "#9A876F";
+        else if (m.count <= 1) color = "#8D9483";
         return (
           <div key={m.group} className="flex flex-col gap-1">
             <div className="flex items-center justify-between text-[11px]">
@@ -280,7 +280,7 @@ function MuscleBreakdown({ week }: { week: WeekStats }) {
               </span>
               <span className="text-muted">{m.count}×</span>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-black/[0.06]">
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
               <div className="h-full rounded-full" style={{ width: `${(m.count / max) * 100}%`, background: color }} />
             </div>
           </div>

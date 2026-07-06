@@ -16,7 +16,7 @@ export default async function StatsPage() {
           </h1>
           <p className="mt-0.5 text-sm text-muted">Your progress at a glance</p>
         </header>
-        <div className="mt-6 rounded-2xl border border-black/5 bg-white p-6 text-center">
+        <div className="mt-6 rounded-2xl border border-white/10 bg-surface p-6 text-center">
           <span aria-hidden className="text-4xl">📈</span>
           <p className="mt-3 text-base font-semibold text-ink">
             No workouts logged yet
@@ -26,7 +26,7 @@ export default async function StatsPage() {
           </p>
           <Link
             href={`/log/${today}`}
-            className="mt-4 inline-flex rounded-xl bg-green px-5 py-2.5 text-sm font-semibold text-white active:scale-95"
+            className="mt-4 inline-flex rounded-xl bg-green px-5 py-2.5 text-sm font-semibold text-ink-inverse active:scale-95"
           >
             + Log workout
           </Link>

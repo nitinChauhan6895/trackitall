@@ -31,7 +31,7 @@ type DraftEx = {
 };
 
 const inputClass =
-  "w-full rounded-xl border border-black/10 bg-white px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-green";
+  "w-full rounded-xl border border-white/10 bg-surface px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-green";
 
 export default function CircuitBuilder({ initial }: { initial?: Circuit }) {
   const router = useRouter();
@@ -113,7 +113,7 @@ export default function CircuitBuilder({ initial }: { initial?: Circuit }) {
           type="button"
           onClick={() => router.push("/circuits")}
           aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-xl active:bg-black/5"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-xl active:bg-white/10"
         >
           ←
         </button>
@@ -150,7 +150,7 @@ export default function CircuitBuilder({ initial }: { initial?: Circuit }) {
           {exercises.map((ex, i) => (
             <div
               key={ex.key}
-              className="rounded-2xl border border-black/10 bg-white"
+              className="rounded-2xl border border-white/10 bg-surface"
             >
               <div className="flex items-center gap-3 px-3 py-3">
                 <span className="w-5 text-center text-sm font-semibold text-muted">
@@ -166,7 +166,7 @@ export default function CircuitBuilder({ initial }: { initial?: Circuit }) {
                   type="button"
                   onClick={() => patchEx(ex.key, { expanded: !ex.expanded })}
                   aria-label="Edit targets"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-orange active:bg-black/5"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-orange active:bg-white/10"
                 >
                   ✎
                 </button>
@@ -176,13 +176,13 @@ export default function CircuitBuilder({ initial }: { initial?: Circuit }) {
                     setExercises((prev) => prev.filter((e) => e.key !== ex.key))
                   }
                   aria-label="Remove exercise"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-black/5"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-white/10"
                 >
                   ✕
                 </button>
               </div>
               {ex.expanded && (
-                <div className="border-t border-black/5 p-3">
+                <div className="border-t border-white/10 p-3">
                   <MetricInputs
                     name={ex.name}
                     metrics={ex.metrics}
@@ -253,7 +253,7 @@ export default function CircuitBuilder({ initial }: { initial?: Circuit }) {
           type="button"
           onClick={save}
           disabled={busy}
-          className="flex w-full items-center justify-center rounded-2xl bg-green px-4 py-4 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
+          className="flex w-full items-center justify-center rounded-2xl bg-green px-4 py-4 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
         >
           {busy ? "Saving…" : "Save Circuit"}
         </button>
@@ -365,7 +365,7 @@ function AddExerciseSheet({
       <div
         onClick={onClose}
         aria-hidden
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
       />
       <div
         role="dialog"
@@ -378,7 +378,7 @@ function AddExerciseSheet({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-black/5"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-white/10"
           >
             ✕
           </button>
@@ -400,8 +400,8 @@ function AddExerciseSheet({
               className={[
                 "shrink-0 rounded-full px-3 py-1.5 text-sm font-medium",
                 filter === f.key
-                  ? "bg-green text-white"
-                  : "border border-black/10 bg-white text-ink",
+                  ? "bg-green text-ink-inverse"
+                  : "border border-white/10 bg-surface text-ink",
               ].join(" ")}
             >
               {f.label}
@@ -415,7 +415,7 @@ function AddExerciseSheet({
               <button
                 type="button"
                 onClick={() => onAdd(it.name)}
-                className="flex w-full items-center justify-between rounded-xl border border-black/5 bg-white px-4 py-3 text-left active:bg-black/5"
+                className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-surface px-4 py-3 text-left active:bg-white/10"
               >
                 <span>
                   <span className="block font-medium text-ink">{it.name}</span>
@@ -429,7 +429,7 @@ function AddExerciseSheet({
           ))}
         </ul>
 
-        <div className="mt-3 border-t border-black/5 pt-3">
+        <div className="mt-3 border-t border-white/10 pt-3">
           <div className="flex gap-2">
             <input
               value={manual}
@@ -444,7 +444,7 @@ function AddExerciseSheet({
                 onAdd(manual.trim());
                 setManual("");
               }}
-              className="shrink-0 rounded-xl bg-green px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+              className="shrink-0 rounded-xl bg-green px-4 py-2.5 text-sm font-semibold text-ink-inverse disabled:opacity-40"
             >
               Add
             </button>

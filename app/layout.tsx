@@ -12,13 +12,13 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
     title: "TrackItAll",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#F5F5F5",
+  themeColor: "#0C0D0A",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

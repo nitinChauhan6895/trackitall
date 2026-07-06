@@ -44,7 +44,7 @@ export default function ShareInbox({ shares }: { shares: IncomingShare[] }) {
           return (
             <li
               key={s.id}
-              className="rounded-2xl border border-black/5 bg-white p-4"
+              className="rounded-2xl border border-white/10 bg-surface p-4"
             >
               <p className="text-sm text-ink">
                 <span className="font-semibold">{s.from_name}</span> shared{" "}
@@ -59,7 +59,7 @@ export default function ShareInbox({ shares }: { shares: IncomingShare[] }) {
                   type="button"
                   disabled={busy}
                   onClick={() => act(s.id, acceptShare)}
-                  className="flex-1 rounded-xl bg-green px-4 py-2.5 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
+                  className="flex-1 rounded-xl bg-green px-4 py-2.5 text-sm font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
                 >
                   {busy ? "…" : "Accept"}
                 </button>
@@ -67,7 +67,7 @@ export default function ShareInbox({ shares }: { shares: IncomingShare[] }) {
                   type="button"
                   disabled={busy}
                   onClick={() => act(s.id, declineShare)}
-                  className="flex-1 rounded-xl border border-black/10 px-4 py-2.5 text-sm font-medium text-muted active:bg-black/5 disabled:opacity-50"
+                  className="flex-1 rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-muted active:bg-white/10 disabled:opacity-50"
                 >
                   Decline
                 </button>

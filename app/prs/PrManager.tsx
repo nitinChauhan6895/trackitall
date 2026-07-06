@@ -46,7 +46,7 @@ export default function PrManager({ initialPrs }: { initialPrs: Pr[] }) {
         <Link
           href="/"
           aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-xl active:bg-black/5"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-xl active:bg-white/10"
         >
           ←
         </Link>
@@ -76,7 +76,7 @@ export default function PrManager({ initialPrs }: { initialPrs: Pr[] }) {
           </button>
 
           {initialPrs.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-black/15 px-4 py-8 text-center text-sm text-muted">
+            <p className="rounded-2xl border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted">
               No PRs yet. Add your personal bests above.
             </p>
           ) : (
@@ -96,7 +96,7 @@ export default function PrManager({ initialPrs }: { initialPrs: Pr[] }) {
                     <button
                       type="button"
                       onClick={() => setEditing(pr)}
-                      className="w-full rounded-2xl border border-black/5 bg-white px-4 py-3.5 text-left active:bg-black/5"
+                      className="w-full rounded-2xl border border-white/10 bg-surface px-4 py-3.5 text-left active:bg-white/10"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <span className="min-w-0 flex-1 truncate font-medium text-ink">
@@ -226,7 +226,7 @@ function PrForm({
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base text-ink outline-none focus:border-orange"
+            className="w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none focus:border-orange"
           />
         </div>
 
@@ -234,7 +234,7 @@ function PrForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Exercise name"
-          className="w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange"
+          className="w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange"
         />
 
         <div className="flex gap-2.5">
@@ -243,7 +243,7 @@ function PrForm({
             onChange={(e) => setValue(e.target.value)}
             inputMode={unit === "time" ? "text" : "decimal"}
             placeholder={unit === "time" ? "mm:ss" : "Value"}
-            className="min-w-0 flex-1 rounded-xl border border-black/10 bg-white px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange"
+            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange"
           />
           {unit === "kg" && (
             <input
@@ -251,13 +251,13 @@ function PrForm({
               onChange={(e) => setReps(e.target.value)}
               inputMode="numeric"
               placeholder="Reps"
-              className="w-20 shrink-0 rounded-xl border border-black/10 bg-white px-3 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange"
+              className="w-20 shrink-0 rounded-xl border border-white/10 bg-surface px-3 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange"
             />
           )}
           <select
             value={unit}
             onChange={(e) => setUnit(e.target.value as PrUnitType)}
-            className="shrink-0 rounded-xl border border-black/10 bg-white px-3 py-3 text-base text-ink outline-none focus:border-orange"
+            className="shrink-0 rounded-xl border border-white/10 bg-surface px-3 py-3 text-base text-ink outline-none focus:border-orange"
           >
             {UNIT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -282,7 +282,7 @@ function PrForm({
                   "rounded-lg px-4 py-2 text-sm font-medium",
                   distanceUnit === u
                     ? "bg-orange text-white"
-                    : "border border-black/10 bg-white text-ink",
+                    : "border border-white/10 bg-surface text-ink",
                 ].join(" ")}
               >
                 {u}
@@ -306,7 +306,7 @@ function PrForm({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="flex-1 rounded-xl border border-black/10 px-4 py-2.5 text-sm text-muted active:bg-black/5"
+            className="flex-1 rounded-xl border border-white/10 px-4 py-2.5 text-sm text-muted active:bg-white/10"
           >
             Cancel
           </button>

@@ -17,7 +17,7 @@ export default function BottomNav() {
     href === "/" ? path === "/" : path.startsWith(href);
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md border-t border-black/5 bg-page/95 backdrop-blur safe-bottom">
+    <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md border-t border-white/10 bg-page/95 backdrop-blur safe-bottom">
       <div className="grid grid-cols-5 items-end px-2 pb-1.5 pt-2">
         <NavItem href="/" label="Home" active={isActive("/")} icon={HomeIcon} />
         <NavItem href="/community" label="Community" active={isActive("/community")} icon={PeopleIcon} />
@@ -26,7 +26,7 @@ export default function BottomNav() {
           <Link
             href={`/log/${today}`}
             aria-label="Log workout"
-            className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-green text-white shadow-lg ring-4 ring-page transition active:scale-95"
+            className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-green text-ink-inverse shadow-lg ring-4 ring-page transition active:scale-95"
           >
             <PlusIcon />
           </Link>

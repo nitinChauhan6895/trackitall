@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { isValidEmail, normalizeUsername } from "@/lib/auth";
 
 const inputClass =
-  "w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
+  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
 
 export default function ForgotPasswordPage() {
   const [value, setValue] = useState("");
@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
       </div>
 
       {sent ? (
-        <div className="rounded-2xl border border-black/5 bg-white p-5 text-center">
+        <div className="rounded-2xl border border-white/10 bg-surface p-5 text-center">
           <p className="text-sm text-ink">
             If an account matches that, a reset link is on its way. Check your
             inbox (and spam).
@@ -88,7 +88,7 @@ export default function ForgotPasswordPage() {
           <button
             type="submit"
             disabled={pending}
-            className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
+            className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60"
           >
             {pending ? "Sending…" : "Send reset link"}
           </button>

@@ -79,7 +79,7 @@ export default async function DayPage({ params }: { params: { date: string } }) 
           <Link
             href={backHref}
             aria-label="Back to calendar"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-xl shadow-sm active:bg-black/5"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface text-xl shadow-sm active:bg-white/10"
           >
             ←
           </Link>
@@ -99,19 +99,19 @@ export default async function DayPage({ params }: { params: { date: string } }) 
       </header>
 
       {/* Day summary stats, with prev/next-day arrows flush in the banner */}
-      <div className="mb-4 flex items-stretch overflow-hidden rounded-2xl border border-black/5 bg-white">
+      <div className="mb-4 flex items-stretch overflow-hidden rounded-2xl border border-white/10 bg-surface">
         <DayArrow href={`/day/${prevKey}`} label="Previous day" glyph="‹" side="left" />
-        <div className="grid flex-1 grid-cols-4 divide-x divide-black/5 py-3">
+        <div className="grid flex-1 grid-cols-4 divide-x divide-white/10 py-3">
           <Stat icon="📋" tone="text-green" value={String(totalSets)} label="Sets" />
           <Stat icon="🏋️" tone="text-orange" value={String(exercises.length)} label="Exercises" />
-          <Stat icon="💪" tone="text-[#9B5CC9]" value={String(byGroup.size)} label="Muscles" />
+          <Stat icon="💪" tone="text-[#C79BE8]" value={String(byGroup.size)} label="Muscles" />
           <Stat icon={<KettlebellIcon className="h-5 w-5" />} tone="text-green" value={fmtVolume(totalVolume)} label="Volume" unit="kg" />
         </div>
         <DayArrow href={`/day/${nextKey}`} label="Next day" glyph="›" side="right" />
       </div>
 
       {exercises.length === 0 ? (
-        <p className="mb-6 rounded-2xl border border-dashed border-black/15 px-4 py-8 text-center text-sm text-muted">
+        <p className="mb-6 rounded-2xl border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted">
           No workout saved for this day yet.
         </p>
       ) : (
@@ -123,7 +123,7 @@ export default async function DayPage({ params }: { params: { date: string } }) 
               return (
                 <section
                   key={group}
-                  className="relative overflow-hidden rounded-2xl border border-black/5 bg-white"
+                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-surface"
                   style={{ borderLeft: `4px solid ${MUSCLE_TONE[group]}` }}
                 >
                   <div className="flex items-center gap-2 px-4 pt-4">
@@ -165,7 +165,7 @@ export default async function DayPage({ params }: { params: { date: string } }) 
       <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md px-4 pb-5 pt-2 safe-bottom">
         <Link
           href={`/log/${date}`}
-          className="flex w-full items-center justify-center rounded-2xl bg-green px-4 py-4 text-base font-semibold text-white transition active:scale-[0.98]"
+          className="flex w-full items-center justify-center rounded-2xl bg-green px-4 py-4 text-base font-semibold text-ink-inverse transition active:scale-[0.98]"
         >
           + Add to this day
         </Link>
@@ -230,8 +230,8 @@ function DayArrow({
       href={href}
       aria-label={label}
       className={[
-        "flex w-10 shrink-0 items-center justify-center text-2xl text-muted active:bg-black/5",
-        side === "left" ? "border-r border-black/5" : "border-l border-black/5",
+        "flex w-10 shrink-0 items-center justify-center text-2xl text-muted active:bg-white/10",
+        side === "left" ? "border-r border-white/10" : "border-l border-white/10",
       ].join(" ")}
     >
       {glyph}

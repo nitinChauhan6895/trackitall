@@ -20,7 +20,7 @@ function Ring({ frac }: { frac: number }) {
   const dash = c * Math.min(1, Math.max(0, frac));
   return (
     <svg viewBox="0 0 64 64" className="absolute inset-0 h-full w-full -rotate-90">
-      <circle cx="32" cy="32" r={r} fill="none" stroke="currentColor" className="text-black/10" strokeWidth="4" />
+      <circle cx="32" cy="32" r={r} fill="none" stroke="currentColor" className="text-white/15" strokeWidth="4" />
       <circle cx="32" cy="32" r={r} fill="none" stroke="currentColor" className="text-orange" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${dash} ${c}`} />
     </svg>
   );
@@ -37,7 +37,7 @@ export function Badge({
   const ring = size === "sm" ? "h-14 w-14" : "h-16 w-16";
 
   return (
-    <div className="flex flex-col items-center gap-2 rounded-2xl border border-black/5 bg-white p-3">
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-surface p-3">
       <div className={`relative ${ring}`}>
         {!badge.earned && <Ring frac={frac} />}
         <div
@@ -45,7 +45,7 @@ export function Badge({
             "absolute inset-[6px] flex items-center justify-center rounded-full text-2xl",
             badge.earned
               ? "bg-orange-soft shadow-[0_0_16px_rgba(242,106,44,0.5)] ring-2 ring-orange/60"
-              : "bg-black/5",
+              : "bg-white/10",
           ].join(" ")}
         >
           <span aria-hidden className={badge.earned ? "" : "opacity-40 grayscale"}>
@@ -55,7 +55,7 @@ export function Badge({
         {!badge.earned && (
           <span
             aria-hidden
-            className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/30 text-[11px] text-white shadow"
+            className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[11px] text-white shadow"
           >
             🔒
           </span>

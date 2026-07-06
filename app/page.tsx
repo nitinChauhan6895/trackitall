@@ -97,12 +97,12 @@ export default async function HomePage({
       </header>
 
       {/* Calendar */}
-      <section className="rounded-2xl border border-black/5 bg-white p-4">
+      <section className="rounded-2xl border border-white/10 bg-surface p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-base font-semibold">{monthLabel(year, month)}</h2>
           <div className="flex items-center gap-1">
-            <Link href={`/?m=${monthParam(prev.year, prev.month)}`} aria-label="Previous month" className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-black/5">‹</Link>
-            <Link href={`/?m=${monthParam(next.year, next.month)}`} aria-label="Next month" className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-black/5">›</Link>
+            <Link href={`/?m=${monthParam(prev.year, prev.month)}`} aria-label="Previous month" className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-white/10">‹</Link>
+            <Link href={`/?m=${monthParam(next.year, next.month)}`} aria-label="Next month" className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-white/10">›</Link>
           </div>
         </div>
 
@@ -126,7 +126,7 @@ export default async function HomePage({
                   href={hasWorkout ? `/day/${key}` : `/log/${key}`}
                   className={[
                     "flex h-9 w-9 items-center justify-center rounded-full text-sm transition active:scale-95",
-                    isToday ? "bg-orange font-bold text-white ring-2 ring-green ring-offset-2" : "bg-black/[0.04] text-ink",
+                    isToday ? "bg-orange font-bold text-white ring-2 ring-green ring-offset-2 ring-offset-page" : "bg-white/[0.05] text-ink",
                   ].join(" ")}
                 >
                   {d.getDate()}
@@ -142,7 +142,7 @@ export default async function HomePage({
           })}
         </div>
 
-        <div className="mt-3 flex items-center justify-between border-t border-black/5 pt-3 text-sm">
+        <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-sm">
           <span className="flex items-center gap-1.5 font-medium text-ink">
             <span aria-hidden>📊</span> {stats.month} Workouts this month
           </span>
@@ -192,7 +192,7 @@ function BadgesSkeleton() {
   return (
     <div className="grid grid-cols-3 gap-3">
       {[0, 1, 2].map((i) => (
-        <div key={i} className="h-[120px] animate-pulse rounded-2xl bg-black/5" />
+        <div key={i} className="h-[120px] animate-pulse rounded-2xl bg-white/10" />
       ))}
     </div>
   );
@@ -222,7 +222,7 @@ async function MeasurementsPreview() {
     );
   if (bf.latest != null)
     cards.push(
-      <MeasurementCard key="bf" icon="📊" label="Body fat" value={String(bf.latest)} unit="%" delta={bf.delta} series={bf.values} colorClass="text-[#3E7CC2]" />,
+      <MeasurementCard key="bf" icon="📊" label="Body fat" value={String(bf.latest)} unit="%" delta={bf.delta} series={bf.values} colorClass="text-[#7FB2F0]" />,
     );
   if (cards.length === 0)
     return <EmptyHint href="/measurements">Log your first measurement →</EmptyHint>;
@@ -233,7 +233,7 @@ function CardsSkeleton() {
   return (
     <div className="grid grid-cols-2 gap-3">
       {[0, 1].map((i) => (
-        <div key={i} className="h-[116px] animate-pulse rounded-2xl bg-black/5" />
+        <div key={i} className="h-[116px] animate-pulse rounded-2xl bg-white/10" />
       ))}
     </div>
   );
@@ -269,7 +269,7 @@ function EmptyHint({ href, children }: { href: string; children: React.ReactNode
   return (
     <Link
       href={href}
-      className="flex items-center justify-center rounded-2xl border border-dashed border-black/15 px-4 py-6 text-center text-sm text-muted active:bg-black/5"
+      className="flex items-center justify-center rounded-2xl border border-dashed border-white/15 px-4 py-6 text-center text-sm text-muted active:bg-white/10"
     >
       {children}
     </Link>

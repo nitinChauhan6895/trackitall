@@ -101,9 +101,14 @@ function setRow(s: SetInput, exerciseId: string, userId: string, position: numbe
   };
 }
 
-// ---------- Per-exercise save/edit (Log workout wizard) ----------
+// ---------- Per-exercise save/edit (quick logger) ----------
 // Persists a single exercise + its sets immediately so nothing is lost mid-session.
 // Pass `id` to edit an existing exercise (its sets are replaced).
+//
+// Fast path: one save_exercise_with_sets RPC (single DB round-trip, RLS-enforced,
+// no extra auth.getUser network call — the middleware gates the route and RLS
+// guards the rows). Falls back to the legacy multi-query path until
+// migration_012 has been run.
 export async function upsertExercise(input: {
   id?: string;
   date: string;
@@ -118,6 +123,54 @@ export async function upsertExercise(input: {
   const name = input.name.trim();
   if (!name) throw new Error("Exercise name is required");
 
+  const supabase = createClient();
+  const cleanSets = input.sets.filter(setHasValue).map((s) => ({
+    reps: cleanInt(s.reps),
+    weight_kg: cleanNum(s.weight_kg),
+    distance_km: cleanNum(s.distance_km),
+    speed_kmh: cleanNum(s.speed_kmh),
+    time_seconds: cleanInt(s.time_seconds),
+    incline: cleanNum(s.incline),
+    resistance: cleanNum(s.resistance),
+    distance_m: cleanNum(s.distance_m),
+    calories: cleanNum(s.calories),
+    sets_count: cleanInt(s.sets_count),
+    height: cleanNum(s.height),
+    floors: cleanNum(s.floors),
+  }));
+
+  const { data, error } = await supabase.rpc("save_exercise_with_sets", {
+    payload: {
+      id: input.id ?? null,
+      date: input.date,
+      muscle_group: input.muscle_group,
+      name,
+      cardio_type: input.cardio_type ?? null,
+      sets: cleanSets,
+    },
+  });
+
+  // PGRST202 = function missing (migration_012 not run yet) → legacy path.
+  if (error && error.code !== "PGRST202") throw error;
+  if (!error) return { id: data as string };
+  return upsertExerciseLegacy(input, name);
+
+  // NOTE: deliberately no revalidatePath here. This action is called mid-flow
+  // from the logger; revalidating would refresh the /log route, re-suspend
+  // its async parent (getCircuits) and remount the logger, dropping its state.
+  // Freshness is handled by router.refresh() when the logger navigates away.
+}
+
+async function upsertExerciseLegacy(
+  input: {
+    id?: string;
+    date: string;
+    muscle_group: MuscleGroup;
+    cardio_type?: CardioType | null;
+    sets: SetInput[];
+  },
+  name: string,
+): Promise<{ id: string }> {
   const { supabase, user } = await requireUser();
   let exerciseId = input.id;
 
@@ -160,11 +213,6 @@ export async function upsertExercise(input: {
     const { error } = await supabase.from("sets").insert(rows);
     if (error) throw error;
   }
-
-  // NOTE: deliberately no revalidatePath here. This action is called mid-flow
-  // from the log wizard; revalidating would refresh the /log route, re-suspend
-  // its async parent (getCircuits) and remount the wizard, dropping its state.
-  // Freshness is handled by router.refresh() when the wizard navigates away.
   return { id: exerciseId! };
 }
 

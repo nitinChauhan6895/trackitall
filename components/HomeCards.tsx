@@ -14,24 +14,24 @@ export function PrCard({ pr }: { pr: Pr }) {
   const recent = isRecent(pr.achieved_date);
   const tag = pr.unit_type === "kg" ? "NEW PR" : "NEW BEST";
   return (
-    <div className="relative flex min-h-[120px] flex-col justify-between overflow-hidden rounded-2xl bg-ink p-4 text-white">
+    <div className="relative flex min-h-[120px] flex-col justify-between overflow-hidden rounded-2xl border border-green/20 bg-surface-2 p-4 text-ink">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/5 to-transparent"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-br from-green/10 to-transparent"
       />
       <div className="relative flex items-center gap-2">
-        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/90 p-1">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 p-1">
           <ExerciseLogo name={pr.exercise_name} fallback={prIcon(pr)} className="h-full w-full text-base" />
         </span>
-        <span className="truncate text-sm font-medium text-white/90">
+        <span className="truncate text-sm font-medium text-ink/90">
           {pr.exercise_name}
         </span>
       </div>
       <div className="relative mt-3">
         <div className="flex items-baseline gap-1">
-          <span className="text-2xl font-bold">{formatPrValue(pr)}</span>
+          <span className="text-2xl font-bold text-green">{formatPrValue(pr)}</span>
           {pr.reps != null && (
-            <span className="text-sm font-semibold text-white/60">
+            <span className="text-sm font-semibold text-muted">
               × {pr.reps}
             </span>
           )}
@@ -65,7 +65,7 @@ export function MeasurementCard({
   colorClass: string;
 }) {
   return (
-    <div className="rounded-2xl border border-black/5 bg-white p-3">
+    <div className="rounded-2xl border border-white/10 bg-surface p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">

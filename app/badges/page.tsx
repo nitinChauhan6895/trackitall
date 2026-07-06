@@ -14,7 +14,7 @@ export default async function BadgesPage() {
         <Link
           href="/"
           aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-xl active:bg-black/5"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-xl active:bg-white/10"
         >
           ←
         </Link>

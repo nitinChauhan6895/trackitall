@@ -9,7 +9,7 @@ import { isValidEmail, isValidUsername, normalizeUsername } from "@/lib/auth";
 type Mode = "signin" | "signup";
 
 const inputClass =
-  "w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
+  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -201,7 +201,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={pending}
-          className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
+          className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60"
         >
           {pending
             ? "Please wait…"

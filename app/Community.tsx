@@ -35,7 +35,7 @@ export default function Community() {
       {SECTIONS.map((s) => (
         <section
           key={s.key}
-          className="rounded-2xl border border-black/5 bg-white p-5"
+          className="rounded-2xl border border-white/10 bg-surface p-5"
         >
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 font-semibold text-ink">

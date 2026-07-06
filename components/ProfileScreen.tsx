@@ -8,7 +8,7 @@ import { displayName, profileInitial, type Profile } from "@/lib/types";
 import { APP_VERSION } from "@/lib/version";
 
 const inputClass =
-  "w-full rounded-xl border border-black/10 bg-white px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
+  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
 
 type View = "menu" | "edit" | "password";
 
@@ -23,7 +23,7 @@ export default function ProfileScreen({ profile }: { profile: Profile }) {
             type="button"
             onClick={() => setView("menu")}
             aria-label="Back"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-muted active:bg-black/5"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-muted active:bg-white/10"
           >
             ←
           </button>
@@ -61,7 +61,7 @@ function Menu({
         <p className="text-sm text-muted">@{profile.username}</p>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-black/5 bg-white">
+      <div className="overflow-hidden rounded-2xl border border-white/10 bg-surface">
         <ShareRow initial={profile.share_to_community} />
         <Row icon="👤" label="Edit profile" onClick={onEdit} />
         <Row icon="✉️" label={profile.email ?? "No email on file"} muted />
@@ -102,7 +102,7 @@ function ShareRow({ initial }: { initial: boolean }) {
   }
 
   return (
-    <div className="border-b border-black/5 px-4 py-3.5">
+    <div className="border-b border-white/10 px-4 py-3.5">
       <div className="flex items-center gap-3">
         <span aria-hidden className="w-5 text-center">👥</span>
         <span className="flex-1 text-base text-ink">Share with community</span>
@@ -115,12 +115,12 @@ function ShareRow({ initial }: { initial: boolean }) {
           onClick={toggle}
           className={[
             "relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60",
-            on ? "bg-green" : "bg-black/20",
+            on ? "bg-green" : "bg-white/15",
           ].join(" ")}
         >
           <span
             className={[
-              "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+              "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-surface shadow transition-transform",
               on ? "translate-x-5" : "translate-x-0",
             ].join(" ")}
           />
@@ -153,13 +153,13 @@ function Row({
     </>
   );
   if (!onClick) {
-    return <div className="flex items-center gap-3 border-b border-black/5 px-4 py-4 text-base last:border-0">{content}</div>;
+    return <div className="flex items-center gap-3 border-b border-white/10 px-4 py-4 text-base last:border-0">{content}</div>;
   }
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center gap-3 border-b border-black/5 px-4 py-4 text-left text-base last:border-0 active:bg-black/5"
+      className="flex w-full items-center gap-3 border-b border-white/10 px-4 py-4 text-left text-base last:border-0 active:bg-white/10"
     >
       {content}
     </button>
@@ -194,7 +194,7 @@ function EditProfile({ profile, onDone }: { profile: Profile; onDone: () => void
       <label className="block text-sm text-muted">Last name</label>
       <input value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last name" className={inputClass} />
       {error && <p className="text-sm text-orange">{error}</p>}
-      <button type="submit" disabled={busy} className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-60">
+      <button type="submit" disabled={busy} className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60">
         {busy ? "Saving…" : "Save changes"}
       </button>
     </form>
@@ -232,7 +232,7 @@ function ChangePassword({ onDone }: { onDone: () => void }) {
       <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm new password" className={inputClass} />
       {error && <p className="text-sm text-orange">{error}</p>}
       {done && <p className="text-sm text-green">Password updated.</p>}
-      <button type="submit" disabled={busy || done} className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-60">
+      <button type="submit" disabled={busy || done} className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60">
         {busy ? "Saving…" : "Update password"}
       </button>
     </form>
