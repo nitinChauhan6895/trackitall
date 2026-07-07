@@ -5,7 +5,7 @@ import {
   getMeasurements,
   getMonthWorkoutSummary,
   getProfile,
-  getRecentPrs,
+  getAllPrs,
   getWorkoutStats,
 } from "@/lib/data";
 import {
@@ -16,6 +16,7 @@ import {
   type MeasurementField,
 } from "@/lib/types";
 import { evaluateBadges, sortedByEarned } from "@/lib/badges";
+import { groupPrs } from "@/lib/prGroups";
 import {
   buildCalendarGrid,
   monthLabel,
@@ -199,13 +200,14 @@ function BadgesSkeleton() {
 }
 
 async function PrPreview() {
-  const recentPrs = await getRecentPrs(2);
-  if (recentPrs.length === 0)
+  // One card per exercise (current best), most recently active first.
+  const groups = groupPrs(await getAllPrs()).slice(0, 2);
+  if (groups.length === 0)
     return <EmptyHint href="/prs">Add your first PR →</EmptyHint>;
   return (
     <div className="grid grid-cols-2 gap-3">
-      {recentPrs.map((pr) => (
-        <PrCard key={pr.id} pr={pr} />
+      {groups.map((g) => (
+        <PrCard key={g.key} pr={g.best} />
       ))}
     </div>
   );

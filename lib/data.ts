@@ -177,18 +177,6 @@ export async function getDayExercises(date: string): Promise<Exercise[]> {
   })) as Exercise[];
 }
 
-export async function getRecentPrs(limit = 3): Promise<Pr[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("prs")
-    .select("*")
-    .order("achieved_date", { ascending: false, nullsFirst: false })
-    .order("updated_at", { ascending: false })
-    .limit(limit);
-  if (error) throw error;
-  return (data ?? []) as Pr[];
-}
-
 export async function getAllPrs(): Promise<Pr[]> {
   const supabase = createClient();
   const { data, error } = await supabase
