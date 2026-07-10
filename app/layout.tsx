@@ -34,7 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="mx-auto flex min-h-full w-full max-w-md flex-col">
+        <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col">
           {children}
         </div>
         <BottomNav />
