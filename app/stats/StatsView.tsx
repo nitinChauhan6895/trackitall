@@ -17,7 +17,19 @@ const RANGE_LABEL: Record<Range, string> = {
   last7: "Last 7 days",
 };
 
-export default function StatsView({ stats }: { stats: StatsData }) {
+export type NutritionWeekSummary = {
+  avgCalories: number;
+  avgProtein: number;
+  daysLogged: number;
+};
+
+export default function StatsView({
+  stats,
+  nutrition,
+}: {
+  stats: StatsData;
+  nutrition?: NutritionWeekSummary | null;
+}) {
   const [range, setRange] = useState<Range>("this");
   const week =
     range === "this" ? stats.thisWeek : range === "last" ? stats.lastWeek : stats.last7;
@@ -53,6 +65,17 @@ export default function StatsView({ stats }: { stats: StatsData }) {
           </button>
         ))}
       </div>
+
+      {/* Nutrition (last 7 days) */}
+      {nutrition && (
+        <>
+          <SectionLabel>Nutrition · last 7 days</SectionLabel>
+          <div className="grid grid-cols-2 gap-2">
+            <Card value={String(nutrition.avgCalories)} unit="kcal" label="Avg daily calories" />
+            <Card value={String(nutrition.avgProtein)} unit="g" label="Avg daily protein" />
+          </div>
+        </>
+      )}
 
       {/* Summary */}
       <SectionLabel>Summary</SectionLabel>

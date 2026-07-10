@@ -27,6 +27,15 @@ import {
   type WorkoutTemplate,
 } from "@/lib/coach/types";
 import { type History } from "@/lib/coach/engine";
+import {
+  DEFAULT_TARGETS,
+  sumMacros,
+  type Food,
+  type FoodLogEntry,
+  type Macros,
+  type NutritionTargets,
+  type SavedMeal,
+} from "@/lib/nutrition";
 import { toDateKey } from "@/lib/date";
 
 export async function getProfile(): Promise<Profile> {
@@ -625,4 +634,237 @@ export async function getMeasurements(): Promise<Measurement[]> {
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []) as Measurement[];
+}
+
+// ---------- Nutrition ----------
+
+function mapFood(row: any): Food {
+  return {
+    id: row.id,
+    name: row.name,
+    calories_per_100g: Number(row.calories_per_100g),
+    protein_per_100g: Number(row.protein_per_100g),
+    carbs_per_100g: Number(row.carbs_per_100g),
+    fat_per_100g: Number(row.fat_per_100g),
+    default_unit: row.default_unit,
+    common_portions: Array.isArray(row.common_portions)
+      ? row.common_portions
+      : typeof row.common_portions === "string"
+        ? JSON.parse(row.common_portions)
+        : [],
+    source: row.source,
+    created_by: row.created_by,
+  };
+}
+
+const mapLog = (r: any): FoodLogEntry => ({
+  id: r.id,
+  log_date: r.log_date,
+  meal: r.meal,
+  food_id: r.food_id,
+  food_name: r.food_name,
+  quantity: Number(r.quantity),
+  unit: r.unit,
+  computed_calories: Number(r.computed_calories),
+  computed_protein: Number(r.computed_protein),
+  computed_carbs: Number(r.computed_carbs),
+  computed_fat: Number(r.computed_fat),
+});
+
+export type NutritionDiary = {
+  date: string;
+  entries: FoodLogEntry[];
+  totals: Macros;
+  targets: NutritionTargets;
+  hasTargets: boolean;
+};
+
+// True when an error means the nutrition tables aren't created yet
+// (migration_013 not run). Lets the app degrade gracefully pre-migration.
+const isMissingTable = (err: { code?: string } | null) =>
+  err?.code === "42P01" || err?.code === "PGRST205" || err?.code === "PGRST204";
+
+// Diary + targets for one day, in a single parallel fetch.
+export async function getNutritionDiary(date: string): Promise<NutritionDiary> {
+  const supabase = createClient();
+  const [logRes, targetRes] = await Promise.all([
+    supabase
+      .from("food_log")
+      .select("*")
+      .eq("log_date", date)
+      .order("created_at", { ascending: true }),
+    supabase.from("nutrition_targets").select("*").maybeSingle(),
+  ]);
+  if (logRes.error && isMissingTable(logRes.error))
+    return {
+      date,
+      entries: [],
+      totals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+      targets: DEFAULT_TARGETS,
+      hasTargets: false,
+    };
+  if (logRes.error) throw logRes.error;
+
+  const entries = (logRes.data ?? []).map(mapLog);
+  const t = targetRes.data;
+  const targets: NutritionTargets = t
+    ? {
+        daily_calories: t.daily_calories,
+        daily_protein_g: t.daily_protein_g,
+        daily_carbs_g: t.daily_carbs_g,
+        daily_fat_g: t.daily_fat_g,
+      }
+    : DEFAULT_TARGETS;
+
+  return { date, entries, totals: sumMacros(entries), targets, hasTargets: !!t };
+}
+
+export async function getNutritionTargets(): Promise<{
+  targets: NutritionTargets;
+  hasTargets: boolean;
+}> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("nutrition_targets")
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  return {
+    targets: data
+      ? {
+          daily_calories: data.daily_calories,
+          daily_protein_g: data.daily_protein_g,
+          daily_carbs_g: data.daily_carbs_g,
+          daily_fat_g: data.daily_fat_g,
+        }
+      : DEFAULT_TARGETS,
+    hasTargets: !!data,
+  };
+}
+
+// Live name search over the shared foods DB (custom foods first, then seeded).
+export async function searchFoods(query: string, limit = 40): Promise<Food[]> {
+  const supabase = createClient();
+  let q = supabase.from("foods").select("*");
+  const term = query.trim();
+  if (term) q = q.ilike("name", `%${term}%`);
+  const { data, error } = await q.order("name", { ascending: true }).limit(limit);
+  if (error) throw error;
+  return (data ?? []).map(mapFood);
+}
+
+// This user's most-recently-logged distinct foods (for the Recent tab).
+export async function getRecentFoods(limit = 25): Promise<Food[]> {
+  const supabase = createClient();
+  const { data: logs, error } = await supabase
+    .from("food_log")
+    .select("food_id, created_at")
+    .not("food_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(150);
+  if (error) throw error;
+
+  const seen: string[] = [];
+  for (const l of logs ?? []) {
+    if (l.food_id && !seen.includes(l.food_id)) seen.push(l.food_id);
+    if (seen.length >= limit) break;
+  }
+  if (seen.length === 0) return [];
+
+  const { data: foods, error: fErr } = await supabase
+    .from("foods")
+    .select("*")
+    .in("id", seen);
+  if (fErr) throw fErr;
+  const byId = new Map((foods ?? []).map((f) => [f.id, mapFood(f)]));
+  return seen.map((id) => byId.get(id)).filter((f): f is Food => !!f);
+}
+
+// Foods this user created.
+export async function getMyFoods(): Promise<Food[]> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data, error } = await supabase
+    .from("foods")
+    .select("*")
+    .eq("created_by", user.id)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map(mapFood);
+}
+
+export async function getSavedMeals(): Promise<SavedMeal[]> {
+  const supabase = createClient();
+  const [mealsRes, itemsRes] = await Promise.all([
+    supabase.from("saved_meals").select("*").order("created_at", { ascending: false }),
+    supabase.from("saved_meal_items").select("*"),
+  ]);
+  if (mealsRes.error) throw mealsRes.error;
+  if (itemsRes.error) throw itemsRes.error;
+
+  const itemsByMeal = new Map<string, any[]>();
+  for (const it of itemsRes.data ?? []) {
+    const list = itemsByMeal.get(it.saved_meal_id) ?? [];
+    list.push(it);
+    itemsByMeal.set(it.saved_meal_id, list);
+  }
+
+  return (mealsRes.data ?? []).map((m) => {
+    const rawItems = itemsByMeal.get(m.id) ?? [];
+    const items = rawItems.map((it) => ({
+      food_id: it.food_id,
+      food_name: it.food_name,
+      quantity: Number(it.quantity),
+      unit: it.unit,
+      computed_calories: Number(it.computed_calories),
+      computed_protein: Number(it.computed_protein),
+      computed_carbs: Number(it.computed_carbs),
+      computed_fat: Number(it.computed_fat),
+    }));
+    return { id: m.id, name: m.name, items, totals: sumMacros(items) };
+  });
+}
+
+// Weekly nutrition rollup for the Stats page (avg daily calories/protein).
+export async function getNutritionWeek(): Promise<{
+  avgCalories: number;
+  avgProtein: number;
+  daysLogged: number;
+} | null> {
+  const supabase = createClient();
+  const today = new Date();
+  const start = new Date(today);
+  start.setDate(today.getDate() - 6);
+  const { data, error } = await supabase
+    .from("food_log")
+    .select("log_date, computed_calories, computed_protein")
+    .gte("log_date", toDateKey(start))
+    .lte("log_date", toDateKey(today));
+  if (error && isMissingTable(error)) return null;
+  if (error) throw error;
+  const rows = data ?? [];
+  if (rows.length === 0) return null;
+
+  const byDay = new Map<string, { cal: number; pro: number }>();
+  for (const r of rows) {
+    const d = byDay.get(r.log_date) ?? { cal: 0, pro: 0 };
+    d.cal += Number(r.computed_calories);
+    d.pro += Number(r.computed_protein);
+    byDay.set(r.log_date, d);
+  }
+  const days = byDay.size;
+  let cal = 0;
+  let pro = 0;
+  for (const v of byDay.values()) {
+    cal += v.cal;
+    pro += v.pro;
+  }
+  return {
+    avgCalories: Math.round(cal / days),
+    avgProtein: Math.round(pro / days),
+    daysLogged: days,
+  };
 }

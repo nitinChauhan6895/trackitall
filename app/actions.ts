@@ -17,6 +17,7 @@ import {
   getCoachProfile,
   getCoachTemplates,
   buildCoachHistory,
+  searchFoods,
 } from "@/lib/data";
 import Anthropic from "@anthropic-ai/sdk";
 import { generate } from "@/lib/coach/engine";
@@ -33,6 +34,14 @@ import {
   type GenerationResult,
   type Goal,
 } from "@/lib/coach/types";
+import {
+  FOOD_UNITS,
+  MEALS,
+  type Food,
+  type Meal,
+  type NutritionTargets,
+  type Portion,
+} from "@/lib/nutrition";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -931,6 +940,288 @@ export async function deleteMeasurement(id: string) {
   const { error } = await supabase.from("measurements").delete().eq("id", id);
   if (error) throw error;
   revalidatePath("/measurements");
+}
+
+// ---------- Nutrition ----------
+
+// Live food search from the client (thin auth wrapper over the data layer).
+export async function searchFoodsAction(query: string): Promise<Food[]> {
+  await requireUser();
+  return searchFoods(query, 40);
+}
+
+function sanitizePortions(portions: Portion[] | undefined): Portion[] {
+  if (!Array.isArray(portions)) return [];
+  return portions
+    .filter((p) => p && typeof p.label === "string" && p.label.trim() !== "")
+    .map((p) => ({
+      label: p.label.trim().slice(0, 40),
+      grams: Math.max(0, Number(p.grams) || 0),
+    }))
+    .filter((p) => p.grams > 0)
+    .slice(0, 8);
+}
+
+export async function logFood(input: {
+  date: string;
+  meal: Meal;
+  food_id: string | null;
+  food_name: string;
+  quantity: number;
+  unit: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}): Promise<{ id: string }> {
+  if (!DATE_RE.test(input.date)) throw new Error("Invalid date");
+  if (!MEALS.includes(input.meal)) throw new Error("Invalid meal");
+  const name = input.food_name.trim();
+  if (!name) throw new Error("Food name is required");
+
+  const { supabase, user } = await requireUser();
+  const { data, error } = await supabase
+    .from("food_log")
+    .insert({
+      user_id: user.id,
+      log_date: input.date,
+      meal: input.meal,
+      food_id: input.food_id,
+      food_name: name.slice(0, 120),
+      quantity: cleanNum(input.quantity) ?? 0,
+      unit: input.unit.slice(0, 20),
+      computed_calories: cleanNum(input.calories) ?? 0,
+      computed_protein: cleanNum(input.protein) ?? 0,
+      computed_carbs: cleanNum(input.carbs) ?? 0,
+      computed_fat: cleanNum(input.fat) ?? 0,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  revalidatePath("/nutrition");
+  revalidatePath("/");
+  return { id: data.id as string };
+}
+
+export async function updateFoodLog(input: {
+  id: string;
+  quantity: number;
+  unit: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase
+    .from("food_log")
+    .update({
+      quantity: cleanNum(input.quantity) ?? 0,
+      unit: input.unit.slice(0, 20),
+      computed_calories: cleanNum(input.calories) ?? 0,
+      computed_protein: cleanNum(input.protein) ?? 0,
+      computed_carbs: cleanNum(input.carbs) ?? 0,
+      computed_fat: cleanNum(input.fat) ?? 0,
+    })
+    .eq("id", input.id);
+  if (error) throw error;
+  revalidatePath("/nutrition");
+  revalidatePath("/");
+}
+
+export async function deleteFoodLog(id: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.from("food_log").delete().eq("id", id);
+  if (error) throw error;
+  revalidatePath("/nutrition");
+  revalidatePath("/");
+}
+
+export async function saveTargets(t: NutritionTargets) {
+  const { supabase, user } = await requireUser();
+  const { error } = await supabase.from("nutrition_targets").upsert({
+    user_id: user.id,
+    daily_calories: cleanInt(t.daily_calories) ?? 0,
+    daily_protein_g: cleanInt(t.daily_protein_g) ?? 0,
+    daily_carbs_g: cleanInt(t.daily_carbs_g) ?? 0,
+    daily_fat_g: cleanInt(t.daily_fat_g) ?? 0,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+  revalidatePath("/nutrition");
+}
+
+// Creates a custom food in the SHARED foods table (everyone can then use it).
+// Values are already normalized to per-100g by the caller.
+export async function createCustomFood(input: {
+  name: string;
+  calories_per_100g: number;
+  protein_per_100g: number;
+  carbs_per_100g: number;
+  fat_per_100g: number;
+  default_unit: string;
+  common_portions: Portion[];
+}): Promise<Food> {
+  const name = input.name.trim();
+  if (!name) throw new Error("Food name is required");
+  const unit = FOOD_UNITS.includes(input.default_unit as any)
+    ? (input.default_unit as (typeof FOOD_UNITS)[number])
+    : "g";
+
+  const { supabase, user } = await requireUser();
+  const { data, error } = await supabase
+    .from("foods")
+    .insert({
+      name: name.slice(0, 120),
+      calories_per_100g: cleanNum(input.calories_per_100g) ?? 0,
+      protein_per_100g: cleanNum(input.protein_per_100g) ?? 0,
+      carbs_per_100g: cleanNum(input.carbs_per_100g) ?? 0,
+      fat_per_100g: cleanNum(input.fat_per_100g) ?? 0,
+      default_unit: unit,
+      common_portions: sanitizePortions(input.common_portions),
+      source: "custom",
+      created_by: user.id,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    name: data.name,
+    calories_per_100g: Number(data.calories_per_100g),
+    protein_per_100g: Number(data.protein_per_100g),
+    carbs_per_100g: Number(data.carbs_per_100g),
+    fat_per_100g: Number(data.fat_per_100g),
+    default_unit: data.default_unit,
+    common_portions: Array.isArray(data.common_portions) ? data.common_portions : [],
+    source: "custom",
+    created_by: data.created_by,
+  };
+}
+
+// Save the current logged foods (or a passed set) as a reusable template.
+export async function saveMeal(input: {
+  name: string;
+  items: {
+    food_id: string | null;
+    food_name: string;
+    quantity: number;
+    unit: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  }[];
+}) {
+  const name = input.name.trim();
+  if (!name) throw new Error("Meal name is required");
+  if (input.items.length === 0) throw new Error("Add at least one food");
+
+  const { supabase, user } = await requireUser();
+  const { data: meal, error } = await supabase
+    .from("saved_meals")
+    .insert({ user_id: user.id, name: name.slice(0, 120) })
+    .select("id")
+    .single();
+  if (error) throw error;
+
+  const rows = input.items.map((it) => ({
+    saved_meal_id: meal.id,
+    user_id: user.id,
+    food_id: it.food_id,
+    food_name: it.food_name.slice(0, 120),
+    quantity: cleanNum(it.quantity) ?? 0,
+    unit: it.unit.slice(0, 20),
+    computed_calories: cleanNum(it.calories) ?? 0,
+    computed_protein: cleanNum(it.protein) ?? 0,
+    computed_carbs: cleanNum(it.carbs) ?? 0,
+    computed_fat: cleanNum(it.fat) ?? 0,
+  }));
+  const { error: itErr } = await supabase.from("saved_meal_items").insert(rows);
+  if (itErr) throw itErr;
+  revalidatePath("/nutrition");
+}
+
+// One-tap: log every item of a saved meal into the given day + meal slot.
+export async function logSavedMeal(input: {
+  date: string;
+  meal: Meal;
+  savedMealId: string;
+}) {
+  if (!DATE_RE.test(input.date)) throw new Error("Invalid date");
+  if (!MEALS.includes(input.meal)) throw new Error("Invalid meal");
+  const { supabase, user } = await requireUser();
+
+  const { data: items, error } = await supabase
+    .from("saved_meal_items")
+    .select("*")
+    .eq("saved_meal_id", input.savedMealId);
+  if (error) throw error;
+  if (!items || items.length === 0) return;
+
+  const rows = items.map((it) => ({
+    user_id: user.id,
+    log_date: input.date,
+    meal: input.meal,
+    food_id: it.food_id,
+    food_name: it.food_name,
+    quantity: it.quantity,
+    unit: it.unit,
+    computed_calories: it.computed_calories,
+    computed_protein: it.computed_protein,
+    computed_carbs: it.computed_carbs,
+    computed_fat: it.computed_fat,
+  }));
+  const { error: insErr } = await supabase.from("food_log").insert(rows);
+  if (insErr) throw insErr;
+  revalidatePath("/nutrition");
+  revalidatePath("/");
+}
+
+export async function deleteSavedMeal(id: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.from("saved_meals").delete().eq("id", id);
+  if (error) throw error;
+  revalidatePath("/nutrition");
+}
+
+// Copy every entry of one meal from a source day into the same meal on today.
+export async function copyMeal(input: {
+  fromDate: string;
+  toDate: string;
+  meal: Meal;
+}) {
+  if (!DATE_RE.test(input.fromDate) || !DATE_RE.test(input.toDate))
+    throw new Error("Invalid date");
+  if (!MEALS.includes(input.meal)) throw new Error("Invalid meal");
+  const { supabase, user } = await requireUser();
+
+  const { data: src, error } = await supabase
+    .from("food_log")
+    .select("*")
+    .eq("log_date", input.fromDate)
+    .eq("meal", input.meal);
+  if (error) throw error;
+  if (!src || src.length === 0) return;
+
+  const rows = src.map((r) => ({
+    user_id: user.id,
+    log_date: input.toDate,
+    meal: input.meal,
+    food_id: r.food_id,
+    food_name: r.food_name,
+    quantity: r.quantity,
+    unit: r.unit,
+    computed_calories: r.computed_calories,
+    computed_protein: r.computed_protein,
+    computed_carbs: r.computed_carbs,
+    computed_fat: r.computed_fat,
+  }));
+  const { error: insErr } = await supabase.from("food_log").insert(rows);
+  if (insErr) throw insErr;
+  revalidatePath("/nutrition");
+  revalidatePath("/");
 }
 
 // ---------- helpers ----------

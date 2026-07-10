@@ -1,10 +1,13 @@
 import Link from "next/link";
-import { getStatsData } from "@/lib/data";
+import { getNutritionWeek, getStatsData } from "@/lib/data";
 import { toDateKey } from "@/lib/date";
 import StatsView from "./StatsView";
 
 export default async function StatsPage() {
-  const stats = await getStatsData();
+  const [stats, nutrition] = await Promise.all([
+    getStatsData(),
+    getNutritionWeek(),
+  ]);
 
   if (!stats.hasAnyData) {
     const today = toDateKey(new Date());
@@ -35,5 +38,5 @@ export default async function StatsPage() {
     );
   }
 
-  return <StatsView stats={stats} />;
+  return <StatsView stats={stats} nutrition={nutrition} />;
 }

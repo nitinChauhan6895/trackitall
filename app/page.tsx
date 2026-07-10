@@ -4,10 +4,12 @@ import {
   getBadgeData,
   getMeasurements,
   getMonthWorkoutSummary,
+  getNutritionDiary,
   getProfile,
   getAllPrs,
   getWorkoutStats,
 } from "@/lib/data";
+import { fraction } from "@/lib/nutrition";
 import {
   MEASUREMENT_FIELDS,
   displayName,
@@ -153,6 +155,21 @@ export default async function HomePage({
         </div>
       </section>
 
+      {/* Nutrition (streamed) */}
+      <section className="mt-5">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="flex items-center gap-1.5 text-base font-semibold">
+            <span aria-hidden>🍽️</span> Nutrition
+          </h2>
+          <Link href="/nutrition" className="text-sm font-medium text-orange active:opacity-70">
+            Open diary ›
+          </Link>
+        </div>
+        <Suspense fallback={<NutritionSkeleton />}>
+          <NutritionPreview date={todayKey} />
+        </Suspense>
+      </section>
+
       {/* Badges (streamed) */}
       <PreviewSection icon="🏅" title="Badges" href="/badges">
         <Suspense fallback={<BadgesSkeleton />}>
@@ -239,6 +256,74 @@ function CardsSkeleton() {
       ))}
     </div>
   );
+}
+
+async function NutritionPreview({ date }: { date: string }) {
+  const { totals, targets, entries } = await getNutritionDiary(date);
+  const kcal = Math.round(totals.calories);
+  const over = kcal > targets.daily_calories;
+  const frac = fraction(kcal, targets.daily_calories);
+  const r = 26;
+  const c = 2 * Math.PI * r;
+  const macros: { label: string; v: number; t: number; color: string }[] = [
+    { label: "P", v: totals.protein, t: targets.daily_protein_g, color: "#FF6233" },
+    { label: "C", v: totals.carbs, t: targets.daily_carbs_g, color: "#E0A52A" },
+    { label: "F", v: totals.fat, t: targets.daily_fat_g, color: "#3FAE8E" },
+  ];
+
+  return (
+    <Link
+      href="/nutrition"
+      className="flex items-center gap-4 rounded-2xl border border-white/10 bg-surface p-4 active:bg-white/[0.04]"
+    >
+      <div className="relative h-16 w-16 shrink-0">
+        <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90">
+          <circle cx="32" cy="32" r={r} fill="none" stroke="#ffffff" strokeOpacity="0.1" strokeWidth="7" />
+          <circle
+            cx="32"
+            cy="32"
+            r={r}
+            fill="none"
+            stroke={over ? "#FF6233" : "#A8E830"}
+            strokeWidth="7"
+            strokeLinecap="round"
+            strokeDasharray={`${c * frac} ${c}`}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-sm font-bold tabular-nums text-ink">{kcal}</span>
+        </div>
+      </div>
+      <div className="min-w-0 flex-1">
+        {entries.length === 0 ? (
+          <p className="text-sm text-muted">Nothing logged today — tap to start →</p>
+        ) : (
+          <>
+            <p className="text-sm font-medium text-ink">
+              {kcal} <span className="text-muted">/ {targets.daily_calories} kcal</span>
+            </p>
+            <div className="mt-2 space-y-1.5">
+              {macros.map((m) => (
+                <div key={m.label} className="flex items-center gap-2">
+                  <span className="w-3 text-[11px] font-semibold text-muted">{m.label}</span>
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${fraction(m.v, m.t) * 100}%`, backgroundColor: m.color }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </Link>
+  );
+}
+
+function NutritionSkeleton() {
+  return <div className="h-[104px] animate-pulse rounded-2xl bg-white/10" />;
 }
 
 function PreviewSection({
