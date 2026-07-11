@@ -7,6 +7,7 @@ export type ScanResult = {
   protein?: number;
   carbs?: number;
   fat?: number;
+  fiber?: number;
 };
 
 // Parse OCR text from a nutrition panel. Assist-only + best-effort: returns
@@ -26,6 +27,7 @@ function parseLabel(text: string): ScanResult {
     protein: num(/protein[^\d]{0,18}(\d{1,3}(?:\.\d+)?)/i),
     carbs: num(/(?:carbohydrate|carbs?)[^\d]{0,18}(\d{1,3}(?:\.\d+)?)/i),
     fat: num(/(?:total\s*fat|fat)[^\d]{0,18}(\d{1,3}(?:\.\d+)?)/i),
+    fiber: num(/(?:dietary\s*fibre|dietary\s*fiber|fibre|fiber)[^\d]{0,18}(\d{1,3}(?:\.\d+)?)/i),
   };
 }
 

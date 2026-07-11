@@ -646,6 +646,7 @@ function mapFood(row: any): Food {
     protein_per_100g: Number(row.protein_per_100g),
     carbs_per_100g: Number(row.carbs_per_100g),
     fat_per_100g: Number(row.fat_per_100g),
+    fiber_per_100g: Number(row.fiber_per_100g) || 0,
     default_unit: row.default_unit,
     common_portions: Array.isArray(row.common_portions)
       ? row.common_portions
@@ -669,6 +670,7 @@ const mapLog = (r: any): FoodLogEntry => ({
   computed_protein: Number(r.computed_protein),
   computed_carbs: Number(r.computed_carbs),
   computed_fat: Number(r.computed_fat),
+  computed_fiber: Number(r.computed_fiber) || 0,
 });
 
 export type NutritionDiary = {
@@ -699,7 +701,7 @@ export async function getNutritionDiary(date: string): Promise<NutritionDiary> {
     return {
       date,
       entries: [],
-      totals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+      totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
       targets: DEFAULT_TARGETS,
       hasTargets: false,
     };
@@ -713,6 +715,7 @@ export async function getNutritionDiary(date: string): Promise<NutritionDiary> {
         daily_protein_g: t.daily_protein_g,
         daily_carbs_g: t.daily_carbs_g,
         daily_fat_g: t.daily_fat_g,
+        daily_fiber_g: t.daily_fiber_g ?? 30,
       }
     : DEFAULT_TARGETS;
 
@@ -736,6 +739,7 @@ export async function getNutritionTargets(): Promise<{
           daily_protein_g: data.daily_protein_g,
           daily_carbs_g: data.daily_carbs_g,
           daily_fat_g: data.daily_fat_g,
+          daily_fiber_g: data.daily_fiber_g ?? 30,
         }
       : DEFAULT_TARGETS,
     hasTargets: !!data,
@@ -823,6 +827,7 @@ export async function getSavedMeals(): Promise<SavedMeal[]> {
       computed_protein: Number(it.computed_protein),
       computed_carbs: Number(it.computed_carbs),
       computed_fat: Number(it.computed_fat),
+      computed_fiber: Number(it.computed_fiber) || 0,
     }));
     return { id: m.id, name: m.name, items, totals: sumMacros(items) };
   });

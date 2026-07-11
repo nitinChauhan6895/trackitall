@@ -7,6 +7,7 @@ import {
   createCustomFood,
   logFood,
   logSavedMeal,
+  saveMeal,
   searchFoodsAction,
 } from "@/app/actions";
 import {
@@ -24,6 +25,19 @@ import {
 import LabelScanner, { type ScanResult } from "./LabelScanner";
 
 type Tab = "all" | "recent" | "my" | "meals";
+
+// One ingredient in the meal builder (macros already computed for its weight).
+type BuilderItem = {
+  food_id: string | null;
+  food_name: string;
+  quantity: number;
+  unit: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+};
 
 export default function SearchClient({
   date,
@@ -48,6 +62,7 @@ export default function SearchClient({
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<Food | null>(null);
   const [creating, setCreating] = useState(false);
+  const [building, setBuilding] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   // Live search (debounced) for the All tab. An empty query reuses the
@@ -177,7 +192,16 @@ export default function SearchClient({
 
       {/* Results */}
       {tab === "meals" ? (
-        <SavedMealList meals={filteredMeals} onLog={quickLogMeal} />
+        <>
+          <button
+            type="button"
+            onClick={() => setBuilding(true)}
+            className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-green px-4 py-3 text-sm font-bold text-ink-inverse active:scale-[0.98]"
+          >
+            🍳 Build a meal from ingredients
+          </button>
+          <SavedMealList meals={filteredMeals} onLog={quickLogMeal} />
+        </>
       ) : (
         <ul className="space-y-2">
           {tab === "all" && searching && shown.length === 0 ? (
@@ -244,7 +268,184 @@ export default function SearchClient({
           }}
         />
       )}
+
+      {building && (
+        <MealBuilder
+          initialFoods={initial}
+          onClose={() => setBuilding(false)}
+          onSaved={() => {
+            setBuilding(false);
+            setTab("meals");
+            router.refresh();
+          }}
+        />
+      )}
     </main>
+  );
+}
+
+// ---------- Meal builder: combine ingredients → save as a reusable meal ----------
+
+function MealBuilder({
+  initialFoods,
+  onClose,
+  onSaved,
+}: {
+  initialFoods: Food[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Food[]>(initialFoods);
+  const [picking, setPicking] = useState<Food | null>(null);
+  const [items, setItems] = useState<BuilderItem[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    const term = query.trim();
+    if (!term) {
+      setResults(initialFoods);
+      return;
+    }
+    clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      try {
+        setResults(await searchFoodsAction(term));
+      } catch {
+        /* keep previous */
+      }
+    }, 220);
+    return () => clearTimeout(timer.current);
+  }, [query, initialFoods]);
+
+  const totals = items.reduce(
+    (a, it) => ({
+      calories: a.calories + it.calories,
+      protein: a.protein + it.protein,
+      carbs: a.carbs + it.carbs,
+      fat: a.fat + it.fat,
+      fiber: a.fiber + it.fiber,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
+  );
+
+  async function save() {
+    setError("");
+    if (!name.trim()) {
+      setError("Name your meal.");
+      return;
+    }
+    if (items.length === 0) {
+      setError("Add at least one ingredient.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await saveMeal({ name, items });
+      onSaved();
+    } catch (e: any) {
+      setError(e?.message ?? "Couldn't save.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet title="Build a meal" onClose={onClose} tall>
+      <div className="flex min-h-0 flex-1 flex-col px-4 pb-5 pt-1">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Meal name (e.g. My egg breakfast)"
+          className="mb-2 w-full rounded-xl border border-white/10 bg-surface-2 px-4 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-green"
+          autoFocus
+        />
+
+        {/* Running total */}
+        <div className="mb-2 flex items-center justify-around rounded-xl bg-white/[0.04] py-2.5 text-center">
+          <Stat n={Math.round(totals.calories)} label="kcal" strong />
+          <Stat n={Math.round(totals.protein)} label="P" />
+          <Stat n={Math.round(totals.carbs)} label="C" />
+          <Stat n={Math.round(totals.fat)} label="F" />
+          <Stat n={Math.round(totals.fiber)} label="Fib" />
+        </div>
+
+        {/* Draft ingredients */}
+        {items.length > 0 && (
+          <ul className="mb-2 max-h-32 space-y-1 overflow-y-auto">
+            {items.map((it, i) => (
+              <li key={i} className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-ink">{it.food_name}</span>
+                  <span className="block truncate text-xs text-muted">
+                    {it.quantity} {it.unit} · {Math.round(it.calories)} kcal
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setItems((prev) => prev.filter((_, j) => j !== i))}
+                  aria-label="Remove"
+                  className="shrink-0 px-1 text-muted active:text-orange"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Ingredient search */}
+        <div className="relative mb-2">
+          <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">🔍</span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Add ingredient…"
+            className="w-full rounded-xl border border-white/10 bg-surface py-2.5 pl-9 pr-3 text-base text-ink outline-none placeholder:text-muted focus:border-green"
+          />
+        </div>
+
+        <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
+          {results.map((f) => (
+            <li key={f.id}>
+              <button
+                type="button"
+                onClick={() => setPicking(f)}
+                className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-surface px-3 py-2.5 text-left active:bg-white/10"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{f.name}</span>
+                <span className="shrink-0 text-xs text-muted">{Math.round(f.calories_per_100g)} kcal/100g</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green text-base font-bold text-ink-inverse">+</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        {error && <p className="mt-2 text-sm text-orange">{error}</p>}
+
+        <button
+          type="button"
+          onClick={save}
+          disabled={busy}
+          className="mt-2 w-full rounded-xl bg-green px-4 py-3 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
+        >
+          {busy ? "Saving…" : `Save meal${items.length ? ` · ${Math.round(totals.calories)} kcal` : ""}`}
+        </button>
+      </div>
+
+      {picking && (
+        <PortionSheet
+          food={picking}
+          meal="Breakfast"
+          date=""
+          onClose={() => setPicking(null)}
+          onLogged={() => {}}
+          onAddToBuilder={(item) => setItems((prev) => [...prev, item])}
+        />
+      )}
+    </Sheet>
   );
 }
 
@@ -256,12 +457,14 @@ function PortionSheet({
   date,
   onClose,
   onLogged,
+  onAddToBuilder,
 }: {
   food: Food;
   meal: Meal;
   date: string;
   onClose: () => void;
   onLogged: () => void;
+  onAddToBuilder?: (item: BuilderItem) => void;
 }) {
   const units = unitOptions(food);
   const initialUnit = food.default_unit === "piece" ? units[units.length > 1 ? 1 : 0] : units[0];
@@ -273,6 +476,22 @@ function PortionSheet({
   const macros = macrosFor(food, quantity, unit);
 
   async function add() {
+    // Builder mode: accumulate into the draft meal instead of logging to a day.
+    if (onAddToBuilder) {
+      onAddToBuilder({
+        food_id: food.id,
+        food_name: food.name,
+        quantity,
+        unit,
+        calories: macros.calories,
+        protein: macros.protein,
+        carbs: macros.carbs,
+        fat: macros.fat,
+        fiber: macros.fiber,
+      });
+      onClose();
+      return;
+    }
     setBusy(true);
     try {
       await logFood({
@@ -286,6 +505,7 @@ function PortionSheet({
         protein: macros.protein,
         carbs: macros.carbs,
         fat: macros.fat,
+        fiber: macros.fiber,
       });
       onLogged();
     } catch {
@@ -359,6 +579,7 @@ function PortionSheet({
           <Stat n={macros.protein} label="protein" />
           <Stat n={macros.carbs} label="carbs" />
           <Stat n={macros.fat} label="fat" />
+          <Stat n={macros.fiber} label="fibre" />
         </div>
 
         <button
@@ -367,7 +588,7 @@ function PortionSheet({
           disabled={busy || quantity <= 0}
           className="mt-4 w-full rounded-xl bg-green px-4 py-3.5 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-40"
         >
-          {busy ? "Adding…" : `Add to ${meal}`}
+          {busy ? "Adding…" : onAddToBuilder ? "Add to meal" : `Add to ${meal}`}
         </button>
       </div>
     </Sheet>
@@ -390,6 +611,7 @@ function CustomFoodForm({
   const [pro, setPro] = useState("");
   const [carb, setCarb] = useState("");
   const [fat, setFat] = useState("");
+  const [fib, setFib] = useState("");
   const [unit, setUnit] = useState<FoodUnit>("g");
   const [portionLabel, setPortionLabel] = useState("");
   const [portionGrams, setPortionGrams] = useState("");
@@ -409,14 +631,16 @@ function CustomFoodForm({
       protein: conv(pro),
       carbs: conv(carb),
       fat: conv(fat),
+      fiber: conv(fib),
     };
-  }, [basis, servingG, cal, pro, carb, fat]);
+  }, [basis, servingG, cal, pro, carb, fat, fib]);
 
   function applyScan(r: ScanResult) {
     if (r.calories != null) setCal(String(r.calories));
     if (r.protein != null) setPro(String(r.protein));
     if (r.carbs != null) setCarb(String(r.carbs));
     if (r.fat != null) setFat(String(r.fat));
+    if (r.fiber != null) setFib(String(r.fiber));
     setScanned(true);
   }
 
@@ -442,6 +666,7 @@ function CustomFoodForm({
         protein_per_100g: norm.protein,
         carbs_per_100g: norm.carbs,
         fat_per_100g: norm.fat,
+        fiber_per_100g: norm.fiber,
         default_unit: unit,
         common_portions: portions,
       });
@@ -524,6 +749,9 @@ function CustomFoodForm({
           </Labeled>
           <Labeled label={`Fat ${basis === "serving" ? "/ serving" : "/ 100g"}`}>
             <input value={fat} onChange={(e) => setFat(e.target.value)} type="number" inputMode="decimal" min={0} className={inputCls} placeholder="g" />
+          </Labeled>
+          <Labeled label={`Fibre ${basis === "serving" ? "/ serving" : "/ 100g"}`}>
+            <input value={fib} onChange={(e) => setFib(e.target.value)} type="number" inputMode="decimal" min={0} className={inputCls} placeholder="g" />
           </Labeled>
         </div>
 

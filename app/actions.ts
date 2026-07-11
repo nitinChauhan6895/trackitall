@@ -973,6 +973,7 @@ export async function logFood(input: {
   protein: number;
   carbs: number;
   fat: number;
+  fiber: number;
 }): Promise<{ id: string }> {
   if (!DATE_RE.test(input.date)) throw new Error("Invalid date");
   if (!MEALS.includes(input.meal)) throw new Error("Invalid meal");
@@ -994,6 +995,7 @@ export async function logFood(input: {
       computed_protein: cleanNum(input.protein) ?? 0,
       computed_carbs: cleanNum(input.carbs) ?? 0,
       computed_fat: cleanNum(input.fat) ?? 0,
+      computed_fiber: cleanNum(input.fiber) ?? 0,
     })
     .select("id")
     .single();
@@ -1011,6 +1013,7 @@ export async function updateFoodLog(input: {
   protein: number;
   carbs: number;
   fat: number;
+  fiber: number;
 }) {
   const { supabase } = await requireUser();
   const { error } = await supabase
@@ -1022,6 +1025,7 @@ export async function updateFoodLog(input: {
       computed_protein: cleanNum(input.protein) ?? 0,
       computed_carbs: cleanNum(input.carbs) ?? 0,
       computed_fat: cleanNum(input.fat) ?? 0,
+      computed_fiber: cleanNum(input.fiber) ?? 0,
     })
     .eq("id", input.id);
   if (error) throw error;
@@ -1045,6 +1049,7 @@ export async function saveTargets(t: NutritionTargets) {
     daily_protein_g: cleanInt(t.daily_protein_g) ?? 0,
     daily_carbs_g: cleanInt(t.daily_carbs_g) ?? 0,
     daily_fat_g: cleanInt(t.daily_fat_g) ?? 0,
+    daily_fiber_g: cleanInt(t.daily_fiber_g) ?? 0,
     updated_at: new Date().toISOString(),
   });
   if (error) throw error;
@@ -1059,6 +1064,7 @@ export async function createCustomFood(input: {
   protein_per_100g: number;
   carbs_per_100g: number;
   fat_per_100g: number;
+  fiber_per_100g: number;
   default_unit: string;
   common_portions: Portion[];
 }): Promise<Food> {
@@ -1077,6 +1083,7 @@ export async function createCustomFood(input: {
       protein_per_100g: cleanNum(input.protein_per_100g) ?? 0,
       carbs_per_100g: cleanNum(input.carbs_per_100g) ?? 0,
       fat_per_100g: cleanNum(input.fat_per_100g) ?? 0,
+      fiber_per_100g: cleanNum(input.fiber_per_100g) ?? 0,
       default_unit: unit,
       common_portions: sanitizePortions(input.common_portions),
       source: "custom",
@@ -1093,6 +1100,7 @@ export async function createCustomFood(input: {
     protein_per_100g: Number(data.protein_per_100g),
     carbs_per_100g: Number(data.carbs_per_100g),
     fat_per_100g: Number(data.fat_per_100g),
+    fiber_per_100g: Number(data.fiber_per_100g) || 0,
     default_unit: data.default_unit,
     common_portions: Array.isArray(data.common_portions) ? data.common_portions : [],
     source: "custom",
@@ -1112,6 +1120,7 @@ export async function saveMeal(input: {
     protein: number;
     carbs: number;
     fat: number;
+    fiber: number;
   }[];
 }) {
   const name = input.name.trim();
@@ -1137,6 +1146,7 @@ export async function saveMeal(input: {
     computed_protein: cleanNum(it.protein) ?? 0,
     computed_carbs: cleanNum(it.carbs) ?? 0,
     computed_fat: cleanNum(it.fat) ?? 0,
+    computed_fiber: cleanNum(it.fiber) ?? 0,
   }));
   const { error: itErr } = await supabase.from("saved_meal_items").insert(rows);
   if (itErr) throw itErr;
@@ -1172,6 +1182,7 @@ export async function logSavedMeal(input: {
     computed_protein: it.computed_protein,
     computed_carbs: it.computed_carbs,
     computed_fat: it.computed_fat,
+    computed_fiber: it.computed_fiber ?? 0,
   }));
   const { error: insErr } = await supabase.from("food_log").insert(rows);
   if (insErr) throw insErr;
@@ -1217,6 +1228,7 @@ export async function copyMeal(input: {
     computed_protein: r.computed_protein,
     computed_carbs: r.computed_carbs,
     computed_fat: r.computed_fat,
+    computed_fiber: r.computed_fiber ?? 0,
   }));
   const { error: insErr } = await supabase.from("food_log").insert(rows);
   if (insErr) throw insErr;

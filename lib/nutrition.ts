@@ -22,6 +22,7 @@ export type Food = {
   protein_per_100g: number;
   carbs_per_100g: number;
   fat_per_100g: number;
+  fiber_per_100g: number;
   default_unit: FoodUnit;
   common_portions: Portion[];
   source: "seeded" | "custom";
@@ -40,6 +41,7 @@ export type FoodLogEntry = {
   computed_protein: number;
   computed_carbs: number;
   computed_fat: number;
+  computed_fiber: number;
 };
 
 export type NutritionTargets = {
@@ -47,6 +49,7 @@ export type NutritionTargets = {
   daily_protein_g: number;
   daily_carbs_g: number;
   daily_fat_g: number;
+  daily_fiber_g: number;
 };
 
 export const DEFAULT_TARGETS: NutritionTargets = {
@@ -54,6 +57,7 @@ export const DEFAULT_TARGETS: NutritionTargets = {
   daily_protein_g: 120,
   daily_carbs_g: 220,
   daily_fat_g: 65,
+  daily_fiber_g: 30,
 };
 
 export type Macros = {
@@ -61,6 +65,7 @@ export type Macros = {
   protein: number;
   carbs: number;
   fat: number;
+  fiber: number;
 };
 
 export type SavedMealItem = {
@@ -72,6 +77,7 @@ export type SavedMealItem = {
   computed_protein: number;
   computed_carbs: number;
   computed_fat: number;
+  computed_fiber: number;
 };
 
 export type SavedMeal = {
@@ -106,6 +112,7 @@ export function macrosFor(food: Food, quantity: number, unit: string): Macros {
     protein: round1(food.protein_per_100g * k),
     carbs: round1(food.carbs_per_100g * k),
     fat: round1(food.fat_per_100g * k),
+    fiber: round1(food.fiber_per_100g * k),
   };
 }
 
@@ -125,15 +132,24 @@ export function perServingToPer100g(value: number, servingGrams: number): number
   return round1((value * 100) / servingGrams);
 }
 
-export function sumMacros(entries: { computed_calories: number; computed_protein: number; computed_carbs: number; computed_fat: number }[]): Macros {
+export function sumMacros(
+  entries: {
+    computed_calories: number;
+    computed_protein: number;
+    computed_carbs: number;
+    computed_fat: number;
+    computed_fiber: number;
+  }[],
+): Macros {
   return entries.reduce<Macros>(
     (acc, e) => ({
       calories: acc.calories + e.computed_calories,
       protein: acc.protein + e.computed_protein,
       carbs: acc.carbs + e.computed_carbs,
       fat: acc.fat + e.computed_fat,
+      fiber: acc.fiber + e.computed_fiber,
     }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0 },
+    { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
   );
 }
 

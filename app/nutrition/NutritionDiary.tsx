@@ -14,6 +14,7 @@ import {
   MEALS,
   MEAL_ICON,
   fraction,
+  sumMacros,
   type FoodLogEntry,
   type Meal,
   type NutritionTargets,
@@ -24,6 +25,7 @@ const MACRO_META = [
   { key: "protein", label: "Protein", color: "#FF6233", targetKey: "daily_protein_g" },
   { key: "carbs", label: "Carbs", color: "#E0A52A", targetKey: "daily_carbs_g" },
   { key: "fat", label: "Fat", color: "#3FAE8E", targetKey: "daily_fat_g" },
+  { key: "fiber", label: "Fibre", color: "#5EA0EF", targetKey: "daily_fiber_g" },
 ] as const;
 
 function shiftKey(key: string, n: number): string {
@@ -59,6 +61,7 @@ export default function NutritionDiary({
   const [editing, setEditing] = useState<FoodLogEntry | null>(null);
   const [showTargets, setShowTargets] = useState(false);
   const [savingMeal, setSavingMeal] = useState<{ meal: Meal; entries: FoodLogEntry[] } | null>(null);
+  const [breakdown, setBreakdown] = useState<{ meal: Meal; entries: FoodLogEntry[] } | null>(null);
   const [pending, startTransition] = useTransition();
 
   const byMeal = (meal: Meal) => entries.filter((e) => e.meal === meal);
@@ -153,7 +156,12 @@ export default function NutritionDiary({
               key={meal}
               className="overflow-hidden rounded-2xl border border-white/10 bg-surface"
             >
-              <div className="flex items-center gap-2 px-4 pt-3.5">
+              <button
+                type="button"
+                disabled={items.length === 0}
+                onClick={() => setBreakdown({ meal, entries: items })}
+                className="flex w-full items-center gap-2 px-4 pt-3.5 text-left disabled:cursor-default"
+              >
                 <span aria-hidden className="text-lg">
                   {MEAL_ICON[meal]}
                 </span>
@@ -161,11 +169,12 @@ export default function NutritionDiary({
                   {meal}
                 </h2>
                 {items.length > 0 && (
-                  <span className="ml-auto text-sm font-semibold tabular-nums text-muted">
+                  <span className="ml-auto flex items-center gap-1.5 text-sm font-semibold tabular-nums text-muted">
                     {Math.round(sub)} kcal
+                    <span aria-hidden className="text-xs">›</span>
                   </span>
                 )}
-              </div>
+              </button>
 
               <div className="px-4 pb-2 pt-1">
                 {items.length === 0 ? (
@@ -272,7 +281,81 @@ export default function NutritionDiary({
           }}
         />
       )}
+
+      {breakdown && (
+        <MealBreakdownSheet
+          meal={breakdown.meal}
+          entries={breakdown.entries}
+          onClose={() => setBreakdown(null)}
+        />
+      )}
     </main>
+  );
+}
+
+// Per-meal macro breakdown: total kcal + P/C/F/fibre and each item's share.
+function MealBreakdownSheet({
+  meal,
+  entries,
+  onClose,
+}: {
+  meal: Meal;
+  entries: FoodLogEntry[];
+  onClose: () => void;
+}) {
+  const totals = sumMacros(entries);
+  const rows: { label: string; value: string; color: string }[] = [
+    { label: "Protein", value: `${Math.round(totals.protein)} g`, color: "#FF6233" },
+    { label: "Carbs", value: `${Math.round(totals.carbs)} g`, color: "#E0A52A" },
+    { label: "Fat", value: `${Math.round(totals.fat)} g`, color: "#3FAE8E" },
+    { label: "Fibre", value: `${Math.round(totals.fiber)} g`, color: "#5EA0EF" },
+  ];
+
+  return (
+    <Sheet title={`${MEAL_ICON[meal]}  ${meal}`} onClose={onClose}>
+      <div className="px-4 pb-5 pt-1">
+        <div className="mb-3 rounded-2xl bg-white/[0.04] p-4">
+          <div className="text-center">
+            <div className="text-3xl font-bold tabular-nums text-green">
+              {Math.round(totals.calories)}
+            </div>
+            <div className="text-xs text-muted">kcal in this meal</div>
+          </div>
+          <div className="mt-3 grid grid-cols-4 gap-2">
+            {rows.map((r) => (
+              <div key={r.label} className="text-center">
+                <div className="text-base font-bold tabular-nums text-ink">{r.value}</div>
+                <div className="flex items-center justify-center gap-1 text-[11px] text-muted">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: r.color }} />
+                  {r.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+          {entries.length} item{entries.length === 1 ? "" : "s"}
+        </p>
+        <ul className="space-y-1">
+          {entries.map((e) => (
+            <li key={e.id} className="flex items-center justify-between gap-3 py-1.5">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-ink">{e.food_name}</span>
+                <span className="block truncate text-xs text-muted">
+                  {trimQty(e.quantity)} {e.unit} · P{Math.round(e.computed_protein)} C
+                  {Math.round(e.computed_carbs)} F{Math.round(e.computed_fat)} · Fib
+                  {Math.round(e.computed_fiber)}
+                </span>
+              </span>
+              <span className="shrink-0 text-sm font-semibold tabular-nums text-ink">
+                {Math.round(e.computed_calories)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </Sheet>
   );
 }
 
@@ -304,6 +387,7 @@ function SaveMealSheet({
           protein: e.computed_protein,
           carbs: e.computed_carbs,
           fat: e.computed_fat,
+          fiber: e.computed_fiber,
         })),
       });
       onDone();
@@ -462,6 +546,7 @@ function EditEntrySheet({
     protein: Math.round(entry.computed_protein * factor),
     carbs: Math.round(entry.computed_carbs * factor),
     fat: Math.round(entry.computed_fat * factor),
+    fiber: Math.round(entry.computed_fiber * factor),
   };
 
   async function save() {
@@ -475,6 +560,7 @@ function EditEntrySheet({
         protein: entry.computed_protein * factor,
         carbs: entry.computed_carbs * factor,
         fat: entry.computed_fat * factor,
+        fiber: entry.computed_fiber * factor,
       });
       onDone();
     } catch {
@@ -513,6 +599,7 @@ function EditEntrySheet({
           <Stat n={scaled.protein} label="P" />
           <Stat n={scaled.carbs} label="C" />
           <Stat n={scaled.fat} label="F" />
+          <Stat n={scaled.fiber} label="Fib" />
         </div>
 
         <div className="mt-4 flex items-center gap-3">
@@ -564,6 +651,7 @@ function TargetsSheet({
   const [pro, setPro] = useState(String(targets.daily_protein_g));
   const [carb, setCarb] = useState(String(targets.daily_carbs_g));
   const [fat, setFat] = useState(String(targets.daily_fat_g));
+  const [fib, setFib] = useState(String(targets.daily_fiber_g));
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -574,6 +662,7 @@ function TargetsSheet({
         daily_protein_g: Number(pro) || 0,
         daily_carbs_g: Number(carb) || 0,
         daily_fat_g: Number(fat) || 0,
+        daily_fiber_g: Number(fib) || 0,
       });
       onDone();
     } catch {
@@ -585,10 +674,11 @@ function TargetsSheet({
     <Sheet title="Daily targets" onClose={onClose}>
       <div className="space-y-3 px-4 pb-5 pt-2">
         <TargetField label="Calories (kcal)" value={cal} onChange={setCal} />
-        <div className="grid grid-cols-3 gap-2.5">
+        <div className="grid grid-cols-4 gap-2.5">
           <TargetField label="Protein (g)" value={pro} onChange={setPro} />
           <TargetField label="Carbs (g)" value={carb} onChange={setCarb} />
           <TargetField label="Fat (g)" value={fat} onChange={setFat} />
+          <TargetField label="Fibre (g)" value={fib} onChange={setFib} />
         </div>
         <button
           type="button"
