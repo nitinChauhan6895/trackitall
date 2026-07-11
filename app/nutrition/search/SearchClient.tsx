@@ -12,7 +12,7 @@ import {
 } from "@/app/actions";
 import {
   MEALS,
-  MEAL_ICON,
+  gramsFor,
   macrosFor,
   perServingToPer100g,
   unitOptions,
@@ -67,6 +67,7 @@ export default function SearchClient({
   // Local copy so a freshly-built meal shows immediately (router.refresh alone
   // doesn't reliably re-seed an already-mounted client prop).
   const [meals, setMeals] = useState<SavedMeal[]>(savedMeals);
+  const [loggingMeal, setLoggingMeal] = useState<SavedMeal | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   // Live search (debounced) for the All tab. An empty query reuses the
@@ -109,12 +110,6 @@ export default function SearchClient({
 
   const shown = tab === "all" ? results : tab === "recent" ? filteredRecent : filteredMine;
 
-  async function quickLogMeal(m: SavedMeal) {
-    await logSavedMeal({ date, meal, savedMealId: m.id });
-    router.push(`/nutrition?d=${date}`);
-    router.refresh();
-  }
-
   return (
     <main className="flex flex-1 flex-col px-4 pb-6 safe-top">
       <header className="flex items-center gap-3 py-4">
@@ -136,15 +131,12 @@ export default function SearchClient({
             type="button"
             onClick={() => setMeal(m)}
             className={[
-              "flex flex-col items-center gap-0.5 rounded-xl border px-1 py-2 text-xs font-semibold transition",
+              "rounded-xl border px-1 py-2.5 text-sm font-semibold transition",
               m === meal
                 ? "border-green bg-green-tint text-green"
                 : "border-white/10 bg-surface text-muted",
             ].join(" ")}
           >
-            <span aria-hidden className="text-base">
-              {MEAL_ICON[m]}
-            </span>
             {m}
           </button>
         ))}
@@ -204,7 +196,7 @@ export default function SearchClient({
           >
             🍳 Build a meal from ingredients
           </button>
-          <SavedMealList meals={filteredMeals} onLog={quickLogMeal} />
+          <SavedMealList meals={filteredMeals} onLog={setLoggingMeal} />
         </>
       ) : (
         <ul className="space-y-2">
@@ -285,7 +277,142 @@ export default function SearchClient({
           }}
         />
       )}
+
+      {loggingMeal && (
+        <SavedMealLogSheet
+          savedMeal={loggingMeal}
+          meal={meal}
+          date={date}
+          onClose={() => setLoggingMeal(null)}
+          onLogged={() => {
+            router.push(`/nutrition?d=${date}`);
+            router.refresh();
+          }}
+        />
+      )}
     </main>
+  );
+}
+
+// ---------- Log a saved meal (with a servings amount), portion-style UI ----------
+
+function SavedMealLogSheet({
+  savedMeal,
+  meal,
+  date,
+  onClose,
+  onLogged,
+}: {
+  savedMeal: SavedMeal;
+  meal: Meal;
+  date: string;
+  onClose: () => void;
+  onLogged: () => void;
+}) {
+  const [amount, setAmount] = useState("1");
+  const [selMeal, setSelMeal] = useState<Meal>(meal);
+  const [busy, setBusy] = useState(false);
+
+  const servings = Number(amount) || 0;
+  const t = savedMeal.totals;
+  const scaled = {
+    calories: Math.round(t.calories * servings),
+    protein: Math.round(t.protein * servings),
+    carbs: Math.round(t.carbs * servings),
+    fat: Math.round(t.fat * servings),
+    fiber: Math.round(t.fiber * servings),
+  };
+
+  async function add() {
+    setBusy(true);
+    try {
+      await logSavedMeal({ date, meal: selMeal, savedMealId: savedMeal.id, servings });
+      onLogged();
+    } catch {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet title="Log meal" onClose={onClose} tall>
+      <div className="flex max-h-[82dvh] flex-col overflow-y-auto px-4 pb-5 pt-1">
+        <h2 className="text-center text-xl font-bold text-ink">{savedMeal.name}</h2>
+        <p className="mb-4 text-center text-sm text-muted">
+          {savedMeal.items.length} item{savedMeal.items.length === 1 ? "" : "s"} ·{" "}
+          {Math.round(t.calories)} kcal per serving
+        </p>
+
+        {/* Servings amount */}
+        <label className="mb-1.5 block text-sm font-semibold text-ink">Servings</label>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setAmount(String(Math.max(0.5, Math.round((servings - 0.5) * 2) / 2)))}
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-surface-2 text-2xl text-ink active:bg-white/10"
+          >
+            −
+          </button>
+          <input
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="0.5"
+            className="min-w-0 flex-1 rounded-2xl border border-orange/50 bg-surface-2 px-4 py-3 text-center text-2xl font-bold text-ink outline-none focus:border-green"
+          />
+          <button
+            type="button"
+            onClick={() => setAmount(String(Math.round((servings + 0.5) * 2) / 2))}
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-surface-2 text-2xl text-ink active:bg-white/10"
+          >
+            +
+          </button>
+        </div>
+
+        {/* Live macros */}
+        <p className="mb-2 mt-4 text-sm text-muted">
+          {trimNum(servings)} serving{servings === 1 ? "" : "s"}
+        </p>
+        <div className="grid grid-cols-4 gap-2">
+          <MacroCard value={String(scaled.calories)} label="kcal" accent />
+          <MacroCard value={`${scaled.protein}g`} label="protein" />
+          <MacroCard value={`${scaled.carbs}g`} label="carbs" />
+          <MacroCard value={`${scaled.fat}g`} label="fat" />
+        </div>
+        <p className="mt-2 text-center text-xs text-muted">
+          + <span className="font-semibold text-ink">{scaled.fiber}g</span> fibre
+        </p>
+
+        {/* Meal picker */}
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          {MEALS.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setSelMeal(m)}
+              className={[
+                "rounded-xl border px-1 py-2.5 text-sm font-semibold transition",
+                m === selMeal
+                  ? "border-orange bg-orange-soft text-orange"
+                  : "border-white/10 bg-surface text-muted",
+              ].join(" ")}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={add}
+          disabled={busy || servings <= 0}
+          className="mt-5 w-full rounded-2xl bg-green px-4 py-4 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-40"
+        >
+          {busy ? "Adding…" : `Add to ${selMeal}`}
+        </button>
+      </div>
+    </Sheet>
   );
 }
 
@@ -497,13 +624,17 @@ function PortionSheet({
   onAddToBuilder?: (item: BuilderItem) => void;
 }) {
   const units = unitOptions(food);
+  const baseUnit = food.default_unit === "ml" ? "ml" : "g";
   const initialUnit = food.default_unit === "piece" ? units[units.length > 1 ? 1 : 0] : units[0];
   const [unit, setUnit] = useState(initialUnit);
   const [qty, setQty] = useState(unit === "g" || unit === "ml" ? "100" : "1");
+  const [selMeal, setSelMeal] = useState<Meal>(meal);
   const [busy, setBusy] = useState(false);
 
   const quantity = Number(qty) || 0;
+  const grams = gramsFor(food, quantity, unit);
   const macros = macrosFor(food, quantity, unit);
+  const per100Label = food.default_unit === "ml" ? "ml" : "g";
 
   async function add() {
     // Builder mode: accumulate into the draft meal instead of logging to a day.
@@ -526,7 +657,7 @@ function PortionSheet({
     try {
       await logFood({
         date,
-        meal,
+        meal: selMeal,
         food_id: food.id,
         food_name: food.name,
         quantity,
@@ -543,39 +674,22 @@ function PortionSheet({
     }
   }
 
+  const setBaseQty = (n: number) => {
+    setUnit(baseUnit);
+    setQty(String(n));
+  };
+
   return (
-    <Sheet title={food.name} onClose={onClose}>
-      <div className="px-4 pb-5 pt-1">
-        <p className="mb-3 text-xs text-muted">
+    <Sheet title="Add food" onClose={onClose} tall>
+      <div className="flex max-h-[82dvh] flex-col overflow-y-auto px-4 pb-5 pt-1">
+        {/* Food identity */}
+        <h2 className="text-center text-xl font-bold text-ink">{food.name}</h2>
+        <p className="mb-4 text-center text-sm text-muted">
           {Math.round(food.calories_per_100g)} kcal · P{food.protein_per_100g} C
-          {food.carbs_per_100g} F{food.fat_per_100g} per 100
-          {food.default_unit === "ml" ? "ml" : "g"}
+          {food.carbs_per_100g} F{food.fat_per_100g} per 100{per100Label}
         </p>
 
-        {/* Portion chips */}
-        {food.common_portions.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-2">
-            {food.common_portions.map((p) => (
-              <button
-                key={p.label}
-                type="button"
-                onClick={() => {
-                  setUnit(p.label);
-                  setQty("1");
-                }}
-                className={[
-                  "rounded-full border px-3 py-1.5 text-xs font-semibold",
-                  unit === p.label
-                    ? "border-green bg-green-tint text-green"
-                    : "border-white/10 bg-surface text-muted",
-                ].join(" ")}
-              >
-                {p.label} ≈ {p.grams}g
-              </button>
-            ))}
-          </div>
-        )}
-
+        {/* Quantity + unit */}
         <div className="flex gap-2.5">
           <input
             value={qty}
@@ -584,7 +698,7 @@ function PortionSheet({
             inputMode="decimal"
             min={0}
             autoFocus
-            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-surface-2 px-4 py-3 text-base text-ink outline-none focus:border-green"
+            className="min-w-0 flex-[1.6] rounded-2xl border border-orange/50 bg-surface-2 px-4 py-3.5 text-center text-2xl font-bold text-ink outline-none focus:border-green"
           />
           <select
             value={unit}
@@ -593,35 +707,119 @@ function PortionSheet({
               setUnit(u);
               setQty(u === "g" || u === "ml" ? "100" : "1");
             }}
-            className="shrink-0 rounded-xl border border-white/10 bg-surface-2 px-3 py-3 text-base text-ink outline-none focus:border-green"
+            className="flex-1 rounded-2xl border border-white/10 bg-surface-2 px-3 py-3.5 text-base text-ink outline-none focus:border-green"
           >
             {units.map((u) => (
               <option key={u} value={u}>
-                {u}
+                {u === "g" ? "grams" : u === "ml" ? "ml" : u}
               </option>
             ))}
           </select>
         </div>
 
-        {/* Live macros */}
-        <div className="mt-3 flex items-center justify-around rounded-xl bg-white/[0.04] py-3 text-center">
-          <Stat n={macros.calories} label="kcal" strong />
-          <Stat n={macros.protein} label="protein" />
-          <Stat n={macros.carbs} label="carbs" />
-          <Stat n={macros.fat} label="fat" />
-          <Stat n={macros.fiber} label="fibre" />
+        {/* Quick portion chips */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {food.default_unit !== "piece" && (
+            <>
+              <PortionChip on={unit === baseUnit && quantity === 50} onClick={() => setBaseQty(50)}>
+                50{baseUnit}
+              </PortionChip>
+              <PortionChip on={unit === baseUnit && quantity === 100} onClick={() => setBaseQty(100)}>
+                100{baseUnit}
+              </PortionChip>
+            </>
+          )}
+          {food.common_portions.map((p) => (
+            <PortionChip
+              key={p.label}
+              on={unit === p.label}
+              onClick={() => {
+                setUnit(p.label);
+                setQty("1");
+              }}
+            >
+              {p.label} ≈ {p.grams}g
+            </PortionChip>
+          ))}
         </div>
+
+        {/* Live macros for this serving */}
+        <p className="mb-2 mt-4 text-sm text-muted">This serving ({trimNum(grams)}g)</p>
+        <div className="grid grid-cols-4 gap-2">
+          <MacroCard value={String(macros.calories)} label="kcal" accent />
+          <MacroCard value={`${macros.protein}g`} label="protein" />
+          <MacroCard value={`${macros.carbs}g`} label="carbs" />
+          <MacroCard value={`${macros.fat}g`} label="fat" />
+        </div>
+        <p className="mt-2 text-center text-xs text-muted">
+          + <span className="font-semibold text-ink">{macros.fiber}g</span> fibre
+        </p>
+
+        {/* Meal picker (hidden in builder mode) */}
+        {!onAddToBuilder && (
+          <div className="mt-4 grid grid-cols-4 gap-2">
+            {MEALS.map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setSelMeal(m)}
+                className={[
+                  "rounded-xl border px-1 py-2.5 text-sm font-semibold transition",
+                  m === selMeal
+                    ? "border-orange bg-orange-soft text-orange"
+                    : "border-white/10 bg-surface text-muted",
+                ].join(" ")}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        )}
 
         <button
           type="button"
           onClick={add}
           disabled={busy || quantity <= 0}
-          className="mt-4 w-full rounded-xl bg-green px-4 py-3.5 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-40"
+          className="mt-5 w-full rounded-2xl bg-green px-4 py-4 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-40"
         >
-          {busy ? "Adding…" : onAddToBuilder ? "Add to meal" : `Add to ${meal}`}
+          {busy ? "Adding…" : onAddToBuilder ? "Add to meal" : `Add to ${selMeal}`}
         </button>
       </div>
     </Sheet>
+  );
+}
+
+function PortionChip({
+  on,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "rounded-full border px-3 py-1.5 text-xs font-semibold",
+        on ? "border-green bg-green-tint text-green" : "border-white/10 bg-surface text-muted",
+      ].join(" ")}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MacroCard({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-surface-2 py-3 text-center">
+      <div className={`text-lg font-bold tabular-nums ${accent ? "text-green" : "text-ink"}`}>
+        {value}
+      </div>
+      <div className="text-[11px] text-muted">{label}</div>
+    </div>
   );
 }
 
@@ -859,7 +1057,6 @@ function SavedMealList({
   meals: SavedMeal[];
   onLog: (m: SavedMeal) => void;
 }) {
-  const [busyId, setBusyId] = useState<string | null>(null);
   if (meals.length === 0)
     return (
       <p className="rounded-xl border border-dashed border-white/15 px-4 py-6 text-center text-sm text-muted">
@@ -882,14 +1079,10 @@ function SavedMealList({
           </span>
           <button
             type="button"
-            disabled={busyId === m.id}
-            onClick={async () => {
-              setBusyId(m.id);
-              await onLog(m);
-            }}
-            className="shrink-0 rounded-lg bg-green px-3 py-1.5 text-sm font-bold text-ink-inverse active:scale-95 disabled:opacity-50"
+            onClick={() => onLog(m)}
+            className="shrink-0 rounded-lg bg-green px-3 py-1.5 text-sm font-bold text-ink-inverse active:scale-95"
           >
-            {busyId === m.id ? "…" : "Log"}
+            Log
           </button>
         </li>
       ))}

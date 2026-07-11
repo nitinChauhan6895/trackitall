@@ -1155,14 +1155,17 @@ export async function saveMeal(input: {
   return { id: meal.id as string };
 }
 
-// One-tap: log every item of a saved meal into the given day + meal slot.
+// Log every item of a saved meal into the given day + meal slot, scaled by
+// `servings` (default 1 = the meal as saved).
 export async function logSavedMeal(input: {
   date: string;
   meal: Meal;
   savedMealId: string;
+  servings?: number;
 }) {
   if (!DATE_RE.test(input.date)) throw new Error("Invalid date");
   if (!MEALS.includes(input.meal)) throw new Error("Invalid meal");
+  const factor = input.servings && input.servings > 0 ? input.servings : 1;
   const { supabase, user } = await requireUser();
 
   const { data: items, error } = await supabase
@@ -1178,13 +1181,13 @@ export async function logSavedMeal(input: {
     meal: input.meal,
     food_id: it.food_id,
     food_name: it.food_name,
-    quantity: it.quantity,
+    quantity: Number(it.quantity) * factor,
     unit: it.unit,
-    computed_calories: it.computed_calories,
-    computed_protein: it.computed_protein,
-    computed_carbs: it.computed_carbs,
-    computed_fat: it.computed_fat,
-    computed_fiber: it.computed_fiber ?? 0,
+    computed_calories: Number(it.computed_calories) * factor,
+    computed_protein: Number(it.computed_protein) * factor,
+    computed_carbs: Number(it.computed_carbs) * factor,
+    computed_fat: Number(it.computed_fat) * factor,
+    computed_fiber: (Number(it.computed_fiber) || 0) * factor,
   }));
   const { error: insErr } = await supabase.from("food_log").insert(rows);
   if (insErr) throw insErr;

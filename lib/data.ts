@@ -833,12 +833,22 @@ export async function getSavedMeals(): Promise<SavedMeal[]> {
   });
 }
 
-// Weekly nutrition rollup for the Stats page (avg daily calories/protein).
-export async function getNutritionWeek(): Promise<{
+export type NutritionDayPoint = {
+  key: string; // YYYY-MM-DD
+  label: string; // weekday initial
+  calories: number;
+  protein: number;
+};
+
+export type NutritionWeek = {
   avgCalories: number;
   avgProtein: number;
   daysLogged: number;
-} | null> {
+  series: NutritionDayPoint[]; // exactly 7, oldest → today
+};
+
+// Weekly nutrition rollup for the Stats page: 7-day series + averages.
+export async function getNutritionWeek(): Promise<NutritionWeek | null> {
   const supabase = createClient();
   const today = new Date();
   const start = new Date(today);
@@ -860,6 +870,22 @@ export async function getNutritionWeek(): Promise<{
     d.pro += Number(r.computed_protein);
     byDay.set(r.log_date, d);
   }
+
+  const WD = ["S", "M", "T", "W", "T", "F", "S"];
+  const series: NutritionDayPoint[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = toDateKey(d);
+    const v = byDay.get(key);
+    series.push({
+      key,
+      label: WD[d.getDay()],
+      calories: Math.round(v?.cal ?? 0),
+      protein: Math.round(v?.pro ?? 0),
+    });
+  }
+
   const days = byDay.size;
   let cal = 0;
   let pro = 0;
@@ -871,5 +897,6 @@ export async function getNutritionWeek(): Promise<{
     avgCalories: Math.round(cal / days),
     avgProtein: Math.round(pro / days),
     daysLogged: days,
+    series,
   };
 }

@@ -21,6 +21,7 @@ export type NutritionWeekSummary = {
   avgCalories: number;
   avgProtein: number;
   daysLogged: number;
+  series: { key: string; label: string; calories: number; protein: number }[];
 };
 
 export default function StatsView({
@@ -73,6 +74,9 @@ export default function StatsView({
           <div className="grid grid-cols-2 gap-2">
             <Card value={String(nutrition.avgCalories)} unit="kcal" label="Avg daily calories" />
             <Card value={String(nutrition.avgProtein)} unit="g" label="Avg daily protein" />
+          </div>
+          <div className="mt-2">
+            <NutritionTrend series={nutrition.series} />
           </div>
         </>
       )}
@@ -203,6 +207,62 @@ function ChartBox({
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="py-6 text-center text-xs text-muted">{children}</p>;
+}
+
+// 7-day bar chart with a Calories/Protein toggle.
+function NutritionTrend({
+  series,
+}: {
+  series: { key: string; label: string; calories: number; protein: number }[];
+}) {
+  const [metric, setMetric] = useState<"calories" | "protein">("calories");
+  const values = series.map((d) => (metric === "calories" ? d.calories : d.protein));
+  const max = Math.max(...values, 0);
+  const unit = metric === "calories" ? "kcal" : "g";
+  const barColor = metric === "calories" ? GREEN : ORANGE;
+
+  return (
+    <ChartBox title="Intake trend" hint="last 7 days">
+      <div className="mb-3 flex rounded-lg bg-white/[0.06] p-0.5">
+        {(["calories", "protein"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMetric(m)}
+            className={[
+              "flex-1 rounded-md py-1.5 text-xs font-semibold capitalize transition",
+              metric === m ? "bg-surface text-green shadow-sm" : "text-muted",
+            ].join(" ")}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+      {max === 0 ? (
+        <Empty>Nothing logged in the last 7 days.</Empty>
+      ) : (
+        <div className="flex h-[140px] items-end gap-1.5">
+          {series.map((d, i) => {
+            const v = values[i];
+            return (
+              <div key={d.key} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
+                <span className="text-[9px] font-semibold text-ink/70">{v > 0 ? v : ""}</span>
+                <div
+                  className="w-full rounded-t"
+                  style={{
+                    height: v > 0 ? `${Math.max(6, (v / max) * 100)}%` : "2%",
+                    background: v > 0 ? barColor : "#2A2D24",
+                  }}
+                />
+                <span className="text-[9px] text-muted">{d.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="mt-2 text-center text-[10px] text-muted">Daily {metric} ({unit})</p>
+    </ChartBox>
+  );
 }
 
 function fmtKm(n: number): string {

@@ -12,7 +12,6 @@ import {
 } from "@/app/actions";
 import {
   MEALS,
-  MEAL_ICON,
   fraction,
   sumMacros,
   type FoodLogEntry,
@@ -162,9 +161,6 @@ export default function NutritionDiary({
                 onClick={() => setBreakdown({ meal, entries: items })}
                 className="flex w-full items-center gap-2 px-4 pt-3.5 text-left disabled:cursor-default"
               >
-                <span aria-hidden className="text-lg">
-                  {MEAL_ICON[meal]}
-                </span>
                 <h2 className="text-sm font-bold uppercase tracking-wide text-ink">
                   {meal}
                 </h2>
@@ -312,7 +308,7 @@ function MealBreakdownSheet({
   ];
 
   return (
-    <Sheet title={`${MEAL_ICON[meal]}  ${meal}`} onClose={onClose}>
+    <Sheet title={meal} onClose={onClose}>
       <div className="px-4 pb-5 pt-1">
         <div className="mb-3 rounded-2xl bg-white/[0.04] p-4">
           <div className="text-center">
