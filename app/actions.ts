@@ -1122,7 +1122,7 @@ export async function saveMeal(input: {
     fat: number;
     fiber: number;
   }[];
-}) {
+}): Promise<{ id: string }> {
   const name = input.name.trim();
   if (!name) throw new Error("Meal name is required");
   if (input.items.length === 0) throw new Error("Add at least one food");
@@ -1151,6 +1151,8 @@ export async function saveMeal(input: {
   const { error: itErr } = await supabase.from("saved_meal_items").insert(rows);
   if (itErr) throw itErr;
   revalidatePath("/nutrition");
+  revalidatePath("/nutrition/search");
+  return { id: meal.id as string };
 }
 
 // One-tap: log every item of a saved meal into the given day + meal slot.

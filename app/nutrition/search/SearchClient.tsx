@@ -21,6 +21,7 @@ import {
   type Meal,
   type Portion,
   type SavedMeal,
+  type SavedMealItem,
 } from "@/lib/nutrition";
 import LabelScanner, { type ScanResult } from "./LabelScanner";
 
@@ -63,6 +64,9 @@ export default function SearchClient({
   const [selected, setSelected] = useState<Food | null>(null);
   const [creating, setCreating] = useState(false);
   const [building, setBuilding] = useState(false);
+  // Local copy so a freshly-built meal shows immediately (router.refresh alone
+  // doesn't reliably re-seed an already-mounted client prop).
+  const [meals, setMeals] = useState<SavedMeal[]>(savedMeals);
   const timer = useRef<ReturnType<typeof setTimeout>>();
 
   // Live search (debounced) for the All tab. An empty query reuses the
@@ -99,8 +103,8 @@ export default function SearchClient({
     [q, myFoods],
   );
   const filteredMeals = useMemo(
-    () => (q ? savedMeals.filter((m) => m.name.toLowerCase().includes(q)) : savedMeals),
-    [q, savedMeals],
+    () => (q ? meals.filter((m) => m.name.toLowerCase().includes(q)) : meals),
+    [q, meals],
   );
 
   const shown = tab === "all" ? results : tab === "recent" ? filteredRecent : filteredMine;
@@ -273,7 +277,8 @@ export default function SearchClient({
         <MealBuilder
           initialFoods={initial}
           onClose={() => setBuilding(false)}
-          onSaved={() => {
+          onSaved={(newMeal) => {
+            setMeals((prev) => [newMeal, ...prev]);
             setBuilding(false);
             setTab("meals");
             router.refresh();
@@ -293,7 +298,7 @@ function MealBuilder({
 }: {
   initialFoods: Food[];
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (meal: SavedMeal) => void;
 }) {
   const [name, setName] = useState("");
   const [query, setQuery] = useState("");
@@ -315,7 +320,7 @@ function MealBuilder({
       try {
         setResults(await searchFoodsAction(term));
       } catch {
-        /* keep previous */
+        /* keep previous results visible */
       }
     }, 220);
     return () => clearTimeout(timer.current);
@@ -344,27 +349,39 @@ function MealBuilder({
     }
     setBusy(true);
     try {
-      await saveMeal({ name, items });
-      onSaved();
+      const { id } = await saveMeal({ name, items });
+      const savedItems: SavedMealItem[] = items.map((it) => ({
+        food_id: it.food_id,
+        food_name: it.food_name,
+        quantity: it.quantity,
+        unit: it.unit,
+        computed_calories: it.calories,
+        computed_protein: it.protein,
+        computed_carbs: it.carbs,
+        computed_fat: it.fat,
+        computed_fiber: it.fiber,
+      }));
+      onSaved({ id, name: name.trim(), items: savedItems, totals });
     } catch (e: any) {
       setError(e?.message ?? "Couldn't save.");
       setBusy(false);
     }
   }
 
+  // Fixed-height panel so the layout never reflows as search results change.
   return (
     <Sheet title="Build a meal" onClose={onClose} tall>
-      <div className="flex min-h-0 flex-1 flex-col px-4 pb-5 pt-1">
+      <div className="flex h-[78dvh] flex-col px-4 pb-4 pt-1">
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Meal name (e.g. My egg breakfast)"
-          className="mb-2 w-full rounded-xl border border-white/10 bg-surface-2 px-4 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-green"
+          className="mb-2 w-full shrink-0 rounded-xl border border-white/10 bg-surface-2 px-4 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-green"
           autoFocus
         />
 
         {/* Running total */}
-        <div className="mb-2 flex items-center justify-around rounded-xl bg-white/[0.04] py-2.5 text-center">
+        <div className="mb-2 flex shrink-0 items-center justify-around rounded-xl bg-white/[0.04] py-2.5 text-center">
           <Stat n={Math.round(totals.calories)} label="kcal" strong />
           <Stat n={Math.round(totals.protein)} label="P" />
           <Stat n={Math.round(totals.carbs)} label="C" />
@@ -372,64 +389,70 @@ function MealBuilder({
           <Stat n={Math.round(totals.fiber)} label="Fib" />
         </div>
 
-        {/* Draft ingredients */}
-        {items.length > 0 && (
-          <ul className="mb-2 max-h-32 space-y-1 overflow-y-auto">
-            {items.map((it, i) => (
-              <li key={i} className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-ink">{it.food_name}</span>
-                  <span className="block truncate text-xs text-muted">
-                    {it.quantity} {it.unit} · {Math.round(it.calories)} kcal
-                  </span>
+        {/* Selected ingredients (name + quantity) */}
+        <p className="mb-1 shrink-0 text-xs font-semibold uppercase tracking-wide text-muted">
+          {items.length === 0 ? "No ingredients yet" : `Added · ${items.length}`}
+        </p>
+        <ul className="mb-2 max-h-28 shrink-0 space-y-1 overflow-y-auto">
+          {items.map((it, i) => (
+            <li key={i} className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-ink">{it.food_name}</span>
+                <span className="block truncate text-xs text-muted">
+                  {trimNum(it.quantity)} {it.unit} · {Math.round(it.calories)} kcal
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setItems((prev) => prev.filter((_, j) => j !== i))}
-                  aria-label="Remove"
-                  className="shrink-0 px-1 text-muted active:text-orange"
-                >
-                  ✕
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {/* Ingredient search */}
-        <div className="relative mb-2">
-          <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">🔍</span>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Add ingredient…"
-            className="w-full rounded-xl border border-white/10 bg-surface py-2.5 pl-9 pr-3 text-base text-ink outline-none placeholder:text-muted focus:border-green"
-          />
-        </div>
-
-        <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
-          {results.map((f) => (
-            <li key={f.id}>
+              </span>
               <button
                 type="button"
-                onClick={() => setPicking(f)}
-                className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-surface px-3 py-2.5 text-left active:bg-white/10"
+                onClick={() => setItems((prev) => prev.filter((_, j) => j !== i))}
+                aria-label="Remove"
+                className="shrink-0 px-1 text-lg text-muted active:text-orange"
               >
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{f.name}</span>
-                <span className="shrink-0 text-xs text-muted">{Math.round(f.calories_per_100g)} kcal/100g</span>
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green text-base font-bold text-ink-inverse">+</span>
+                ✕
               </button>
             </li>
           ))}
         </ul>
 
-        {error && <p className="mt-2 text-sm text-orange">{error}</p>}
+        {/* Ingredient search */}
+        <div className="relative mb-2 shrink-0">
+          <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">🔍</span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search to add an ingredient…"
+            className="w-full rounded-xl border border-white/10 bg-surface py-2.5 pl-9 pr-3 text-base text-ink outline-none placeholder:text-muted focus:border-green"
+          />
+        </div>
+
+        {/* Results — the only region that scrolls; height stays constant */}
+        <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
+          {results.length === 0 ? (
+            <li className="py-6 text-center text-sm text-muted">No foods found.</li>
+          ) : (
+            results.map((f) => (
+              <li key={f.id}>
+                <button
+                  type="button"
+                  onClick={() => setPicking(f)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-surface px-3 py-2.5 text-left active:bg-white/10"
+                >
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{f.name}</span>
+                  <span className="shrink-0 text-xs text-muted">{Math.round(f.calories_per_100g)} kcal/100g</span>
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green text-base font-bold text-ink-inverse">+</span>
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
+
+        {error && <p className="mt-2 shrink-0 text-sm text-orange">{error}</p>}
 
         <button
           type="button"
           onClick={save}
           disabled={busy}
-          className="mt-2 w-full rounded-xl bg-green px-4 py-3 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
+          className="mt-2 w-full shrink-0 rounded-xl bg-green px-4 py-3 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
         >
           {busy ? "Saving…" : `Save meal${items.length ? ` · ${Math.round(totals.calories)} kcal` : ""}`}
         </button>
@@ -442,11 +465,18 @@ function MealBuilder({
           date=""
           onClose={() => setPicking(null)}
           onLogged={() => {}}
-          onAddToBuilder={(item) => setItems((prev) => [...prev, item])}
+          onAddToBuilder={(item) => {
+            setItems((prev) => [...prev, item]);
+            setPicking(null);
+          }}
         />
       )}
     </Sheet>
   );
+}
+
+function trimNum(n: number): string {
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10);
 }
 
 // ---------- Screen 3: portion & macros ----------
