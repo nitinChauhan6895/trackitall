@@ -63,6 +63,7 @@ export default function SearchClient({
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<Food | null>(null);
   const [creating, setCreating] = useState(false);
+  const [quickAdd, setQuickAdd] = useState(false);
   const [building, setBuilding] = useState(false);
   // Local copy so a freshly-built meal shows immediately (router.refresh alone
   // doesn't reliably re-seed an already-mounted client prop).
@@ -177,14 +178,23 @@ export default function SearchClient({
         ))}
       </div>
 
-      {/* Create custom food entry */}
-      <button
-        type="button"
-        onClick={() => setCreating(true)}
-        className="mb-3 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-orange/50 px-4 py-3 text-sm font-semibold text-orange active:bg-orange-soft"
-      >
-        + Create custom food
-      </button>
+      {/* Create custom food + quick-add macros */}
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setCreating(true)}
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-orange/50 px-3 py-3 text-sm font-semibold text-orange active:bg-orange-soft"
+        >
+          + Custom food
+        </button>
+        <button
+          type="button"
+          onClick={() => setQuickAdd(true)}
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-green/50 px-3 py-3 text-sm font-semibold text-green active:bg-green-tint"
+        >
+          ✎ Quick add
+        </button>
+      </div>
 
       {/* Results */}
       {tab === "meals" ? (
@@ -261,6 +271,18 @@ export default function SearchClient({
           onCreated={(food) => {
             setCreating(false);
             setSelected(food);
+          }}
+        />
+      )}
+
+      {quickAdd && (
+        <QuickAddSheet
+          meal={meal}
+          date={date}
+          onClose={() => setQuickAdd(false)}
+          onLogged={() => {
+            router.push(`/nutrition?d=${date}`);
+            router.refresh();
           }}
         />
       )}
@@ -820,6 +842,126 @@ function MacroCard({ value, label, accent }: { value: string; label: string; acc
       </div>
       <div className="text-[11px] text-muted">{label}</div>
     </div>
+  );
+}
+
+// ---------- Quick add: type macros directly (no food item) ----------
+
+function QuickAddSheet({
+  meal,
+  date,
+  onClose,
+  onLogged,
+}: {
+  meal: Meal;
+  date: string;
+  onClose: () => void;
+  onLogged: () => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [cal, setCal] = useState("");
+  const [pro, setPro] = useState("");
+  const [carb, setCarb] = useState("");
+  const [fat, setFat] = useState("");
+  const [fib, setFib] = useState("");
+  const [selMeal, setSelMeal] = useState<Meal>(meal);
+  const [busy, setBusy] = useState(false);
+
+  const num = (s: string) => Math.max(0, Number(s) || 0);
+  const anyValue = [cal, pro, carb, fat, fib].some((v) => num(v) > 0);
+
+  async function add() {
+    setBusy(true);
+    try {
+      await logFood({
+        date,
+        meal: selMeal,
+        food_id: null,
+        food_name: label.trim() || "Quick add",
+        quantity: 1,
+        unit: "serving",
+        calories: num(cal),
+        protein: num(pro),
+        carbs: num(carb),
+        fat: num(fat),
+        fiber: num(fib),
+      });
+      onLogged();
+    } catch {
+      setBusy(false);
+    }
+  }
+
+  const inputCls =
+    "w-full rounded-xl border border-white/10 bg-surface-2 px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-green";
+
+  return (
+    <Sheet title="Quick add" onClose={onClose} tall>
+      <div className="flex max-h-[82dvh] flex-col overflow-y-auto px-4 pb-5 pt-1">
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Label (optional, e.g. Restaurant meal)"
+          className={`${inputCls} mb-3`}
+          autoFocus
+        />
+
+        <Labeled label="Calories (kcal)">
+          <input
+            value={cal}
+            onChange={(e) => setCal(e.target.value)}
+            type="number"
+            inputMode="decimal"
+            min={0}
+            placeholder="0"
+            className={`${inputCls} text-center text-xl font-bold`}
+          />
+        </Labeled>
+
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          <Labeled label="Protein (g)">
+            <input value={pro} onChange={(e) => setPro(e.target.value)} type="number" inputMode="decimal" min={0} placeholder="0" className={`${inputCls} text-center`} />
+          </Labeled>
+          <Labeled label="Carbs (g)">
+            <input value={carb} onChange={(e) => setCarb(e.target.value)} type="number" inputMode="decimal" min={0} placeholder="0" className={`${inputCls} text-center`} />
+          </Labeled>
+          <Labeled label="Fat (g)">
+            <input value={fat} onChange={(e) => setFat(e.target.value)} type="number" inputMode="decimal" min={0} placeholder="0" className={`${inputCls} text-center`} />
+          </Labeled>
+          <Labeled label="Fibre (g)">
+            <input value={fib} onChange={(e) => setFib(e.target.value)} type="number" inputMode="decimal" min={0} placeholder="0" className={`${inputCls} text-center`} />
+          </Labeled>
+        </div>
+
+        {/* Meal picker */}
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          {MEALS.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setSelMeal(m)}
+              className={[
+                "rounded-xl border px-1 py-2.5 text-sm font-semibold transition",
+                m === selMeal
+                  ? "border-orange bg-orange-soft text-orange"
+                  : "border-white/10 bg-surface text-muted",
+              ].join(" ")}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={add}
+          disabled={busy || !anyValue}
+          className="mt-5 w-full rounded-2xl bg-green px-4 py-4 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-40"
+        >
+          {busy ? "Adding…" : `Add to ${selMeal}`}
+        </button>
+      </div>
+    </Sheet>
   );
 }
 
