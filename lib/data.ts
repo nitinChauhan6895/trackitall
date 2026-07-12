@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getLocalUser } from "@/lib/supabase/user";
 import {
   MUSCLE_GROUPS,
   type Circuit,
@@ -40,9 +41,7 @@ import { toDateKey } from "@/lib/date";
 
 export async function getProfile(): Promise<Profile> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = getLocalUser(); // local cookie decode — no auth round-trip
 
   const fallbackUsername = (user?.email ?? "there").split("@")[0] || "there";
 
@@ -424,9 +423,7 @@ export async function getCircuit(id: string): Promise<Circuit | null> {
 
 export async function getIncomingShares(): Promise<IncomingShare[]> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = getLocalUser();
   if (!user) return [];
 
   const { data, error } = await supabase
@@ -469,9 +466,7 @@ export async function getStatsData(): Promise<StatsData> {
 
 export async function getCoachProfile(): Promise<CoachProfile | null> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = getLocalUser();
   if (!user) return null;
   const { data } = await supabase
     .from("coach_profiles")
@@ -758,38 +753,33 @@ export async function searchFoods(query: string, limit = 40): Promise<Food[]> {
 }
 
 // This user's most-recently-logged distinct foods (for the Recent tab).
+// Single round-trip: the food row rides along on the log rows via the FK.
 export async function getRecentFoods(limit = 25): Promise<Food[]> {
   const supabase = createClient();
   const { data: logs, error } = await supabase
     .from("food_log")
-    .select("food_id, created_at")
+    .select("food_id, created_at, foods(*)")
     .not("food_id", "is", null)
     .order("created_at", { ascending: false })
     .limit(150);
   if (error) throw error;
 
-  const seen: string[] = [];
+  const seen = new Set<string>();
+  const out: Food[] = [];
   for (const l of logs ?? []) {
-    if (l.food_id && !seen.includes(l.food_id)) seen.push(l.food_id);
-    if (seen.length >= limit) break;
+    const f = (l as any).foods;
+    if (!l.food_id || !f || seen.has(l.food_id)) continue;
+    seen.add(l.food_id);
+    out.push(mapFood(f));
+    if (out.length >= limit) break;
   }
-  if (seen.length === 0) return [];
-
-  const { data: foods, error: fErr } = await supabase
-    .from("foods")
-    .select("*")
-    .in("id", seen);
-  if (fErr) throw fErr;
-  const byId = new Map((foods ?? []).map((f) => [f.id, mapFood(f)]));
-  return seen.map((id) => byId.get(id)).filter((f): f is Food => !!f);
+  return out;
 }
 
 // Foods this user created.
 export async function getMyFoods(): Promise<Food[]> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = getLocalUser();
   if (!user) return [];
   const { data, error } = await supabase
     .from("foods")
@@ -802,23 +792,16 @@ export async function getMyFoods(): Promise<Food[]> {
 
 export async function getSavedMeals(): Promise<SavedMeal[]> {
   const supabase = createClient();
-  const [mealsRes, itemsRes] = await Promise.all([
-    supabase.from("saved_meals").select("*").order("created_at", { ascending: false }),
-    supabase.from("saved_meal_items").select("*"),
-  ]);
-  if (mealsRes.error) throw mealsRes.error;
-  if (itemsRes.error) throw itemsRes.error;
+  // Single round-trip: items ride along via the FK.
+  const { data, error } = await supabase
+    .from("saved_meals")
+    .select("*, saved_meal_items(*)")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
 
-  const itemsByMeal = new Map<string, any[]>();
-  for (const it of itemsRes.data ?? []) {
-    const list = itemsByMeal.get(it.saved_meal_id) ?? [];
-    list.push(it);
-    itemsByMeal.set(it.saved_meal_id, list);
-  }
-
-  return (mealsRes.data ?? []).map((m) => {
-    const rawItems = itemsByMeal.get(m.id) ?? [];
-    const items = rawItems.map((it) => ({
+  return (data ?? []).map((m: any) => {
+    const rawItems = m.saved_meal_items ?? [];
+    const items = rawItems.map((it: any) => ({
       food_id: it.food_id,
       food_name: it.food_name,
       quantity: Number(it.quantity),

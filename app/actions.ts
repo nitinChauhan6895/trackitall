@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getLocalUser } from "@/lib/supabase/user";
 import {
   MUSCLE_GROUPS,
   PR_UNIT_TYPES,
@@ -47,9 +48,9 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 async function requireUser() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Local cookie decode — no auth-server round-trip. Every query/insert made
+  // with this id is still verified by RLS on the database side.
+  const user = getLocalUser();
   if (!user) redirect("/login");
   return { supabase, user };
 }
