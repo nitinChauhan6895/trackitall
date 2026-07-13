@@ -18,7 +18,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md px-4 pb-3 safe-bottom">
-      <div className="grid grid-cols-5 items-center rounded-[28px] border border-white/10 bg-surface/95 px-2 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.55)] backdrop-blur">
+      <div className="grid grid-cols-5 items-center rounded-[28px] border border-white/10 bg-surface px-2 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.55)]">
         <NavItem href="/" label="Home" active={isActive("/")} icon={HomeIcon} />
         <NavItem href="/community" label="Community" active={isActive("/community")} icon={PeopleIcon} />
 

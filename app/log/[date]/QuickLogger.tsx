@@ -398,7 +398,7 @@ export default function QuickLogger({
         </div>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md border-t border-white/10 bg-page/95 px-4 pb-5 pt-3 backdrop-blur safe-bottom">
+      <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md border-t border-white/10 bg-page px-4 pb-5 pt-3 safe-bottom">
         {finishError && (
           <p className="mb-2 text-center text-sm font-medium text-orange">{finishError}</p>
         )}

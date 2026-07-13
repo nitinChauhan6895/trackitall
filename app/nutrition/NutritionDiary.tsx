@@ -235,7 +235,7 @@ export default function NutritionDiary({
       </div>
 
       {/* Primary CTA */}
-      <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md border-t border-white/10 bg-page/95 px-4 pb-5 pt-3 backdrop-blur safe-bottom">
+      <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md border-t border-white/10 bg-page px-4 pb-5 pt-3 safe-bottom">
         <Link
           href={`/nutrition/search?d=${date}&meal=Breakfast`}
           className="flex w-full items-center justify-center rounded-2xl bg-green px-4 py-4 text-base font-bold text-ink-inverse transition active:scale-[0.98]"
