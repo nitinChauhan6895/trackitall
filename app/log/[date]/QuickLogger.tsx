@@ -24,7 +24,7 @@ import {
 } from "@/app/actions";
 import { libraryFor, type LibraryItem } from "@/lib/presets";
 import { HIIT_EXERCISES, resolveHiitMetrics } from "@/lib/hiit";
-import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
+import MuscleBadge from "@/components/MuscleBadge";
 
 // Cardio "Exercise" dropdown options (JSON cardio names → field type).
 const CARDIO_LIBRARY = libraryFor("cardio");
@@ -375,9 +375,7 @@ export default function QuickLogger({
           {groupsInUse.map((g) => (
             <section key={g}>
               <h2 className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-ink">
-                <span className="h-5 w-5" style={{ color: MUSCLE_TONE[g] }}>
-                  <MuscleIcon group={g} />
-                </span>
+                <MuscleBadge group={g} className="h-5 w-5" />
                 {MUSCLE_GROUP_LABELS[g]}
               </h2>
               <div className="space-y-3">
@@ -484,12 +482,7 @@ function ExerciseCard({
           expanded ? "bg-green-tint/50" : "",
         ].join(" ")}
       >
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 p-1.5"
-          style={{ color: MUSCLE_TONE[ex.group] }}
-        >
-          <MuscleIcon group={ex.group} />
-        </span>
+        <MuscleBadge group={ex.group} className="h-9 w-9" />
         <span className="min-w-0 flex-1">
           <span className="block truncate font-semibold text-ink">{cardTitle(ex)}</span>
           <span className="block truncate text-sm text-muted">{summarizeExercise(ex)}</span>
@@ -853,9 +846,7 @@ function AddSheet({
                 onClick={() => setGroup(g)}
                 className="flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-surface px-2 py-4 transition active:scale-[0.97] active:border-green"
               >
-                <span className="h-8 w-8" style={{ color: MUSCLE_TONE[g] }}>
-                  <MuscleIcon group={g} />
-                </span>
+                <MuscleBadge group={g} className="h-10 w-10" />
                 <span className="text-sm font-semibold text-ink">
                   {MUSCLE_GROUP_LABELS[g]}
                 </span>
