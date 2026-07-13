@@ -7,16 +7,20 @@ import {
   getNutritionDiary,
   getProfile,
   getAllPrs,
+  getRecentTraining,
   getWorkoutStats,
 } from "@/lib/data";
 import { fraction } from "@/lib/nutrition";
 import {
   MEASUREMENT_FIELDS,
+  MUSCLE_GROUP_LABELS,
   displayName,
   profileInitial,
   type Measurement,
   type MeasurementField,
+  type MuscleGroup,
 } from "@/lib/types";
+import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
 import { evaluateBadges, sortedByEarned } from "@/lib/badges";
 import { groupPrs } from "@/lib/prGroups";
 import {
@@ -153,6 +157,21 @@ export default async function HomePage({
             <span aria-hidden>🏆</span> Keep it up!
           </span>
         </div>
+      </section>
+
+      {/* Last 7 days trained (streamed) */}
+      <section className="mt-5">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="flex items-center gap-1.5 text-base font-semibold">
+            <span aria-hidden>💪</span> Last 7 days
+          </h2>
+          <Link href="/stats" className="text-sm font-medium text-orange active:opacity-70">
+            Stats ›
+          </Link>
+        </div>
+        <Suspense fallback={<RecentTrainingSkeleton />}>
+          <RecentTraining />
+        </Suspense>
       </section>
 
       {/* Nutrition (streamed) */}
@@ -324,6 +343,80 @@ async function NutritionPreview({ date }: { date: string }) {
 
 function NutritionSkeleton() {
   return <div className="h-[104px] animate-pulse rounded-2xl bg-white/10" />;
+}
+
+// Weekday label for a date key, relative for today/yesterday.
+function dayLabels(key: string, isToday: boolean): { top: string; sub: string } {
+  const [y, m, d] = key.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  const yest = new Date();
+  yest.setDate(yest.getDate() - 1);
+  const sub = dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (isToday) return { top: "Today", sub };
+  if (key === toDateKey(yest)) return { top: "Yesterday", sub };
+  return { top: dt.toLocaleDateString(undefined, { weekday: "short" }), sub };
+}
+
+async function RecentTraining() {
+  const days = await getRecentTraining(7);
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-surface">
+      {days.map((day) => {
+        const { top, sub } = dayLabels(day.key, day.isToday);
+        const href = day.groups.length ? `/day/${day.key}` : `/log/${day.key}`;
+        return (
+          <Link
+            key={day.key}
+            href={href}
+            className="flex items-center gap-3 border-b border-white/5 px-4 py-2.5 last:border-0 active:bg-white/[0.04]"
+          >
+            <div className="w-16 shrink-0">
+              <p className="text-sm font-semibold text-ink">{top}</p>
+              <p className="text-[11px] text-muted">{sub}</p>
+            </div>
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+              {day.groups.length === 0 ? (
+                <span className="text-xs italic text-muted">Rest day</span>
+              ) : (
+                day.groups.map((g) => <MuscleChip key={g} group={g} />)
+              )}
+            </div>
+            <span aria-hidden className="shrink-0 text-muted">
+              ›
+            </span>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+function MuscleChip({ group }: { group: MuscleGroup }) {
+  const tone = MUSCLE_TONE[group];
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full py-1 pl-1 pr-2"
+      style={{ backgroundColor: `${tone}22` }}
+    >
+      <span className="h-4 w-4" style={{ color: tone }}>
+        <MuscleIcon group={group} />
+      </span>
+      <span className="text-[11px] font-medium text-ink">{MUSCLE_GROUP_LABELS[group]}</span>
+    </span>
+  );
+}
+
+function RecentTrainingSkeleton() {
+  return (
+    <div className="space-y-px overflow-hidden rounded-2xl border border-white/10 bg-surface">
+      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+        <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+          <div className="h-8 w-16 shrink-0 animate-pulse rounded bg-white/10" />
+          <div className="h-6 flex-1 animate-pulse rounded-full bg-white/10" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function PreviewSection({

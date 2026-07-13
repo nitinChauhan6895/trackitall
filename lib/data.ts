@@ -120,6 +120,45 @@ export async function getMonthWorkoutSummary(
   return out;
 }
 
+// Muscle groups trained on each of the last `days` days, most-recent first.
+export type TrainingDay = { key: string; isToday: boolean; groups: MuscleGroup[] };
+
+export async function getRecentTraining(days = 7): Promise<TrainingDay[]> {
+  const supabase = createClient();
+  const today = new Date();
+  const start = new Date(today);
+  start.setDate(today.getDate() - (days - 1));
+
+  const { data, error } = await supabase
+    .from("exercises")
+    .select("workout_date, muscle_group")
+    .gte("workout_date", toDateKey(start))
+    .lte("workout_date", toDateKey(today));
+  if (error) throw error;
+
+  const byDay = new Map<string, Set<MuscleGroup>>();
+  for (const row of data ?? []) {
+    const key = row.workout_date as string;
+    if (!byDay.has(key)) byDay.set(key, new Set());
+    byDay.get(key)!.add(row.muscle_group as MuscleGroup);
+  }
+
+  const todayKey = toDateKey(today);
+  const out: TrainingDay[] = [];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const key = toDateKey(d);
+    const set = byDay.get(key);
+    out.push({
+      key,
+      isToday: key === todayKey,
+      groups: set ? MUSCLE_GROUPS.filter((g) => set.has(g)) : [],
+    });
+  }
+  return out;
+}
+
 export type WorkoutStats = { last7: number; last14: number; month: number };
 
 export async function getWorkoutStats(): Promise<WorkoutStats> {
