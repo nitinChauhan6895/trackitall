@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
+import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "TrackItAll",
@@ -34,10 +35,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col">
-          {children}
-        </div>
-        <BottomNav />
+        <Providers>
+          <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col">
+            {children}
+          </div>
+          <BottomNav />
+        </Providers>
         <ServiceWorkerRegister />
       </body>
     </html>

@@ -14,5 +14,5 @@ export default async function NutritionPage({
       ? searchParams.d
       : toDateKey(new Date());
   const diary = await getNutritionDiary(date);
-  return <NutritionDiary diary={diary} today={toDateKey(new Date())} />;
+  return <NutritionDiary initialDiary={diary} today={toDateKey(new Date())} />;
 }

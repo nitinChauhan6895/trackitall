@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   copyMeal,
   deleteFoodLog,
@@ -18,6 +19,7 @@ import {
   type Meal,
   type NutritionTargets,
 } from "@/lib/nutrition";
+import { fetchNutritionDiary, qk } from "@/lib/browserData";
 import type { NutritionDiary as Diary } from "@/lib/data";
 
 const MACRO_META = [
@@ -49,13 +51,23 @@ function heading(key: string, today: string): string {
 }
 
 export default function NutritionDiary({
-  diary,
+  initialDiary,
   today,
 }: {
-  diary: Diary;
+  initialDiary: Diary;
   today: string;
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  // Cache-backed diary: instant from IndexedDB on re-open, reconciled in the
+  // background; edits invalidate this key to refetch.
+  const { data: diary = initialDiary } = useQuery({
+    queryKey: qk.diary(initialDiary.date),
+    queryFn: () => fetchNutritionDiary(initialDiary.date),
+    initialData: initialDiary,
+  });
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: qk.diary(initialDiary.date) });
   const { date, entries, totals, targets, hasTargets } = diary;
   const [editing, setEditing] = useState<FoodLogEntry | null>(null);
   const [showTargets, setShowTargets] = useState(false);
@@ -183,7 +195,7 @@ export default function NutritionDiary({
                           toDate: date,
                           meal,
                         });
-                        router.refresh();
+                        refresh();
                       })
                     }
                   />
@@ -250,7 +262,7 @@ export default function NutritionDiary({
           onClose={() => setEditing(null)}
           onDone={() => {
             setEditing(null);
-            router.refresh();
+            refresh();
           }}
         />
       )}
@@ -261,7 +273,7 @@ export default function NutritionDiary({
           onClose={() => setShowTargets(false)}
           onDone={() => {
             setShowTargets(false);
-            router.refresh();
+            refresh();
           }}
         />
       )}
@@ -273,7 +285,7 @@ export default function NutritionDiary({
           onClose={() => setSavingMeal(null)}
           onDone={() => {
             setSavingMeal(null);
-            router.refresh();
+            refresh();
           }}
         />
       )}

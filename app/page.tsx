@@ -8,8 +8,8 @@ import {
   getProfile,
   getAllPrs,
   getRecentTraining,
-  getWorkoutStats,
 } from "@/lib/data";
+import CalendarCard from "./CalendarCard";
 import { fraction } from "@/lib/nutrition";
 import {
   MEASUREMENT_FIELDS,
@@ -23,19 +23,9 @@ import {
 import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
 import { evaluateBadges, sortedByEarned } from "@/lib/badges";
 import { groupPrs } from "@/lib/prGroups";
-import {
-  buildCalendarGrid,
-  monthLabel,
-  monthParam,
-  nextMonth,
-  parseMonthParam,
-  prevMonth,
-  toDateKey,
-} from "@/lib/date";
+import { parseMonthParam, toDateKey } from "@/lib/date";
 import { Badge } from "@/components/Badge";
 import { MeasurementCard, PrCard } from "@/components/HomeCards";
-
-const WEEKDAYS = ["M", "T", "W", "T", "F", "S", "S"];
 
 // Deduped per request: the streak pill and the badges row share one query.
 const loadBadges = cache(getBadgeData);
@@ -68,16 +58,13 @@ export default async function HomePage({
   const { year, month } = parseMonthParam(searchParams.m);
 
   // Above-the-fold shell only — keeps first paint off the heavy badge scan.
-  const [profile, stats, workoutSummary] = await Promise.all([
+  // The calendar's summary seeds the client CalendarCard (instant month nav).
+  const [profile, workoutSummary] = await Promise.all([
     getProfile(),
-    getWorkoutStats(),
     getMonthWorkoutSummary(year, month),
   ]);
 
-  const grid = buildCalendarGrid(year, month);
   const todayKey = toDateKey(new Date());
-  const prev = prevMonth(year, month);
-  const next = nextMonth(year, month);
   const firstName = profile.first_name || displayName(profile);
   const todayLabel = new Date().toLocaleDateString(undefined, {
     day: "numeric",
@@ -103,61 +90,13 @@ export default async function HomePage({
         </Link>
       </header>
 
-      {/* Calendar */}
-      <section className="rounded-2xl border border-white/10 bg-surface p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold">{monthLabel(year, month)}</h2>
-          <div className="flex items-center gap-1">
-            <Link href={`/?m=${monthParam(prev.year, prev.month)}`} aria-label="Previous month" className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-white/10">‹</Link>
-            <Link href={`/?m=${monthParam(next.year, next.month)}`} aria-label="Next month" className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-white/10">›</Link>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-7 text-center text-xs font-medium text-muted">
-          {WEEKDAYS.map((w, i) => (
-            <div key={i} className="py-1">{w}</div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-7 gap-y-1">
-          {grid.map((d) => {
-            const key = toDateKey(d);
-            const inMonth = d.getMonth() === month - 1;
-            if (!inMonth) return <div key={key} aria-hidden />;
-            const groups = workoutSummary.get(key) ?? [];
-            const hasWorkout = groups.length > 0;
-            const isToday = key === todayKey;
-            return (
-              <div key={key} className="flex flex-col items-center gap-1 py-0.5">
-                <Link
-                  href={hasWorkout ? `/day/${key}` : `/log/${key}`}
-                  className={[
-                    "flex h-9 w-9 items-center justify-center rounded-full text-sm transition active:scale-95",
-                    isToday ? "bg-orange font-bold text-white ring-2 ring-green ring-offset-2 ring-offset-page" : "bg-white/[0.05] text-ink",
-                  ].join(" ")}
-                >
-                  {d.getDate()}
-                </Link>
-                <div className="flex h-1.5 items-center gap-0.5">
-                  {hasWorkout &&
-                    groups.slice(0, 3).map((g, i) => (
-                      <span key={g + i} className={["h-1 w-1 rounded-full", i % 2 === 0 ? "bg-green" : "bg-orange"].join(" ")} aria-hidden />
-                    ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-sm">
-          <span className="flex items-center gap-1.5 font-medium text-ink">
-            <span aria-hidden>📊</span> {stats.month} Workouts this month
-          </span>
-          <span className="flex items-center gap-1.5 text-muted">
-            <span aria-hidden>🏆</span> Keep it up!
-          </span>
-        </div>
-      </section>
+      {/* Calendar — client component with instant, cache-backed month nav */}
+      <CalendarCard
+        initialYear={year}
+        initialMonth={month}
+        initialSummary={Object.fromEntries(workoutSummary)}
+        todayKey={todayKey}
+      />
 
       {/* Last 7 days trained (streamed) */}
       <section className="mt-5">
