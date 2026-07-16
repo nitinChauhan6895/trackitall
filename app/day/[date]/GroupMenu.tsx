@@ -9,10 +9,12 @@ export default function GroupMenu({
   date,
   group,
   groupLabel,
+  onChanged,
 }: {
   date: string;
   group: MuscleGroup;
   groupLabel: string;
+  onChanged: () => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -48,7 +50,7 @@ export default function GroupMenu({
                 setOpen(false);
                 startTransition(async () => {
                   await deleteGroup(date, group);
-                  router.refresh();
+                  onChanged();
                 });
               }}
             />

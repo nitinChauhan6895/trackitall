@@ -19,14 +19,32 @@ export default function DayExercise({
   name,
   sets,
   inputs,
+  onChanged,
 }: {
   exerciseId: string;
   date: string;
   name: string;
   sets: { id: string; label: string }[];
   inputs: InputSpec[];
+  onChanged: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+
+  // Run a server action from a form submit, then refresh the cached day.
+  const submit =
+    (action: (fd: FormData) => Promise<unknown>, reset = false) =>
+    async (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      const form = e.currentTarget;
+      const fd = new FormData(form);
+      try {
+        await action(fd);
+        if (reset) form.reset();
+        onChanged();
+      } catch {
+        /* keep the row as-is on failure */
+      }
+    };
 
   return (
     <div className="border-b border-white/10 py-1 last:border-0">
@@ -69,7 +87,7 @@ export default function DayExercise({
           {sets.map((s, i) => (
             <form
               key={s.id}
-              action={deleteSet}
+              onSubmit={submit(deleteSet)}
               className="flex items-center justify-between text-sm"
             >
               <input type="hidden" name="id" value={s.id} />
@@ -90,7 +108,7 @@ export default function DayExercise({
             </form>
           ))}
 
-          <form action={addSet} className="flex flex-wrap items-center gap-2">
+          <form onSubmit={submit(addSet, true)} className="flex flex-wrap items-center gap-2">
             <input type="hidden" name="exercise_id" value={exerciseId} />
             <input type="hidden" name="date" value={date} />
             {inputs.map((meta) => (
@@ -114,7 +132,7 @@ export default function DayExercise({
           </form>
 
           <div className="flex items-center justify-between border-t border-white/10 pt-2.5">
-            <form action={deleteExercise}>
+            <form onSubmit={submit(deleteExercise)}>
               <input type="hidden" name="id" value={exerciseId} />
               <input type="hidden" name="date" value={date} />
               <button
