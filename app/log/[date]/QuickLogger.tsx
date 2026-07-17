@@ -24,6 +24,7 @@ import {
 } from "@/app/actions";
 import { libraryFor, type LibraryItem } from "@/lib/presets";
 import { HIIT_EXERCISES, resolveHiitMetrics } from "@/lib/hiit";
+import { enqueue } from "@/lib/offlineQueue";
 import MuscleBadge from "@/components/MuscleBadge";
 
 // Cardio "Exercise" dropdown options (JSON cardio names → field type).
@@ -59,7 +60,8 @@ type DraftSet = {
 };
 
 // Sync lifecycle: draft (local only / edited) → syncing → saved | error.
-type SyncStatus = "draft" | "syncing" | "saved" | "error";
+// "queued" = saved locally, waiting for the connection to sync (offline).
+type SyncStatus = "draft" | "syncing" | "saved" | "error" | "queued";
 
 type DraftExercise = {
   id: string;
@@ -282,19 +284,26 @@ export default function QuickLogger({
     if (!name) return;
 
     update(id, { collapsed: true, status: "syncing", name });
-    const p = upsertExercise({
+    const payload = {
       id: ex.savedId,
       date,
       muscle_group: ex.group,
       cardio_type: mode === "cardio" ? ex.cardioType : null,
       name,
       sets: ex.sets.map((s) => toSetInput(mode, ex, s)),
-    })
+    };
+    const p = upsertExercise(payload)
       .then(({ id: savedId }) => {
         update(id, { savedId, status: "saved" });
       })
-      .catch(() => {
-        update(id, { status: "error" });
+      .catch(async () => {
+        // Offline → keep the write, sync on reconnect. Genuine error → surface.
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          await enqueue("upsertExercise", payload);
+          update(id, { status: "queued" });
+        } else {
+          update(id, { status: "error" });
+        }
       })
       .finally(() => {
         inflight.current.delete(id);
@@ -314,8 +323,9 @@ export default function QuickLogger({
     setFinishError("");
 
     // Kick off any open card that still has content, then wait for everything.
+    const done = new Set<SyncStatus>(["saved", "syncing", "queued"]);
     for (const ex of itemsRef.current) {
-      if (ex.status !== "saved" && ex.status !== "syncing" && exerciseHasContent(ex)) {
+      if (!done.has(ex.status) && exerciseHasContent(ex)) {
         saveExercise(ex.id);
       }
     }
@@ -326,7 +336,8 @@ export default function QuickLogger({
       setFinishing(false);
       return;
     }
-    const savedAny = itemsRef.current.some((e) => e.savedId);
+    // Queued items count as saved — they'll sync on reconnect.
+    const savedAny = itemsRef.current.some((e) => e.savedId || e.status === "queued");
     router.push(savedAny ? `/day/${date}` : "/");
     router.refresh();
   }
@@ -445,6 +456,8 @@ function StatusChip({ status }: { status: SyncStatus }) {
     );
   if (status === "saved")
     return <span className="text-xs font-semibold text-green">✓ Saved</span>;
+  if (status === "queued")
+    return <span className="text-xs font-semibold text-orange">◷ Offline</span>;
   if (status === "error")
     return <span className="text-xs font-semibold text-orange">! Retry</span>;
   return null;

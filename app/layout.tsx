@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
+import OfflineSync from "@/components/OfflineSync";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <Providers>
+          <OfflineSync />
           <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col">
             {children}
           </div>
