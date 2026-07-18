@@ -2,14 +2,19 @@
 //
 // Strategy:
 //   • build assets (/_next/static, icons, fonts) → cache-first (content-hashed)
-//   • navigations + RSC payloads          → network-first, fall back to cache,
-//                                            then to the static /offline page
+//   • navigations + RSC payloads → stale-while-revalidate: serve the cached
+//     page instantly and refresh it in the background. On a weak connection
+//     this is the difference between an instant open and waiting on a slow
+//     request. Uncached routes go to the network, falling back to /offline.
 //   • everything else (POST, Supabase, auth) → untouched, straight to network
 //
 // Cached pages are personalised, so the app wipes every cache on sign-in
 // (see lib/localCache.ts) to keep accounts separate on a shared device.
+//
+// Bump VERSION on releases that change the UI shell — activate() drops the old
+// caches, so nobody is left holding a stale page across a deploy.
 
-const VERSION = "v2";
+const VERSION = "v3";
 const STATIC = `tia-static-${VERSION}`;
 const PAGES = `tia-pages-${VERSION}`;
 const OFFLINE_URL = "/offline";
@@ -84,23 +89,34 @@ self.addEventListener("fetch", (event) => {
   if (!isNav && !isRsc) return; // let auth/actions/data pass straight through
 
   event.respondWith(
-    fetch(req)
-      .then((res) => {
-        // Don't cache redirects (e.g. the middleware bounce to /login).
-        if (res.ok && !res.redirected) {
-          const copy = res.clone();
-          caches.open(PAGES).then((c) => c.put(req, copy)).catch(() => {});
-        }
-        return res;
-      })
-      .catch(async () => {
-        const cached = await caches.match(req);
-        if (cached) return cached;
-        if (isNav) {
-          const offline = await caches.match(OFFLINE_URL);
-          if (offline) return offline;
-        }
-        return Response.error();
-      }),
+    (async () => {
+      const cached = await caches.match(req);
+
+      // Kick off the refresh regardless — it updates the cache for next time.
+      const network = fetch(req)
+        .then((res) => {
+          // Don't cache redirects (e.g. the middleware bounce to /login).
+          if (res.ok && !res.redirected) {
+            const copy = res.clone();
+            caches.open(PAGES).then((c) => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => null);
+
+      // Stale-while-revalidate: if we have it, show it now and sync behind.
+      if (cached) {
+        event.waitUntil(network);
+        return cached;
+      }
+
+      const res = await network;
+      if (res) return res;
+      if (isNav) {
+        const offline = await caches.match(OFFLINE_URL);
+        if (offline) return offline;
+      }
+      return Response.error();
+    })(),
   );
 });
