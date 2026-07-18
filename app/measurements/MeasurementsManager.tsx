@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchMeasurements, qk } from "@/lib/browserData";
 import {
   MEASUREMENT_FIELDS,
   type Measurement,
@@ -37,14 +38,21 @@ export default function MeasurementsManager({
 }: {
   initial: Measurement[];
 }) {
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState<Measurement | null>(null);
   const [adding, setAdding] = useState(false);
+
+  // Cache-backed: instant on revisit, refreshed in the background.
+  const { data: entries = initial } = useQuery({
+    queryKey: qk.measurements(),
+    queryFn: fetchMeasurements,
+    initialData: initial,
+  });
 
   function done() {
     setEditing(null);
     setAdding(false);
-    router.refresh();
+    queryClient.invalidateQueries({ queryKey: qk.measurements() });
   }
 
   return (
@@ -74,9 +82,9 @@ export default function MeasurementsManager({
         />
       ) : (
         <>
-          {initial.length > 0 && (
+          {entries.length > 0 && (
             <div className="mb-4 grid grid-cols-2 gap-3">
-              {latestValues(initial)
+              {latestValues(entries)
                 .filter((m) => m.value != null)
                 .map(({ field, value }) => (
                   <MetricTile
@@ -100,13 +108,13 @@ export default function MeasurementsManager({
 
           <h2 className="mb-2 text-sm font-semibold text-muted">History</h2>
 
-          {initial.length === 0 ? (
+          {entries.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted">
               No measurements yet. Add your first entry above.
             </p>
           ) : (
             <ul className="space-y-2.5">
-              {initial.map((m) => (
+              {entries.map((m) => (
                 <li key={m.id}>
                   <button
                     type="button"

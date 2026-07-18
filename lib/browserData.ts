@@ -3,7 +3,13 @@
 // shapes so the query cache can persist to IndexedDB.
 
 import { getBrowserClient } from "@/lib/supabase/client";
-import { MUSCLE_GROUPS, type Exercise, type MuscleGroup } from "@/lib/types";
+import {
+  MUSCLE_GROUPS,
+  type Exercise,
+  type Measurement,
+  type MuscleGroup,
+  type Pr,
+} from "@/lib/types";
 import {
   DEFAULT_TARGETS,
   sumMacros,
@@ -19,6 +25,9 @@ export const qk = {
   day: (date: string) => ["day", date] as const,
   diary: (date: string) => ["diary", date] as const,
   month: (year: number, month: number) => ["month", year, month] as const,
+  prs: () => ["prs"] as const,
+  measurements: () => ["measurements"] as const,
+  stats: () => ["stats"] as const,
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -89,6 +98,30 @@ export async function fetchDayExercises(date: string): Promise<Exercise[]> {
     ...e,
     sets: (e.sets ?? []).sort((a: any, b: any) => a.position - b.position),
   })) as Exercise[];
+}
+
+// ---------- PRs & measurements ----------
+
+export async function fetchAllPrs(): Promise<Pr[]> {
+  const supabase = await authedClient();
+  const { data, error } = await supabase
+    .from("prs")
+    .select("*")
+    .order("achieved_date", { ascending: false, nullsFirst: false })
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as Pr[];
+}
+
+export async function fetchMeasurements(): Promise<Measurement[]> {
+  const supabase = await authedClient();
+  const { data, error } = await supabase
+    .from("measurements")
+    .select("*")
+    .order("entry_date", { ascending: false })
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as Measurement[];
 }
 
 // ---------- nutrition diary ----------

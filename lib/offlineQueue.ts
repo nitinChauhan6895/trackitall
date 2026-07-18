@@ -9,6 +9,7 @@
 
 import { get, set } from "idb-keyval";
 import { upsertExercise } from "@/app/actions";
+import { getBrowserClient } from "@/lib/supabase/client";
 
 const KEY = "trackitall-offline-queue";
 
@@ -17,7 +18,21 @@ export type QueuedOp = {
   type: "upsertExercise";
   payload: any;
   createdAt: number;
+  /** Owner at enqueue time — a shared device must never replay these under
+   *  a different account. */
+  userId?: string | null;
 };
+
+async function currentUserId(): Promise<string | null> {
+  try {
+    const {
+      data: { session },
+    } = await getBrowserClient().auth.getSession();
+    return session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
 
 type Listener = (count: number) => void;
 const listeners = new Set<Listener>();
@@ -40,7 +55,7 @@ export function subscribeQueue(l: Listener): () => void {
 }
 
 export async function enqueue(type: QueuedOp["type"], payload: any): Promise<void> {
-  const q = await readQueue();
+  const [q, userId] = await Promise.all([readQueue(), currentUserId()]);
   q.push({
     id:
       typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -49,6 +64,7 @@ export async function enqueue(type: QueuedOp["type"], payload: any): Promise<voi
     type,
     payload,
     createdAt: Date.now(),
+    userId,
   });
   await writeQueue(q);
 }
@@ -67,19 +83,31 @@ export async function flushQueue(): Promise<{ flushed: number; remaining: number
   flushing = true;
   let flushed = 0;
   try {
-    let q = await readQueue();
-    while (q.length) {
-      const op = q[0];
+    const queue = await readQueue();
+    if (queue.length === 0) return { flushed: 0, remaining: 0 };
+
+    const me = await currentUserId();
+    // Signed out — hold everything until the owner is back.
+    if (!me) return { flushed: 0, remaining: queue.length };
+
+    const remaining: QueuedOp[] = [];
+    let halted = false;
+    for (const op of queue) {
+      // Another account's write, or we already hit a failure: keep it in order.
+      if (halted || (op.userId && op.userId !== me)) {
+        remaining.push(op);
+        continue;
+      }
       try {
         await dispatch[op.type](op.payload);
+        flushed++;
       } catch {
-        break; // network (or other) failure — retry later
+        remaining.push(op);
+        halted = true; // preserve ordering — retry this and the rest later
       }
-      q = q.slice(1);
-      await writeQueue(q);
-      flushed++;
     }
-    return { flushed, remaining: q.length };
+    await writeQueue(remaining);
+    return { flushed, remaining: remaining.length };
   } finally {
     flushing = false;
   }

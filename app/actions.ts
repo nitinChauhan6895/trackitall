@@ -18,6 +18,8 @@ import {
   getCoachProfile,
   getCoachTemplates,
   buildCoachHistory,
+  getNutritionWeek,
+  getStatsData,
   searchFoods,
 } from "@/lib/data";
 import Anthropic from "@anthropic-ai/sdk";
@@ -941,6 +943,17 @@ export async function deleteMeasurement(id: string) {
   const { error } = await supabase.from("measurements").delete().eq("id", id);
   if (error) throw error;
   revalidatePath("/measurements");
+}
+
+// ---------- Cached reads for the client query cache ----------
+
+// Stats are computed server-side (heavy aggregation), so instead of porting the
+// maths to the browser we expose the *result* as an action and let React Query
+// cache it in IndexedDB — instant on revisit, refreshed in the background.
+export async function loadStatsAction() {
+  await requireUser();
+  const [stats, nutrition] = await Promise.all([getStatsData(), getNutritionWeek()]);
+  return { stats, nutrition };
 }
 
 // ---------- Nutrition ----------

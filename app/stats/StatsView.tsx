@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { loadStatsAction } from "@/app/actions";
+import { qk } from "@/lib/browserData";
 import { toDateKey } from "@/lib/date";
 import type { SeriesPoint, StatsData, WeekStats } from "@/lib/stats";
 
@@ -25,12 +28,25 @@ export type NutritionWeekSummary = {
 };
 
 export default function StatsView({
-  stats,
-  nutrition,
+  stats: initialStats,
+  nutrition: initialNutrition,
 }: {
   stats: StatsData;
   nutrition?: NutritionWeekSummary | null;
 }) {
+  // Stats are computed server-side; we cache the *result* so revisits paint
+  // instantly from IndexedDB and refresh in the background.
+  const { data } = useQuery({
+    queryKey: qk.stats(),
+    queryFn: loadStatsAction,
+    initialData: { stats: initialStats, nutrition: initialNutrition ?? null },
+  });
+  const stats = (data?.stats ?? initialStats) as StatsData;
+  const nutrition = (data?.nutrition ?? initialNutrition) as
+    | NutritionWeekSummary
+    | null
+    | undefined;
+
   const [range, setRange] = useState<Range>("this");
   const week =
     range === "this" ? stats.thisWeek : range === "last" ? stats.lastWeek : stats.last7;

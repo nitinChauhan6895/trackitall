@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchAllPrs, qk } from "@/lib/browserData";
 import {
   formatPrValue,
   formatSeconds,
@@ -54,18 +55,25 @@ const UNIT_OPTIONS: { value: PrUnitType; label: string }[] = [
 type Preset = { name: string; unit: PrUnitType; distance_unit: "m" | "km" | null };
 
 export default function PrManager({ initialPrs }: { initialPrs: Pr[] }) {
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const [editing, setEditing] = useState<Pr | null>(null);
   const [adding, setAdding] = useState(false);
   const [preset, setPreset] = useState<Preset | null>(null);
 
-  const groups = groupPrs(initialPrs);
+  // Cache-backed: instant from IndexedDB on revisit, refreshed in the
+  // background; saves/deletes invalidate this key.
+  const { data: prs = initialPrs } = useQuery({
+    queryKey: qk.prs(),
+    queryFn: fetchAllPrs,
+    initialData: initialPrs,
+  });
+  const groups = groupPrs(prs);
 
   function done() {
     setEditing(null);
     setAdding(false);
     setPreset(null);
-    router.refresh();
+    queryClient.invalidateQueries({ queryKey: qk.prs() });
   }
 
   return (

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { clearLocalCaches } from "@/lib/localCache";
 import { isValidEmail, isValidUsername, normalizeUsername } from "@/lib/auth";
 
 type Mode = "signin" | "signup";
@@ -126,6 +127,9 @@ export default function LoginPage() {
       setError(friendlyError(signErr.message, mode));
       return;
     }
+
+    // Drop any cached pages/data from a previous account on this device.
+    await clearLocalCaches();
 
     router.replace("/");
     router.refresh();

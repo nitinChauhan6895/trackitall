@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import { get, set, del } from "idb-keyval";
+import Prefetcher from "@/components/Prefetcher";
 
 // IndexedDB-backed storage for the persisted query cache.
 const idbStorage = {
@@ -51,6 +52,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       client={queryClient}
       persistOptions={{ persister, maxAge: 1000 * 60 * 60 * 24 }}
     >
+      <Prefetcher />
       {children}
     </PersistQueryClientProvider>
   );
