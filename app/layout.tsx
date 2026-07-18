@@ -63,7 +63,19 @@ function ServiceWorkerRegister() {
             var V = ${JSON.stringify(APP_VERSION)};
             if ('serviceWorker' in navigator) {
               window.addEventListener('load', function () {
-                navigator.serviceWorker.register('/sw.js?v=' + V).catch(function () {});
+                navigator.serviceWorker.register('/sw.js?v=' + V).then(function () {
+                  // A fresh worker starts with an empty page cache. Warm the
+                  // entry point straight away so going offline right after an
+                  // update still opens the app instead of the fallback.
+                  return navigator.serviceWorker.ready;
+                }).then(function () {
+                  if (navigator.onLine) {
+                    fetch('/', { credentials: 'same-origin' }).catch(function () {});
+                    if (location.pathname !== '/') {
+                      fetch(location.pathname, { credentials: 'same-origin' }).catch(function () {});
+                    }
+                  }
+                }).catch(function () {});
               });
             }
             // Safety net: if a stale page still asks for a chunk that's gone,

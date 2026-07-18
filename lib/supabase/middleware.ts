@@ -33,14 +33,11 @@ function readSessionExpiry(request: NextRequest): number | null {
 
 export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  // Public routes: auth screens plus /offline (the service worker precaches it
-  // as the no-connection fallback, so it must load signed-out).
   const isAuthRoute =
     path.startsWith("/login") ||
     path.startsWith("/forgot") ||
     path.startsWith("/reset") ||
-    path.startsWith("/auth") ||
-    path.startsWith("/offline");
+    path.startsWith("/auth");
 
   // Fast path: the session cookie is present and not close to expiry, so skip
   // the network round-trip to the auth server entirely. Data access is still

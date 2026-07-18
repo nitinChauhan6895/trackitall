@@ -11,16 +11,21 @@
 // Cached pages are personalised, so the app wipes every cache on sign-in
 // (see lib/localCache.ts) to keep accounts separate on a shared device.
 //
-// The app registers this worker as /sw.js?v=<app version>, so each release is a
-// distinct SW that installs fresh and drops the previous release's caches in
-// activate(). That's what stops stale-while-revalidate from ever serving a page
-// from an old build whose JS chunks no longer exist.
+// Cache lifetimes are deliberately different:
+//   STATIC is NOT versioned. Build output is content-hashed, so entries from
+//   different releases can never collide — and keeping them means an update
+//   doesn't throw away the assets that make the app work offline.
+//   PAGES *is* versioned (/sw.js?v=<app version>), so a page cached from an
+//   older build is dropped rather than served with JS chunks that no longer
+//   exist.
+//
+// The offline fallback is a plain static HTML file with no JS, so it renders
+// even when nothing else has been cached yet.
 
-const VERSION =
-  new URL(self.location.href).searchParams.get("v") || "v3";
-const STATIC = `tia-static-${VERSION}`;
+const VERSION = new URL(self.location.href).searchParams.get("v") || "0";
+const STATIC = "tia-static";
 const PAGES = `tia-pages-${VERSION}`;
-const OFFLINE_URL = "/offline";
+const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -36,6 +41,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
+      // Keep STATIC and this release's PAGES; drop older page caches only.
       .then((keys) =>
         Promise.all(
           keys.filter((k) => k !== STATIC && k !== PAGES).map((k) => caches.delete(k)),
