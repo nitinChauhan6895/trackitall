@@ -11,10 +11,13 @@
 // Cached pages are personalised, so the app wipes every cache on sign-in
 // (see lib/localCache.ts) to keep accounts separate on a shared device.
 //
-// Bump VERSION on releases that change the UI shell — activate() drops the old
-// caches, so nobody is left holding a stale page across a deploy.
+// The app registers this worker as /sw.js?v=<app version>, so each release is a
+// distinct SW that installs fresh and drops the previous release's caches in
+// activate(). That's what stops stale-while-revalidate from ever serving a page
+// from an old build whose JS chunks no longer exist.
 
-const VERSION = "v3";
+const VERSION =
+  new URL(self.location.href).searchParams.get("v") || "v3";
 const STATIC = `tia-static-${VERSION}`;
 const PAGES = `tia-pages-${VERSION}`;
 const OFFLINE_URL = "/offline";
