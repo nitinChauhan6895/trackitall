@@ -922,3 +922,24 @@ export async function getNutritionWeek(): Promise<NutritionWeek | null> {
     series,
   };
 }
+
+/** Current consecutive-day training streak.
+ *
+ *  Deliberately narrow: one indexed column over a bounded window, so it can sit
+ *  in the above-the-fold home shell without dragging in the heavy badge scan.
+ *  A streak longer than the window is reported as the window length, which is
+ *  far beyond anything the pill needs to show. */
+export async function getCurrentStreak(): Promise<number> {
+  const supabase = createClient();
+  const today = new Date();
+  const from = new Date(today);
+  from.setDate(from.getDate() - 180);
+  const { data, error } = await supabase
+    .from("exercises")
+    .select("workout_date")
+    .gte("workout_date", toDateKey(from))
+    .lte("workout_date", toDateKey(today));
+  if (error) throw error;
+  const days = Array.from(new Set((data ?? []).map((r) => r.workout_date as string)));
+  return currentStreak(days, toDateKey(today));
+}

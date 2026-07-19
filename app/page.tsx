@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   getBadgeData,
   getMeasurements,
+  getCurrentStreak,
   getMonthWorkoutSummary,
   getNutritionDiary,
   getProfile,
@@ -59,9 +60,10 @@ export default async function HomePage({
 
   // Above-the-fold shell only — keeps first paint off the heavy badge scan.
   // The calendar's summary seeds the client CalendarCard (instant month nav).
-  const [profile, workoutSummary] = await Promise.all([
+  const [profile, workoutSummary, streak] = await Promise.all([
     getProfile(),
     getMonthWorkoutSummary(year, month),
+    getCurrentStreak(),
   ]);
 
   const todayKey = toDateKey(new Date());
@@ -96,6 +98,7 @@ export default async function HomePage({
         initialMonth={month}
         initialSummary={Object.fromEntries(workoutSummary)}
         todayKey={todayKey}
+        streak={streak}
       />
 
       {/* Last 7 days trained (streamed) */}

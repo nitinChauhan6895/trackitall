@@ -23,11 +23,13 @@ export default function CalendarCard({
   initialMonth,
   initialSummary,
   todayKey,
+  streak,
 }: {
   initialYear: number;
   initialMonth: number;
   initialSummary: MonthSummary;
   todayKey: string;
+  streak: number;
 }) {
   const [{ year, month }, setYM] = useState({ year: initialYear, month: initialMonth });
   const isInitial = year === initialYear && month === initialMonth;
@@ -82,28 +84,26 @@ export default function CalendarCard({
           const hasWorkout = groups.length > 0;
           const isToday = key === todayKey;
           return (
-            <div key={key} className="flex flex-col items-center gap-1 py-0.5">
+            <div key={key} className="flex flex-col items-center py-0.5">
               <Link
                 href={hasWorkout ? `/day/${key}` : `/log/${key}`}
+                aria-label={
+                  hasWorkout
+                    ? `${d.getDate()} — trained: ${groups.join(", ")}`
+                    : String(d.getDate())
+                }
                 className={[
                   "flex h-9 w-9 items-center justify-center rounded-full text-sm transition active:scale-95",
-                  isToday
-                    ? "bg-orange font-bold text-white ring-2 ring-green ring-offset-2 ring-offset-page"
+                  // A trained day is filled; today is just outlined, so the two
+                  // read independently and a trained today shows both.
+                  hasWorkout
+                    ? "bg-green font-semibold text-ink-inverse"
                     : "bg-white/[0.05] text-ink",
+                  isToday ? "ring-2 ring-green ring-offset-2 ring-offset-page" : "",
                 ].join(" ")}
               >
                 {d.getDate()}
               </Link>
-              <div className="flex h-1.5 items-center gap-0.5">
-                {hasWorkout &&
-                  groups.slice(0, 3).map((g, i) => (
-                    <span
-                      key={g + i}
-                      className={["h-1 w-1 rounded-full", i % 2 === 0 ? "bg-green" : "bg-orange"].join(" ")}
-                      aria-hidden
-                    />
-                  ))}
-              </div>
             </div>
           );
         })}
@@ -113,8 +113,11 @@ export default function CalendarCard({
         <span className="flex items-center gap-1.5 font-medium text-ink">
           <span aria-hidden>📊</span> {workouts} Workout{workouts === 1 ? "" : "s"} this month
         </span>
-        <span className="flex items-center gap-1.5 text-muted">
-          <span aria-hidden>🏆</span> Keep it up!
+        <span className="flex items-center gap-1.5 font-medium text-orange">
+          <span aria-hidden>🔥</span>
+          {streak > 0
+            ? `${streak} day streak`
+            : "No streak yet"}
         </span>
       </div>
     </section>

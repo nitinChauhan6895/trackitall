@@ -6,6 +6,7 @@ import { loadStatsAction } from "@/app/actions";
 import { qk } from "@/lib/browserData";
 import { toDateKey } from "@/lib/date";
 import { formatDayMonth } from "@/lib/dateFormat";
+import { RANGE_KEYS, RANGE_LABELS, type RangeKey } from "@/lib/stats";
 import type { HistorySession, SeriesPoint, StatsData, WeekStats } from "@/lib/stats";
 
 const GREEN = "#A8E830";
@@ -14,11 +15,17 @@ const TEAL_OLD = "#1F7D63";
 const TEAL_NEW = "#3FAE8E";
 const AMBER = "#E0A52A";
 
-type Range = "this" | "last" | "last7";
-const RANGE_LABEL: Record<Range, string> = {
-  this: "This week",
-  last: "Last week",
-  last7: "Last 7 days",
+// An empty window, used when a cache entry predates the current shape.
+const EMPTY_RANGE: WeekStats = {
+  workoutDays: 0,
+  totalSets: 0,
+  totalReps: 0,
+  totalVolumeKg: 0,
+  cardioSeries: [],
+  cardioLabels: [],
+  cardioBucketDays: 1,
+  muscles: [],
+  neglected: [],
 };
 
 export type NutritionWeekSummary = {
@@ -48,9 +55,11 @@ export default function StatsView({
     | null
     | undefined;
 
-  const [range, setRange] = useState<Range>("this");
-  const week =
-    range === "this" ? stats.thisWeek : range === "last" ? stats.lastWeek : stats.last7;
+  const [range, setRange] = useState<RangeKey>("thisWeek");
+  // A StatsData cached by an older release has no `ranges` — fall back rather
+  // than crash on a stale IndexedDB entry.
+  const week = stats.ranges?.[range] ?? EMPTY_RANGE;
+  const rangeLabel = RANGE_LABELS[range].toLowerCase();
   const [exercise, setExercise] = useState(stats.strengthExercises[0] ?? "");
   const series = stats.strengthSeries[exercise] ?? [];
   // Older releases cached a StatsData without history — tolerate its absence
@@ -70,22 +79,21 @@ export default function StatsView({
         <p className="mt-0.5 text-sm text-muted">Your progress at a glance</p>
       </header>
 
-      {/* Time range toggle */}
-      <div className="mt-4 flex rounded-xl bg-white/[0.06] p-1">
-        {(["this", "last", "last7"] as Range[]).map((r) => (
-          <button
-            key={r}
-            type="button"
-            onClick={() => setRange(r)}
-            className={[
-              "flex-1 rounded-lg py-2 text-xs font-semibold transition",
-              range === r ? "bg-surface text-green shadow-sm" : "text-muted",
-            ].join(" ")}
-          >
-            {RANGE_LABEL[r]}
-          </button>
-        ))}
-      </div>
+      {/* Time range */}
+      <label className="mt-4 block">
+        <span className="sr-only">Time period</span>
+        <select
+          value={range}
+          onChange={(e) => setRange(e.target.value as RangeKey)}
+          className="w-full appearance-none rounded-xl border border-white/10 bg-surface px-4 py-2.5 text-sm font-semibold text-ink outline-none focus:border-green"
+        >
+          {RANGE_KEYS.map((r) => (
+            <option key={r} value={r}>
+              {RANGE_LABELS[r]}
+            </option>
+          ))}
+        </select>
+      </label>
 
       {/* Nutrition (last 7 days) */}
       {nutrition && (
@@ -104,7 +112,7 @@ export default function StatsView({
       {/* Summary */}
       <SectionLabel>Summary</SectionLabel>
       <div className="grid grid-cols-2 gap-2">
-        <Card value={String(week.workoutDays)} unit="days" label={`Workouts · ${RANGE_LABEL[range].toLowerCase()}`} />
+        <Card value={String(week.workoutDays)} unit="days" label={`Workouts · ${rangeLabel}`} />
         <Card green value={String(stats.monthTotal)} unit="sessions" label="This month total" />
         <Card value={String(week.totalSets)} unit="sets" label={`Total sets · ${week.totalReps} reps`} />
         <Card green value={weightVal} unit={weightUnit} label="Total weight lifted" />
@@ -156,8 +164,11 @@ export default function StatsView({
 
       {/* Cardio progress — daily distance */}
       <SectionLabel>Cardio progress</SectionLabel>
-      <ChartBox title="Daily distance" hint="km">
-        <DailyCardio km={week.cardioPerDay} labels={week.dayLabels} />
+      <ChartBox
+        title={week.cardioBucketDays > 1 ? "Weekly distance" : "Daily distance"}
+        hint="km"
+      >
+        <DailyCardio km={week.cardioSeries} labels={week.cardioLabels} />
       </ChartBox>
 
       {/* Muscle group breakdown */}
@@ -370,12 +381,10 @@ function MuscleBreakdown({ week }: { week: WeekStats }) {
   const max = Math.max(...week.muscles.map((m) => m.count), 1);
   return (
     <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-      {week.muscles.map((m, i) => {
-        let color = AMBER;
-        if (m.count === 0) color = "#33362C";
-        else if (m.group === "cardio") color = TEAL_OLD;
-        else if (i < 2) color = ORANGE;
-        else if (m.count <= 1) color = "#8D9483";
+      {week.muscles.map((m) => {
+        // One colour for every group: the bar length already encodes the
+        // ranking, so tinting by rank only made it harder to compare.
+        const color = m.count === 0 ? "#33362C" : GREEN;
         return (
           <div key={m.group} className="flex flex-col gap-1">
             <div className="flex items-center justify-between text-[11px]">

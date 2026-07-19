@@ -28,10 +28,35 @@ export type WeekStats = {
   totalSets: number;
   totalReps: number;
   totalVolumeKg: number;
-  cardioPerDay: number[]; // 7 daily km totals across the window
-  dayLabels: string[]; // weekday letter per day
+  /** km totals per bucket across the window (see cardioBucketDays). */
+  cardioSeries: number[];
+  /** One label per bucket. */
+  cardioLabels: string[];
+  /** 1 for short windows; 7 once a per-day bar chart would be unreadable. */
+  cardioBucketDays: number;
   muscles: MuscleCount[]; // every tracked group (incl. 0), desc by count
   neglected: string[]; // group labels with 0 sessions
+};
+
+/** Selectable windows, in the order they're offered. */
+export const RANGE_KEYS = [
+  "thisWeek",
+  "last7",
+  "thisMonth",
+  "lastMonth",
+  "last30",
+  "last60",
+] as const;
+
+export type RangeKey = (typeof RANGE_KEYS)[number];
+
+export const RANGE_LABELS: Record<RangeKey, string> = {
+  thisWeek: "This week",
+  last7: "Last 7 days",
+  thisMonth: "Current month",
+  lastMonth: "Last month",
+  last30: "Last 30 days",
+  last60: "Last 60 days",
 };
 
 export type SeriesPoint = { date: string; value: number };
@@ -58,9 +83,7 @@ export type StatsData = {
   monthTotal: number;
   currentStreak: number;
   bestStreak: number;
-  thisWeek: WeekStats;
-  lastWeek: WeekStats;
-  last7: WeekStats;
+  ranges: Record<RangeKey, WeekStats>;
   strengthExercises: string[];
   strengthSeries: Record<string, SeriesPoint[]>;
   /** Most recent sessions first, capped at HISTORY_LIMIT per exercise. */
@@ -89,26 +112,48 @@ type DayAgg = {
   cardioKm: number;
 };
 
-function weekStats(startKey: string, byDate: Map<string, DayAgg>): WeekStats {
-  const dayKeys = Array.from({ length: 7 }, (_, i) => addDays(startKey, i));
+function weekStats(
+  startKey: string,
+  byDate: Map<string, DayAgg>,
+  days = 7,
+): WeekStats {
+  const dayKeys = Array.from({ length: days }, (_, i) => addDays(startKey, i));
   let workoutDays = 0;
   let totalSets = 0;
   let totalReps = 0;
   let totalVolumeKg = 0;
-  const cardioPerDay: number[] = [];
-  const dayLabels: string[] = [];
 
-  for (const k of dayKeys) {
+  // Past a fortnight, one bar per day is too thin to read (and 60 of them
+  // overflow the card), so longer windows are bucketed by week.
+  const cardioBucketDays = days <= 14 ? 1 : 7;
+  const cardioSeries: number[] = [];
+  const cardioLabels: string[] = [];
+  let bucketKm = 0;
+
+  dayKeys.forEach((k, i) => {
     const a = byDate.get(k);
-    cardioPerDay.push(a ? Math.round(a.cardioKm * 10) / 10 : 0);
-    dayLabels.push(WEEKDAY_LETTER[keyToDate(k).getDay()]);
+    bucketKm += a?.cardioKm ?? 0;
+    const bucketStart = i - (i % cardioBucketDays) === i;
+    if (bucketStart) {
+      cardioLabels.push(
+        cardioBucketDays === 1
+          ? WEEKDAY_LETTER[keyToDate(k).getDay()]
+          : // "13/7" — locale-independent by construction.
+            `${Number(k.slice(8, 10))}/${Number(k.slice(5, 7))}`,
+      );
+    }
+    const bucketEnd = i % cardioBucketDays === cardioBucketDays - 1 || i === days - 1;
+    if (bucketEnd) {
+      cardioSeries.push(Math.round(bucketKm * 10) / 10);
+      bucketKm = 0;
+    }
     if (a) {
       workoutDays++;
       totalSets += a.sets;
       totalReps += a.reps;
       totalVolumeKg += a.volume;
     }
-  }
+  });
 
   const counts = new Map<MuscleGroup, number>();
   for (const k of dayKeys) {
@@ -131,8 +176,9 @@ function weekStats(startKey: string, byDate: Map<string, DayAgg>): WeekStats {
     totalSets,
     totalReps,
     totalVolumeKg,
-    cardioPerDay,
-    dayLabels,
+    cardioSeries,
+    cardioLabels,
+    cardioBucketDays,
     muscles,
     neglected,
   };
@@ -161,8 +207,19 @@ export function computeStats(exs: RawStatsExercise[], today: Date): StatsData {
   const allDates = Array.from(byDate.keys());
   const dow = (today.getDay() + 6) % 7; // Mon = 0
   const thisMon = addDays(todayKey, -dow);
-  const lastMon = addDays(thisMon, -7);
   const last7Start = addDays(todayKey, -6);
+
+  // Calendar months. The current one runs up to today rather than to the end
+  // of the month, so its totals aren't diluted by days that haven't happened.
+  const y = today.getFullYear();
+  const mo = today.getMonth(); // 0-based
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const monthStart = `${y}-${pad2(mo + 1)}-01`;
+  const daysSoFarThisMonth = today.getDate();
+  const prev = new Date(y, mo - 1, 1);
+  const prevMonthStart = `${prev.getFullYear()}-${pad2(prev.getMonth() + 1)}-01`;
+  // Day 0 of the following month = last day of that month.
+  const prevMonthDays = new Date(prev.getFullYear(), prev.getMonth() + 1, 0).getDate();
 
   const monthPrefix = todayKey.slice(0, 7);
   const monthTotal = allDates.filter((d) => d.startsWith(monthPrefix)).length;
@@ -231,9 +288,14 @@ export function computeStats(exs: RawStatsExercise[], today: Date): StatsData {
     monthTotal,
     currentStreak: currentStreak(allDates, todayKey),
     bestStreak: longestStreak(allDates),
-    thisWeek: weekStats(thisMon, byDate),
-    lastWeek: weekStats(lastMon, byDate),
-    last7: weekStats(last7Start, byDate),
+    ranges: {
+      thisWeek: weekStats(thisMon, byDate, 7),
+      last7: weekStats(last7Start, byDate, 7),
+      thisMonth: weekStats(monthStart, byDate, daysSoFarThisMonth),
+      lastMonth: weekStats(prevMonthStart, byDate, prevMonthDays),
+      last30: weekStats(addDays(todayKey, -29), byDate, 30),
+      last60: weekStats(addDays(todayKey, -59), byDate, 60),
+    },
     strengthExercises,
     strengthSeries,
     strengthHistory,
