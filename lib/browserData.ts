@@ -5,6 +5,7 @@
 import { getBrowserClient } from "@/lib/supabase/client";
 import {
   MUSCLE_GROUPS,
+  type Circuit,
   type Exercise,
   type Measurement,
   type MuscleGroup,
@@ -28,6 +29,7 @@ export const qk = {
   prs: () => ["prs"] as const,
   measurements: () => ["measurements"] as const,
   stats: () => ["stats"] as const,
+  circuits: () => ["circuits"] as const,
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -98,6 +100,24 @@ export async function fetchDayExercises(date: string): Promise<Exercise[]> {
     ...e,
     sets: (e.sets ?? []).sort((a: any, b: any) => a.position - b.position),
   })) as Exercise[];
+}
+
+// ---------- circuits (HIIT templates used by the logger) ----------
+
+export async function fetchCircuits(): Promise<Circuit[]> {
+  const supabase = await authedClient();
+  const { data, error } = await supabase
+    .from("circuits")
+    .select("*, circuit_exercises(*)")
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((c: any) => ({
+    ...c,
+    set_times: c.set_times ?? [],
+    exercises: (c.circuit_exercises ?? []).sort(
+      (a: any, b: any) => a.position - b.position,
+    ),
+  })) as Circuit[];
 }
 
 // ---------- PRs & measurements ----------

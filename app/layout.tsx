@@ -70,10 +70,17 @@ function ServiceWorkerRegister() {
                   return navigator.serviceWorker.ready;
                 }).then(function () {
                   if (navigator.onLine) {
-                    fetch('/', { credentials: 'same-origin' }).catch(function () {});
-                    if (location.pathname !== '/') {
-                      fetch(location.pathname, { credentials: 'same-origin' }).catch(function () {});
-                    }
+                    var d = new Date();
+                    var today = d.getFullYear() + '-' +
+                      String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                      String(d.getDate()).padStart(2, '0');
+                    // Warm the app shell AND one /day + /log shell, so adding
+                    // or viewing a workout works offline for ANY date.
+                    ['/', '/day/' + today, '/log/' + today, location.pathname]
+                      .filter(function (p, i, a) { return a.indexOf(p) === i; })
+                      .forEach(function (p) {
+                        fetch(p, { credentials: 'same-origin' }).catch(function () {});
+                      });
                   }
                 }).catch(function () {});
               });

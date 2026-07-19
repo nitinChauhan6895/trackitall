@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   CARDIO_FIELDS,
   CARDIO_FIELD_META,
@@ -15,6 +16,7 @@ import {
   type CardioField,
   type CardioType,
   type Circuit,
+  type Exercise,
   type MuscleGroup,
 } from "@/lib/types";
 import {
@@ -25,6 +27,7 @@ import {
 import { libraryFor, type LibraryItem } from "@/lib/presets";
 import { HIIT_EXERCISES, resolveHiitMetrics } from "@/lib/hiit";
 import { enqueue } from "@/lib/offlineQueue";
+import { qk } from "@/lib/browserData";
 import MuscleBadge from "@/components/MuscleBadge";
 
 // Cardio "Exercise" dropdown options (JSON cardio names → field type).
@@ -239,6 +242,7 @@ export default function QuickLogger({
   circuits?: Circuit[];
 }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [items, setItems] = useState<DraftExercise[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [finishing, setFinishing] = useState(false);
@@ -300,6 +304,38 @@ export default function QuickLogger({
         // Offline → keep the write, sync on reconnect. Genuine error → surface.
         if (typeof navigator !== "undefined" && !navigator.onLine) {
           await enqueue("upsertExercise", payload);
+          // Write it into the day's local cache too, so the day view shows the
+          // exercise straight away instead of looking empty until it syncs.
+          queryClient.setQueryData<Exercise[]>(qk.day(date), (prev) => {
+            const pending: Exercise = {
+              id: `pending-${ex.id}`,
+              user_id: "",
+              workout_date: date,
+              muscle_group: ex.group,
+              name,
+              cardio_type: mode === "cardio" ? ex.cardioType : null,
+              position: (prev?.length ?? 0) + 1,
+              created_at: new Date().toISOString(),
+              sets: payload.sets.map((s, i) => ({
+                id: `pending-${ex.id}-${i}`,
+                position: i,
+                reps: s.reps ?? null,
+                weight_kg: s.weight_kg ?? null,
+                distance_km: s.distance_km ?? null,
+                distance_m: s.distance_m ?? null,
+                speed_kmh: s.speed_kmh ?? null,
+                time_seconds: s.time_seconds ?? null,
+                calories: s.calories ?? null,
+                incline: s.incline ?? null,
+                resistance: s.resistance ?? null,
+                sets_count: s.sets_count ?? null,
+                height: s.height ?? null,
+                floors: s.floors ?? null,
+              })),
+            } as Exercise;
+            const rest = (prev ?? []).filter((e) => e.id !== pending.id);
+            return [...rest, pending];
+          });
           update(id, { status: "queued" });
         } else {
           update(id, { status: "error" });

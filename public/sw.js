@@ -60,6 +60,21 @@ self.addEventListener("message", (event) => {
   }
 });
 
+// /day/<date> and /log/<date> render from a shared client shell that reads the
+// date out of the address bar, so ONE cached copy can serve every date —
+// including days never opened before. We stash a copy under a family key and
+// fall back to it on a miss.
+function shellKeyFor(url, isRsc) {
+  const p = url.pathname;
+  const family = /^\/day\/\d{4}-\d{2}-\d{2}/.test(p)
+    ? "day"
+    : /^\/log\/\d{4}-\d{2}-\d{2}/.test(p)
+      ? "log"
+      : null;
+  if (!family) return null;
+  return `${self.location.origin}/__shell/${family}${isRsc ? ".rsc" : ""}`;
+}
+
 function isBuildAsset(url) {
   return (
     url.pathname.startsWith("/_next/static/") ||
@@ -97,6 +112,8 @@ self.addEventListener("fetch", (event) => {
   const isRsc = url.searchParams.has("_rsc");
   if (!isNav && !isRsc) return; // let auth/actions/data pass straight through
 
+  const shellKey = shellKeyFor(url, isRsc);
+
   event.respondWith(
     (async () => {
       const cached = await caches.match(req);
@@ -106,8 +123,14 @@ self.addEventListener("fetch", (event) => {
         .then((res) => {
           // Don't cache redirects (e.g. the middleware bounce to /login).
           if (res.ok && !res.redirected) {
-            const copy = res.clone();
-            caches.open(PAGES).then((c) => c.put(req, copy)).catch(() => {});
+            caches
+              .open(PAGES)
+              .then((c) => {
+                c.put(req, res.clone()).catch(() => {});
+                // Keep a date-agnostic copy so any other date can reuse it.
+                if (shellKey) c.put(shellKey, res.clone()).catch(() => {});
+              })
+              .catch(() => {});
           }
           return res;
         })
@@ -121,6 +144,12 @@ self.addEventListener("fetch", (event) => {
 
       const res = await network;
       if (res) return res;
+
+      // Offline and this exact date was never cached — reuse the shell.
+      if (shellKey) {
+        const shell = await caches.match(shellKey);
+        if (shell) return shell;
+      }
       if (isNav) {
         const offline = await caches.match(OFFLINE_URL);
         if (offline) return offline;

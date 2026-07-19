@@ -47,18 +47,15 @@ function inputsFor(exercise: Exercise, kind: SetKind): InputSpec[] {
 // Client-rendered day view: reads the day's exercises from the persisted query
 // cache (instant on re-open, reconciled in the background); edits invalidate the
 // day key to refetch.
-export default function DayView({
-  date,
-  initialExercises,
-}: {
-  date: string;
-  initialExercises: Exercise[];
-}) {
+export default function DayView({ date }: { date: string }) {
   const queryClient = useQueryClient();
-  const { data: exercises = initialExercises } = useQuery({
+  // Local-first: whatever is in the persisted (IndexedDB) cache renders
+  // immediately; the network refresh is a background nicety. Offline with
+  // nothing cached simply means an empty day, which is the truth.
+  const { data: exercises = [] } = useQuery({
     queryKey: qk.day(date),
     queryFn: () => fetchDayExercises(date),
-    initialData: initialExercises,
+    retry: false,
   });
   const onChanged = () => queryClient.invalidateQueries({ queryKey: qk.day(date) });
 

@@ -1,11 +1,15 @@
-import { notFound } from "next/navigation";
-import { getDayExercises } from "@/lib/data";
+"use client";
+
+import { useRouteDate } from "@/lib/useRouteDate";
 import DayView from "./DayView";
+import DayLoading from "./loading";
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-export default async function DayPage({ params }: { params: { date: string } }) {
-  if (!DATE_RE.test(params.date)) notFound();
-  const exercises = await getDayExercises(params.date);
-  return <DayView date={params.date} initialExercises={exercises} />;
+// Client shell: no server data, and the date comes from the address bar. That
+// makes the rendered HTML identical for every date, so the service worker can
+// serve one cached shell for ANY /day/<date> — including days you've never
+// opened before — and the exercises come from the local (IndexedDB) cache.
+export default function DayPage() {
+  const date = useRouteDate();
+  if (!date) return <DayLoading />;
+  return <DayView date={date} />;
 }
