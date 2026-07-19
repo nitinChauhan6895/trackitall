@@ -51,7 +51,9 @@ self.addEventListener("activate", (event) => {
       // A version bump empties PAGES, so refill it immediately. Without this
       // the app is NOT openable offline until you happen to visit each route
       // again while online.
-      .then(() => warmShells()),
+      // force: the bump just emptied PAGES, so every entry is stale by
+      // definition and the "skip what's cached" shortcut must not apply.
+      .then(() => warmShells(true)),
   );
 });
 
@@ -85,12 +87,29 @@ function todayISO() {
 
 // Fetch the entry point and one /day + /log page, storing each under its own
 // URL *and* under the date-agnostic shell key, so any date works offline.
-async function warmShells() {
+async function warmShells(force) {
   const today = todayISO();
   const c = await caches.open(PAGES);
+  // Every bottom-nav destination, so moving around the app offline works —
+  // not just the two workout screens.
+  const paths = [
+    "/",
+    "/community",
+    "/stats",
+    "/coach",
+    "/nutrition",
+    `/day/${today}`,
+    `/log/${today}`,
+  ];
   return Promise.all(
-    ["/", `/day/${today}`, `/log/${today}`].map(async (path) => {
+    paths.map(async (path) => {
       try {
+        // Steady state costs nothing: only fetch what's missing. Visiting a
+        // page refreshes it anyway (stale-while-revalidate below), and a new
+        // day is the only thing that reintroduces a gap.
+        if (!force && (await c.match(path, { ignoreVary: true }))) {
+          return { path, cached: true, skipped: "already cached" };
+        }
         const res = await fetch(path, { credentials: "include" });
         // A signed-out warm follows the middleware bounce to /login; caching
         // that would show a login screen for every offline route.

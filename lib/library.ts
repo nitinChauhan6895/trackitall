@@ -21,6 +21,7 @@ const CATEGORY_TO_GROUP: Record<string, MuscleGroup> = {
   Tricep: "tricep",
   Back: "back",
   Bicep: "bicep",
+  Forearms: "forearms",
   Shoulders: "shoulders",
   Legs: "legs",
   Core: "core",
@@ -142,6 +143,17 @@ export const EXERCISE_LIBRARY: LibraryCategory[] = [
       { name: "Mountain Climbers", metric: ["time"] },
       { name: "Ab Wheel Rollout", metric: ["reps"] },
       { name: "Toe Touches", metric: ["reps"] },
+    ],
+  },
+  {
+    category: "Forearms",
+    exercises: [
+      { name: "Wrist Curl", metric: ["weight", "reps"] },
+      { name: "Reverse Wrist Curl", metric: ["weight", "reps"] },
+      { name: "Reverse Curl", metric: ["weight", "reps"] },
+      { name: "Wrist Roller", metric: ["weight", "reps"] },
+      { name: "Dead Hang", metric: ["time"] },
+      { name: "Plate Pinch Hold", metric: ["weight", "time"] },
     ],
   },
   {

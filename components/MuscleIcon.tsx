@@ -12,6 +12,7 @@ export const MUSCLE_TONE: Record<MuscleGroup, string> = {
   cardio: "#1FA6A0", // teal
   back: "#2F80C2", // blue
   bicep: "#5A6FE0", // indigo
+  forearms: "#7B5AD9", // violet
   olympic: "#9B5CC9", // purple
   hiit: "#D6489E", // magenta
 };
