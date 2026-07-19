@@ -171,14 +171,21 @@ self.addEventListener("fetch", (event) => {
         .then((res) => {
           // Don't cache redirects (e.g. the middleware bounce to /login).
           if (res.ok && !res.redirected) {
-            caches
-              .open(PAGES)
-              .then((c) => {
-                c.put(req, res.clone()).catch(() => {});
-                // Keep a date-agnostic copy so any other date can reuse it.
-                if (shellKey) c.put(shellKey, res.clone()).catch(() => {});
-              })
-              .catch(() => {});
+            // Clone SYNCHRONOUSLY. caches.open() is async, and by the time it
+            // resolves this response has been handed to the browser and its
+            // body consumed — cloning there throws and nothing is ever cached.
+            const copy = res.clone();
+            // Keep a date-agnostic copy so any other date can reuse it.
+            const shellCopy = shellKey ? res.clone() : null;
+            event.waitUntil(
+              caches
+                .open(PAGES)
+                .then(async (c) => {
+                  await c.put(req, copy);
+                  if (shellCopy) await c.put(shellKey, shellCopy);
+                })
+                .catch(() => {}),
+            );
           }
           return res;
         })

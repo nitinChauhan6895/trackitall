@@ -89,6 +89,10 @@ function ServiceWorkerRegister() {
             // reload once (bypassing the SW) instead of showing an error page.
             function recover(msg) {
               if (!msg || !/ChunkLoadError|Loading chunk|dynamically imported module/i.test(msg)) return;
+              // Never do this offline: it would wipe the caches the app is
+              // currently running from and strand the user on the fallback,
+              // with no network to refetch anything.
+              if (!navigator.onLine) return;
               if (sessionStorage.getItem('tia-chunk-reload') === V) return;
               sessionStorage.setItem('tia-chunk-reload', V);
               if (window.caches) { caches.keys().then(function (k) { return Promise.all(k.map(function (n) { return caches.delete(n); })); }).finally(function () { location.reload(); }); }
