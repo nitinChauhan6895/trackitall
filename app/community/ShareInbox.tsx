@@ -2,20 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { acceptShare, declineShare } from "@/app/actions";
+import { formatShortDate } from "@/lib/dateFormat";
 import { MUSCLE_GROUP_LABELS, type IncomingShare } from "@/lib/types";
-
-function fmtDate(key: string) {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 export default function ShareInbox({ shares }: { shares: IncomingShare[] }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [pending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -26,6 +20,11 @@ export default function ShareInbox({ shares }: { shares: IncomingShare[] }) {
     startTransition(async () => {
       try {
         await fn(id);
+        // Accepting writes exercises into the day. The home calendar and day
+        // view read from the persisted client cache, which revalidatePath()
+        // on the server can't touch — without this the accepted workout is
+        // missing until that query happens to refetch.
+        await queryClient.invalidateQueries();
         router.refresh();
       } finally {
         setBusyId(null);
@@ -51,7 +50,7 @@ export default function ShareInbox({ shares }: { shares: IncomingShare[] }) {
                 <span className="font-semibold">{MUSCLE_GROUP_LABELS[s.muscle_group]}</span>
               </p>
               <p className="mt-0.5 text-xs text-muted">
-                {fmtDate(s.workout_date)} · {s.exercise_count}{" "}
+                {formatShortDate(s.workout_date)} · {s.exercise_count}{" "}
                 {s.exercise_count === 1 ? "exercise" : "exercises"} · {s.set_count} sets
               </p>
               <div className="mt-3 flex gap-2.5">
