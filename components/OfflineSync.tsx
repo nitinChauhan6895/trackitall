@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { flushQueue, subscribeQueue } from "@/lib/offlineQueue";
+import { flushQueue, refreshQueueCount, subscribeQueue } from "@/lib/offlineQueue";
 
 // Global mount: watches connectivity, flushes the offline write queue on
 // reconnect / load, and shows a small status pill when offline or syncing.
@@ -26,11 +26,22 @@ export default function OfflineSync() {
     const goOffline = () => setOnline(false);
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
+
+    // Background Sync may have drained the queue while the app was closed (or
+    // backgrounded). Refresh the pill count and the data when it reports back.
+    const onSwMessage = (e: MessageEvent) => {
+      if (e.data !== "queue-flushed") return;
+      refreshQueueCount();
+      queryClient.invalidateQueries();
+    };
+    navigator.serviceWorker?.addEventListener("message", onSwMessage);
+
     const unsub = subscribeQueue(setPending);
     sync(); // catch up anything left from a previous session
     return () => {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);
+      navigator.serviceWorker?.removeEventListener("message", onSwMessage);
       unsub();
     };
   }, []);

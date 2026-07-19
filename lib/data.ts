@@ -495,7 +495,7 @@ export async function getStatsData(): Promise<StatsData> {
   const { data, error } = await supabase
     .from("exercises")
     .select(
-      "workout_date, muscle_group, name, cardio_type, sets(reps, weight_kg, distance_km, distance_m)",
+      "workout_date, muscle_group, name, cardio_type, sets(position, reps, weight_kg, distance_km, distance_m)",
     );
   if (error) throw error;
   return computeStats((data ?? []) as any[], new Date());

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { toCsv } from "@/lib/csv";
 import { getLocalUser } from "@/lib/supabase/user";
 import {
   MUSCLE_GROUPS,
@@ -1270,4 +1271,70 @@ function cleanInt(v: number | null | undefined): number | null {
 function cleanNum(v: number | null | undefined): number | null {
   if (v == null || !Number.isFinite(v)) return null;
   return Math.max(0, v);
+}
+
+// ---------- Data export ----------
+//
+// Both exports stream the user's own rows only — RLS enforces that server-side
+// regardless of what's asked for here.
+
+export async function exportWorkoutsCsv(): Promise<string> {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase
+    .from("exercises")
+    .select(
+      "workout_date, muscle_group, name, cardio_type, position, sets(position, reps, weight_kg, distance_km, distance_m, speed_kmh, time_seconds, incline, resistance, calories, sets_count, height, floors)",
+    )
+    .order("workout_date", { ascending: true })
+    .order("position", { ascending: true });
+  if (error) throw error;
+
+  const headers = [
+    "Date", "Muscle group", "Exercise", "Cardio type", "Set",
+    "Reps", "Weight (kg)", "Distance (km)", "Distance (m)", "Speed (km/h)",
+    "Time (s)", "Incline", "Resistance", "Calories", "Sets count",
+    "Height", "Floors",
+  ];
+
+  const rows: unknown[][] = [];
+  for (const e of (data ?? []) as any[]) {
+    const sets = [...(e.sets ?? [])].sort(
+      (a: any, b: any) => (a.position ?? 0) - (b.position ?? 0),
+    );
+    // An exercise with no sets still gets a row, so nothing silently vanishes.
+    if (sets.length === 0) {
+      rows.push([e.workout_date, e.muscle_group, e.name, e.cardio_type ?? "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+      continue;
+    }
+    sets.forEach((s: any, i: number) => {
+      rows.push([
+        e.workout_date, e.muscle_group, e.name, e.cardio_type ?? "", i + 1,
+        s.reps ?? "", s.weight_kg ?? "", s.distance_km ?? "", s.distance_m ?? "", s.speed_kmh ?? "",
+        s.time_seconds ?? "", s.incline ?? "", s.resistance ?? "", s.calories ?? "", s.sets_count ?? "",
+        s.height ?? "", s.floors ?? "",
+      ]);
+    });
+  }
+  return toCsv(headers, rows);
+}
+
+export async function exportNutritionCsv(): Promise<string> {
+  const { supabase } = await requireUser();
+  const { data, error } = await supabase
+    .from("food_log")
+    .select(
+      "log_date, meal, food_name, quantity, unit, computed_calories, computed_protein, computed_carbs, computed_fat, computed_fiber",
+    )
+    .order("log_date", { ascending: true });
+  if (error) throw error;
+
+  const headers = [
+    "Date", "Meal", "Food", "Quantity", "Unit",
+    "Calories (kcal)", "Protein (g)", "Carbs (g)", "Fat (g)", "Fibre (g)",
+  ];
+  const rows = ((data ?? []) as any[]).map((r) => [
+    r.log_date, r.meal, r.food_name, r.quantity, r.unit,
+    r.computed_calories, r.computed_protein, r.computed_carbs, r.computed_fat, r.computed_fiber,
+  ]);
+  return toCsv(headers, rows);
 }

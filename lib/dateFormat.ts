@@ -26,3 +26,10 @@ export function formatShortDate(key: string): string {
   if (!y || !m || !d) return key;
   return `${d} ${MONTHS_SHORT[m - 1]} ${y}`;
 }
+
+/** "2026-08-13" -> "13 Aug". */
+export function formatDayMonth(key: string): string {
+  const [, m, d] = key.split("-").map(Number);
+  if (!m || !d) return key;
+  return `${d} ${MONTHS_SHORT[m - 1]}`;
+}

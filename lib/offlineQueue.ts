@@ -59,12 +59,38 @@ async function writeQueue(q: QueuedOp[]) {
   listeners.forEach((l) => l(q.length));
 }
 
+/** Re-read the queue and notify listeners.
+ *
+ *  Needed because Background Sync drains the queue from the service worker,
+ *  writing IndexedDB directly — the page's own writeQueue() never runs, so
+ *  nothing would tell the UI the pending count changed. */
+export async function refreshQueueCount(): Promise<number> {
+  const q = await readQueue();
+  listeners.forEach((l) => l(q.length));
+  return q.length;
+}
+
 export function subscribeQueue(l: Listener): () => void {
   listeners.add(l);
   readQueue().then((q) => l(q.length));
   return () => {
     listeners.delete(l);
   };
+}
+
+// Ask the browser to replay the queue in the background, even if the app is
+// closed by then. Chromium-only: on iOS Safari registration simply isn't
+// available, and the queue still flushes via the 'online' listener the next
+// time the app is opened.
+async function requestBackgroundSync(): Promise<void> {
+  try {
+    if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+    const reg: any = await navigator.serviceWorker.ready;
+    if (!reg?.sync) return;
+    await reg.sync.register("tia-flush");
+  } catch {
+    // Permission denied or unsupported — the foreground flush still covers us.
+  }
 }
 
 export async function enqueue(type: QueuedOp["type"], payload: any): Promise<void> {
@@ -80,6 +106,7 @@ export async function enqueue(type: QueuedOp["type"], payload: any): Promise<voi
     userId,
   });
   await writeQueue(q);
+  await requestBackgroundSync();
 }
 
 // Form-action payloads are stored as plain field maps (FormData isn't

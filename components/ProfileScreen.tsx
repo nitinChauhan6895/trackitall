@@ -3,14 +3,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { setShareToCommunity, updateProfile, signOut } from "@/app/actions";
+import {
+  exportNutritionCsv,
+  exportWorkoutsCsv,
+  setShareToCommunity,
+  updateProfile,
+  signOut,
+} from "@/app/actions";
 import { displayName, profileInitial, type Profile } from "@/lib/types";
 import { APP_VERSION } from "@/lib/version";
 
 const inputClass =
   "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
 
-type View = "menu" | "edit" | "password";
+type View = "menu" | "edit" | "password" | "export";
 
 export default function ProfileScreen({ profile }: { profile: Profile }) {
   const [view, setView] = useState<View>("menu");
@@ -29,15 +35,27 @@ export default function ProfileScreen({ profile }: { profile: Profile }) {
           </button>
         )}
         <h1 className="text-2xl font-bold tracking-tight">
-          {view === "edit" ? "Edit profile" : view === "password" ? "Change password" : "Profile"}
+          {view === "edit"
+            ? "Edit profile"
+            : view === "password"
+              ? "Change password"
+              : view === "export"
+                ? "Export data"
+                : "Profile"}
         </h1>
       </header>
 
       {view === "menu" && (
-        <Menu profile={profile} onEdit={() => setView("edit")} onPassword={() => setView("password")} />
+        <Menu
+          profile={profile}
+          onEdit={() => setView("edit")}
+          onPassword={() => setView("password")}
+          onExport={() => setView("export")}
+        />
       )}
       {view === "edit" && <EditProfile profile={profile} onDone={() => setView("menu")} />}
       {view === "password" && <ChangePassword onDone={() => setView("menu")} />}
+      {view === "export" && <ExportData />}
     </main>
   );
 }
@@ -46,10 +64,12 @@ function Menu({
   profile,
   onEdit,
   onPassword,
+  onExport,
 }: {
   profile: Profile;
   onEdit: () => void;
   onPassword: () => void;
+  onExport: () => void;
 }) {
   return (
     <div className="flex flex-1 flex-col">
@@ -66,6 +86,7 @@ function Menu({
         <Row icon="👤" label="Edit profile" onClick={onEdit} />
         <Row icon="✉️" label={profile.email ?? "No email on file"} muted />
         <Row icon="🔒" label="Change password" onClick={onPassword} />
+        <Row icon="⬇️" label="Export data" onClick={onExport} />
       </div>
 
       <form action={signOut} className="mt-6">
@@ -130,6 +151,91 @@ function ShareRow({ initial }: { initial: boolean }) {
         {on
           ? "Your stats appear in Community, and you can see others'."
           : "Off — your stats stay private."}
+      </p>
+    </div>
+  );
+}
+
+// Downloads a CSV built on the server. The BOM makes Excel read it as UTF-8
+// instead of mangling any non-ASCII food or exercise names.
+function downloadCsv(filename: string, csv: string) {
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoking immediately can cancel the download on some mobile browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+function ExportData() {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState("");
+
+  async function run(kind: "workouts" | "nutrition") {
+    setBusy(kind);
+    setError("");
+    setDone("");
+    try {
+      const csv =
+        kind === "workouts" ? await exportWorkoutsCsv() : await exportNutritionCsv();
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadCsv(`trackitall-${kind}-${stamp}.csv`, csv);
+      // A header-only file means there was nothing to export.
+      const rows = csv.split("\r\n").length - 1;
+      setDone(rows === 0 ? `No ${kind} logged yet.` : `Exported ${rows} rows.`);
+    } catch (e: any) {
+      setError(e?.message ?? "Export failed. Check your connection and try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-sm text-muted">
+        Download a copy of your data as CSV. Opens in Excel, Numbers or Google
+        Sheets.
+      </p>
+
+      <button
+        type="button"
+        disabled={busy !== null}
+        onClick={() => run("workouts")}
+        className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-surface px-4 py-3.5 text-left active:bg-white/[0.06] disabled:opacity-50"
+      >
+        <span>
+          <span className="block text-base font-semibold text-ink">Workouts</span>
+          <span className="block text-xs text-muted">
+            Every exercise and set, one row per set
+          </span>
+        </span>
+        <span className="text-sm text-green">{busy === "workouts" ? "…" : "CSV"}</span>
+      </button>
+
+      <button
+        type="button"
+        disabled={busy !== null}
+        onClick={() => run("nutrition")}
+        className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-surface px-4 py-3.5 text-left active:bg-white/[0.06] disabled:opacity-50"
+      >
+        <span>
+          <span className="block text-base font-semibold text-ink">Nutrition</span>
+          <span className="block text-xs text-muted">
+            Every logged food with its macros
+          </span>
+        </span>
+        <span className="text-sm text-green">{busy === "nutrition" ? "…" : "CSV"}</span>
+      </button>
+
+      {done && <p className="text-sm text-green">{done}</p>}
+      {error && <p className="text-sm text-orange">{error}</p>}
+      <p className="text-xs text-muted">
+        Needs a connection — exports are read fresh from the server.
       </p>
     </div>
   );

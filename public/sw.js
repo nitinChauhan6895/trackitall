@@ -69,6 +69,7 @@ self.addEventListener("message", (event) => {
   // below ignores it and it never reaches the cache.
   // Replies with a per-URL result when a MessagePort is supplied, so warming
   // can be checked from the console instead of guessed at.
+  if (event.data === "flush-queue") return handleFlushMessage(event);
   if (event.data === "warm-shells") {
     const port = event.ports && event.ports[0];
     event.waitUntil(
@@ -78,6 +79,130 @@ self.addEventListener("message", (event) => {
     );
   }
 });
+
+// ---- Background Sync: flush the offline write queue with the app closed ----
+//
+// The queue lives in IndexedDB, written by idb-keyval from the page. There's no
+// idb-keyval here, so we talk to its store directly — these names are its
+// defaults (see lib/offlineQueue.ts, which uses the default store).
+const IDB_NAME = "keyval-store";
+const IDB_STORE = "keyval";
+const QUEUE_KEY = "trackitall-offline-queue";
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+    // If the store doesn't exist yet the page has never queued anything.
+    req.onupgradeneeded = () => {
+      try {
+        req.result.createObjectStore(IDB_STORE);
+      } catch {}
+    };
+  });
+}
+
+function idbRequest(db, mode, fn) {
+  return new Promise((resolve, reject) => {
+    let tx;
+    try {
+      tx = db.transaction(IDB_STORE, mode);
+    } catch {
+      return resolve(undefined); // no store => nothing queued
+    }
+    const req = fn(tx.objectStore(IDB_STORE));
+    tx.oncomplete = () => resolve(req ? req.result : undefined);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+async function readQueue() {
+  const db = await idbOpen();
+  try {
+    const q = await idbRequest(db, "readonly", (s) => s.get(QUEUE_KEY));
+    return Array.isArray(q) ? q : [];
+  } finally {
+    db.close();
+  }
+}
+
+async function writeQueue(queue) {
+  const db = await idbOpen();
+  try {
+    await idbRequest(db, "readwrite", (s) => s.put(queue, QUEUE_KEY));
+  } finally {
+    db.close();
+  }
+}
+
+// Post the queue to /api/sync and keep whatever didn't apply.
+async function flushQueueFromSW() {
+  const queue = await readQueue();
+  if (queue.length === 0) return { flushed: 0, remaining: 0 };
+
+  const res = await fetch("/api/sync", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ops: queue }),
+  });
+  // Signed out or server error: keep everything and let sync retry.
+  // A redirect counts as a failure too — being bounced to a login page comes
+  // back as a perfectly "ok" HTML response, which must not be read as success.
+  if (!res.ok || res.redirected) {
+    throw new Error("sync rejected: " + res.status + (res.redirected ? " (redirected)" : ""));
+  }
+
+  const statuses = await res
+    .json()
+    .then((b) => b && b.statuses)
+    .catch(() => null);
+  if (!Array.isArray(statuses)) throw new Error("bad sync response");
+
+  // Statuses come back positionally, so pin each one to the op id it belongs
+  // to before touching the queue again.
+  const byId = new Map();
+  queue.forEach((op, i) => byId.set(op.id, statuses[i]));
+
+  // Re-read rather than reusing `queue`: the page may have queued or flushed
+  // something while the request was in flight. Matching on id (not index)
+  // means a shifted queue can't misattribute a result and drop a live write.
+  const latest = await readQueue();
+  const remaining = [];
+  let flushed = 0;
+  for (const op of latest) {
+    const status = byId.get(op.id);
+    if (status === "ok") flushed++;
+    else if (status === "drop") continue; // discarded on purpose
+    else remaining.push(op); // fail, keep, or queued after we sent
+  }
+  await writeQueue(remaining);
+
+  if (flushed > 0) {
+    const clients = await self.clients.matchAll({ includeUncontrolled: true });
+    for (const c of clients) c.postMessage("queue-flushed");
+  }
+  return { flushed, remaining: remaining.length };
+}
+
+self.addEventListener("sync", (event) => {
+  // Rejecting tells the browser to retry later with its own backoff.
+  if (event.tag === "tia-flush") event.waitUntil(flushQueueFromSW());
+});
+
+// Same flush, triggered explicitly. Lets the app hand a flush to the worker,
+// and makes this path checkable from the console without waiting on the
+// browser to decide it's a good time to fire a sync event.
+function handleFlushMessage(event) {
+  const port = event.ports && event.ports[0];
+  event.waitUntil(
+    flushQueueFromSW()
+      .then((r) => port && port.postMessage(r))
+      .catch((e) => port && port.postMessage({ error: String(e && e.message ? e.message : e) })),
+  );
+}
 
 function todayISO() {
   const d = new Date();

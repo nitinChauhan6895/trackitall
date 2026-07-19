@@ -13,6 +13,7 @@ export type RawStatsExercise = {
   name: string;
   cardio_type: string | null;
   sets: {
+    position?: number | null;
     reps: number | null;
     weight_kg: number | null;
     distance_km: number | null;
@@ -35,6 +36,23 @@ export type WeekStats = {
 
 export type SeriesPoint = { date: string; value: number };
 
+/** One logged set, as it appeared in a session. */
+export type HistorySet = { reps: number | null; weightKg: number | null };
+
+/** A past session of a single exercise, for progressive-overload context. */
+export type HistorySession = {
+  date: string;
+  sets: HistorySet[];
+  topWeightKg: number;
+  /** reps x weight summed over the session. */
+  volumeKg: number;
+};
+
+// How many past sessions per exercise to keep. The whole history would be sent
+// to the browser and cached in IndexedDB; a few months of context is enough to
+// judge whether you're progressing.
+const HISTORY_LIMIT = 12;
+
 export type StatsData = {
   hasAnyData: boolean;
   monthTotal: number;
@@ -45,6 +63,8 @@ export type StatsData = {
   last7: WeekStats;
   strengthExercises: string[];
   strengthSeries: Record<string, SeriesPoint[]>;
+  /** Most recent sessions first, capped at HISTORY_LIMIT per exercise. */
+  strengthHistory: Record<string, HistorySession[]>;
 };
 
 // Muscle groups shown in the breakdown / neglected list (HIIT excluded).
@@ -169,6 +189,43 @@ export function computeStats(exs: RawStatsExercise[], today: Date): StatsData {
       .sort((a, b) => (a.date < b.date ? -1 : 1));
   }
 
+  // Session-by-session set detail, so the chart can be read alongside what was
+  // actually lifted. One exercise can appear as several rows on the same date
+  // (e.g. logged under two groups), so sets are merged per name+date.
+  const historyMap = new Map<string, Map<string, HistorySet[]>>();
+  for (const e of exs) {
+    if (!seriesMap.has(e.name)) continue; // weight-based exercises only
+    let byDay = historyMap.get(e.name);
+    if (!byDay) {
+      byDay = new Map();
+      historyMap.set(e.name, byDay);
+    }
+    const list = byDay.get(e.workout_date) ?? [];
+    const ordered = [...(e.sets ?? [])].sort(
+      (a, b) => (a.position ?? 0) - (b.position ?? 0),
+    );
+    for (const s of ordered) {
+      list.push({ reps: s.reps, weightKg: s.weight_kg });
+    }
+    byDay.set(e.workout_date, list);
+  }
+
+  const strengthHistory: Record<string, HistorySession[]> = {};
+  for (const [name, byDay] of historyMap) {
+    strengthHistory[name] = Array.from(byDay.entries())
+      .map(([date, sets]) => ({
+        date,
+        sets,
+        topWeightKg: sets.reduce((mx, s) => Math.max(mx, s.weightKg ?? 0), 0),
+        volumeKg: sets.reduce(
+          (sum, s) => sum + (s.reps ?? 0) * (s.weightKg ?? 0),
+          0,
+        ),
+      }))
+      .sort((a, b) => (a.date < b.date ? 1 : -1)) // newest first
+      .slice(0, HISTORY_LIMIT);
+  }
+
   return {
     hasAnyData: exs.length > 0,
     monthTotal,
@@ -179,5 +236,6 @@ export function computeStats(exs: RawStatsExercise[], today: Date): StatsData {
     last7: weekStats(last7Start, byDate),
     strengthExercises,
     strengthSeries,
+    strengthHistory,
   };
 }

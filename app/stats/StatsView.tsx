@@ -5,7 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { loadStatsAction } from "@/app/actions";
 import { qk } from "@/lib/browserData";
 import { toDateKey } from "@/lib/date";
-import type { SeriesPoint, StatsData, WeekStats } from "@/lib/stats";
+import { formatDayMonth } from "@/lib/dateFormat";
+import type { HistorySession, SeriesPoint, StatsData, WeekStats } from "@/lib/stats";
 
 const GREEN = "#A8E830";
 const ORANGE = "#FF571F";
@@ -52,6 +53,9 @@ export default function StatsView({
     range === "this" ? stats.thisWeek : range === "last" ? stats.lastWeek : stats.last7;
   const [exercise, setExercise] = useState(stats.strengthExercises[0] ?? "");
   const series = stats.strengthSeries[exercise] ?? [];
+  // Older releases cached a StatsData without history — tolerate its absence
+  // rather than crashing on a stale IndexedDB entry.
+  const history = stats.strengthHistory?.[exercise] ?? [];
 
   const vol = week.totalVolumeKg;
   const weightVal = vol >= 1000 ? (vol / 1000).toFixed(1) : String(Math.round(vol));
@@ -145,6 +149,7 @@ export default function StatsView({
             ) : (
               <LineChart points={series} />
             )}
+            <ExerciseHistory sessions={history} />
           </>
         )}
       </ChartBox>
@@ -389,7 +394,75 @@ function MuscleBreakdown({ week }: { week: WeekStats }) {
   );
 }
 
-function shortDate(key: string) {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+// Locale-independent on purpose — see lib/dateFormat.ts.
+const shortDate = formatDayMonth;
+
+/** Trim pointless decimals: 40 -> "40", 42.5 -> "42.5". */
+function fmtKg(n: number): string {
+  return String(Math.round(n * 100) / 100);
+}
+
+// Session-by-session detail for the selected exercise. The chart shows the
+// shape of the progress; this shows what was actually lifted, so you know what
+// to beat on the next session.
+function ExerciseHistory({ sessions }: { sessions: HistorySession[] }) {
+  if (sessions.length === 0) return null;
+
+  return (
+    <div className="mt-4 border-t border-white/10 pt-3">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+        Previous sessions
+      </p>
+      <ul className="space-y-2">
+        {sessions.map((s, i) => {
+          // sessions are newest-first, so the next item is the older one.
+          const prev = sessions[i + 1];
+          const delta = prev ? s.topWeightKg - prev.topWeightKg : 0;
+          const up = delta > 0;
+          const down = delta < 0;
+          return (
+            <li key={s.date} className="rounded-xl bg-white/[0.04] px-3 py-2.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-sm font-semibold text-ink">
+                  {shortDate(s.date)}
+                </span>
+                <span className="flex items-baseline gap-1.5">
+                  <span className="text-sm font-semibold text-ink">
+                    {fmtKg(s.topWeightKg)}
+                    <span className="text-xs font-normal text-muted"> kg top</span>
+                  </span>
+                  {prev && (
+                    <span
+                      className={[
+                        "text-[11px] font-semibold",
+                        up ? "text-green" : down ? "text-orange" : "text-muted",
+                      ].join(" ")}
+                    >
+                      {up ? `▲ +${fmtKg(delta)}` : down ? `▼ ${fmtKg(delta)}` : "="}
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {s.sets.map((set, j) => (
+                  <span
+                    key={j}
+                    className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[11px] text-muted"
+                  >
+                    {set.reps ?? "–"}
+                    {set.weightKg != null ? ` × ${fmtKg(set.weightKg)}kg` : ""}
+                  </span>
+                ))}
+              </div>
+              {s.volumeKg > 0 && (
+                <p className="mt-1 text-[10px] text-muted">
+                  Volume {fmtKg(s.volumeKg)} kg
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
 }

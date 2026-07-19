@@ -33,6 +33,12 @@ function readSessionExpiry(request: NextRequest): number | null {
 
 export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
+
+  // API routes authenticate themselves and answer with a status code. Bouncing
+  // them to /login would hand a caller (the service worker's Background Sync
+  // POST) a 200 HTML login page instead of a 401 it can act on.
+  if (path.startsWith("/api/")) return NextResponse.next({ request });
+
   const isAuthRoute =
     path.startsWith("/login") ||
     path.startsWith("/forgot") ||
