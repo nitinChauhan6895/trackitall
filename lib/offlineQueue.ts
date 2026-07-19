@@ -8,14 +8,27 @@
 // ambiguous flaky-online request.
 
 import { get, set } from "idb-keyval";
-import { upsertExercise } from "@/app/actions";
+import {
+  addSet,
+  deleteExercise,
+  deleteGroup,
+  deleteSet,
+  upsertExercise,
+} from "@/app/actions";
 import { getBrowserClient } from "@/lib/supabase/client";
 
 const KEY = "trackitall-offline-queue";
 
+export type OpType =
+  | "upsertExercise"
+  | "addSet"
+  | "deleteSet"
+  | "deleteExercise"
+  | "deleteGroup";
+
 export type QueuedOp = {
   id: string;
-  type: "upsertExercise";
+  type: OpType;
   payload: any;
   createdAt: number;
   /** Owner at enqueue time — a shared device must never replay these under
@@ -69,10 +82,31 @@ export async function enqueue(type: QueuedOp["type"], payload: any): Promise<voi
   await writeQueue(q);
 }
 
+// Form-action payloads are stored as plain field maps (FormData isn't
+// serialisable), and rebuilt when the op runs.
+function toFormData(fields: Record<string, string | undefined>): FormData {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) fd.append(k, v ?? "");
+  return fd;
+}
+
 // Server actions keyed by op type. Add new offline-capable mutations here.
-const dispatch: Record<QueuedOp["type"], (payload: any) => Promise<unknown>> = {
+const dispatch: Record<OpType, (payload: any) => Promise<unknown>> = {
   upsertExercise: (p) => upsertExercise(p),
+  addSet: (p) => addSet(toFormData(p)),
+  deleteSet: (p) => deleteSet(toFormData(p)),
+  deleteExercise: (p) => deleteExercise(toFormData(p)),
+  deleteGroup: (p) => deleteGroup(p.date, p.group),
 };
+
+// Single path for running a mutation, used both live and when replaying the
+// queue — so online and offline behaviour can never drift apart.
+export function runOp(type: OpType, payload: any): Promise<unknown> {
+  return dispatch[type](payload);
+}
+
+export const isOffline = () =>
+  typeof navigator !== "undefined" && !navigator.onLine;
 
 // Replay queued ops oldest-first. Stops at the first failure (keeps that op and
 // the rest for the next attempt). No-op while offline or already flushing.

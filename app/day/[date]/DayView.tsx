@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { monthParam } from "@/lib/date";
 import { fetchDayExercises, qk } from "@/lib/browserData";
+import { enqueue, isOffline, runOp, type OpType } from "@/lib/offlineQueue";
 import {
   CARDIO_FIELDS,
   MUSCLE_GROUPS,
   MUSCLE_GROUP_LABELS,
   formatSeconds,
   isCardio,
+  parseTimeToSeconds,
   type CardioField,
   type CardioType,
   type Exercise,
@@ -59,6 +61,29 @@ export default function DayView({
     initialData: initialExercises,
   });
   const onChanged = () => queryClient.invalidateQueries({ queryKey: qk.day(date) });
+
+  // Run an edit against the cached day. The optimistic update is applied first
+  // so the UI responds instantly; if we're offline the op is queued and the
+  // optimistic state simply stays put (a failed background refetch leaves the
+  // last-good data in place) until the queue drains on reconnect.
+  async function mutate(
+    type: OpType,
+    payload: any,
+    optimistic?: (prev: Exercise[]) => Exercise[],
+  ) {
+    if (optimistic) {
+      queryClient.setQueryData<Exercise[]>(qk.day(date), (prev) =>
+        optimistic(prev ?? exercises),
+      );
+    }
+    try {
+      await runOp(type, payload);
+      onChanged();
+    } catch {
+      if (isOffline()) await enqueue(type, payload);
+      else onChanged(); // genuine failure — fall back to server truth
+    }
+  }
 
   const byGroup = new Map<MuscleGroup, Exercise[]>();
   for (const ex of exercises) {
@@ -152,7 +177,11 @@ export default function DayView({
                       date={date}
                       group={group}
                       groupLabel={MUSCLE_GROUP_LABELS[group]}
-                      onChanged={onChanged}
+                      onDeleteGroup={() =>
+                        mutate("deleteGroup", { date, group }, (prev) =>
+                          prev.filter((e) => e.muscle_group !== group),
+                        )
+                      }
                     />
                   </div>
                 </div>
@@ -168,7 +197,32 @@ export default function DayView({
                         label: formatSavedSet(ex, kind, s),
                       }))}
                       inputs={inputsFor(ex, kind)}
-                      onChanged={onChanged}
+                      onAddSet={(fields) =>
+                        mutate(
+                          "addSet",
+                          { ...fields, exercise_id: ex.id, date },
+                          (prev) =>
+                            prev.map((e) =>
+                              e.id === ex.id
+                                ? { ...e, sets: [...e.sets, synthSet(fields)] }
+                                : e,
+                            ),
+                        )
+                      }
+                      onDeleteSet={(setId) =>
+                        mutate("deleteSet", { id: setId, date }, (prev) =>
+                          prev.map((e) =>
+                            e.id === ex.id
+                              ? { ...e, sets: e.sets.filter((s) => s.id !== setId) }
+                              : e,
+                          ),
+                        )
+                      }
+                      onDeleteExercise={() =>
+                        mutate("deleteExercise", { id: ex.id, date }, (prev) =>
+                          prev.filter((e) => e.id !== ex.id),
+                        )
+                      }
                     />
                   ))}
                 </div>
@@ -244,6 +298,32 @@ const MONTHS_FULL = [
 // Locale-free thousands grouping so SSR and client match.
 function fmtVolume(v: number): string {
   return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+// Builds the row the server would have created, so a set added offline renders
+// immediately (and formats) exactly like a saved one.
+function synthSet(fields: Record<string, string>): WorkoutSet {
+  const n = (v?: string) => {
+    if (v == null || v.trim() === "") return null;
+    const x = Number(v);
+    return Number.isFinite(x) ? x : null;
+  };
+  return {
+    id: `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    position: Number.MAX_SAFE_INTEGER,
+    reps: n(fields.reps),
+    weight_kg: n(fields.weight),
+    distance_km: n(fields.distance_km),
+    distance_m: n(fields.distance_m),
+    speed_kmh: n(fields.speed),
+    time_seconds: parseTimeToSeconds(fields.time ?? ""),
+    calories: n(fields.calories),
+    incline: n(fields.incline),
+    resistance: n(fields.resistance),
+    sets_count: n(fields.sets_count),
+    height: n(fields.height),
+    floors: n(fields.floors),
+  } as WorkoutSet;
 }
 
 function shiftKey(key: string, n: number): string {

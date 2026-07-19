@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { flushQueue, subscribeQueue } from "@/lib/offlineQueue";
 
 // Global mount: watches connectivity, flushes the offline write queue on
@@ -8,18 +9,25 @@ import { flushQueue, subscribeQueue } from "@/lib/offlineQueue";
 export default function OfflineSync() {
   const [online, setOnline] = useState(true);
   const [pending, setPending] = useState(0);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
+    // Drain the queue, then refetch so optimistic edits are replaced by the
+    // server's version of the truth.
+    const sync = async () => {
+      const { flushed } = await flushQueue();
+      if (flushed > 0) queryClient.invalidateQueries();
+    };
     setOnline(navigator.onLine);
     const goOnline = () => {
       setOnline(true);
-      flushQueue();
+      sync();
     };
     const goOffline = () => setOnline(false);
     window.addEventListener("online", goOnline);
     window.addEventListener("offline", goOffline);
     const unsub = subscribeQueue(setPending);
-    flushQueue(); // catch up anything left from a previous session
+    sync(); // catch up anything left from a previous session
     return () => {
       window.removeEventListener("online", goOnline);
       window.removeEventListener("offline", goOffline);

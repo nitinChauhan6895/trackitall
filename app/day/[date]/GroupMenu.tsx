@@ -9,12 +9,12 @@ export default function GroupMenu({
   date,
   group,
   groupLabel,
-  onChanged,
+  onDeleteGroup,
 }: {
   date: string;
   group: MuscleGroup;
   groupLabel: string;
-  onChanged: () => void;
+  onDeleteGroup: () => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -48,9 +48,8 @@ export default function GroupMenu({
               danger
               onClick={() => {
                 setOpen(false);
-                startTransition(async () => {
-                  await deleteGroup(date, group);
-                  onChanged();
+                startTransition(() => {
+                  onDeleteGroup();
                 });
               }}
             />

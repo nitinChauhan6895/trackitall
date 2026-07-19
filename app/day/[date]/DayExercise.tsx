@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { addSet, deleteSet, deleteExercise } from "@/app/actions";
 
 type InputSpec = {
   name: string;
@@ -19,32 +18,31 @@ export default function DayExercise({
   name,
   sets,
   inputs,
-  onChanged,
+  onAddSet,
+  onDeleteSet,
+  onDeleteExercise,
 }: {
   exerciseId: string;
   date: string;
   name: string;
   sets: { id: string; label: string }[];
   inputs: InputSpec[];
-  onChanged: () => void;
+  onAddSet: (fields: Record<string, string>) => void;
+  onDeleteSet: (setId: string) => void;
+  onDeleteExercise: () => void;
 }) {
   const [editing, setEditing] = useState(false);
 
-  // Run a server action from a form submit, then refresh the cached day.
-  const submit =
-    (action: (fd: FormData) => Promise<unknown>, reset = false) =>
-    async (e: React.FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      const form = e.currentTarget;
-      const fd = new FormData(form);
-      try {
-        await action(fd);
-        if (reset) form.reset();
-        onChanged();
-      } catch {
-        /* keep the row as-is on failure */
-      }
-    };
+  // The parent owns the mutation (optimistic cache update + queue when
+  // offline); here we just collect the form fields.
+  function submitAddSet(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fields: Record<string, string> = {};
+    for (const [k, v] of new FormData(form).entries()) fields[k] = String(v);
+    form.reset();
+    onAddSet(fields);
+  }
 
   return (
     <div className="border-b border-white/10 py-1 last:border-0">
@@ -85,13 +83,7 @@ export default function DayExercise({
       {editing && (
         <div className="mb-3 space-y-2 rounded-xl bg-white/[0.04] p-3">
           {sets.map((s, i) => (
-            <form
-              key={s.id}
-              onSubmit={submit(deleteSet)}
-              className="flex items-center justify-between text-sm"
-            >
-              <input type="hidden" name="id" value={s.id} />
-              <input type="hidden" name="date" value={date} />
+            <div key={s.id} className="flex items-center justify-between text-sm">
               <span className="flex items-center gap-2 tabular-nums text-ink">
                 <span className="w-4 text-center text-[10px] font-semibold text-muted">
                   {i + 1}
@@ -99,18 +91,17 @@ export default function DayExercise({
                 {s.label}
               </span>
               <button
-                type="submit"
+                type="button"
+                onClick={() => onDeleteSet(s.id)}
                 aria-label="Delete set"
                 className="px-2 text-muted active:text-orange"
               >
                 ✕
               </button>
-            </form>
+            </div>
           ))}
 
-          <form onSubmit={submit(addSet, true)} className="flex flex-wrap items-center gap-2">
-            <input type="hidden" name="exercise_id" value={exerciseId} />
-            <input type="hidden" name="date" value={date} />
+          <form onSubmit={submitAddSet} className="flex flex-wrap items-center gap-2">
             {inputs.map((meta) => (
               <input
                 key={meta.name}
@@ -132,16 +123,13 @@ export default function DayExercise({
           </form>
 
           <div className="flex items-center justify-between border-t border-white/10 pt-2.5">
-            <form onSubmit={submit(deleteExercise)}>
-              <input type="hidden" name="id" value={exerciseId} />
-              <input type="hidden" name="date" value={date} />
-              <button
-                type="submit"
-                className="text-sm font-semibold text-orange active:opacity-70"
-              >
-                🗑 Delete exercise
-              </button>
-            </form>
+            <button
+              type="button"
+              onClick={onDeleteExercise}
+              className="text-sm font-semibold text-orange active:opacity-70"
+            >
+              🗑 Delete exercise
+            </button>
             <button
               type="button"
               onClick={() => setEditing(false)}
