@@ -509,7 +509,7 @@ function AddSheet({
   return (
     <>
       <div onClick={onClose} aria-hidden className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" />
-      <div className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[70vh] w-full max-w-md flex-col rounded-t-3xl bg-page shadow-xl safe-bottom">
+      <div className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[70dvh] w-full max-w-md flex-col rounded-t-3xl bg-page shadow-xl safe-bottom">
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
           <h3 className="text-base font-semibold text-ink">Add exercise</h3>
           <button type="button" onClick={onClose} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-white/10">

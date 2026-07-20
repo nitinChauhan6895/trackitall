@@ -154,9 +154,13 @@ export default function DayView({ date }: { date: string }) {
             const list = byGroup.get(group)!;
             const kind = kindOf(group);
             return (
+              // No overflow-hidden on the card: the ⋮ menu renders absolutely
+              // inside it, and a one-exercise card is shorter than the menu —
+              // clipping cropped it. Nothing needs the clip (the accent is a
+              // border, children are padded off the corners).
               <section
                 key={group}
-                className="relative overflow-hidden rounded-2xl border border-white/10 bg-surface"
+                className="relative rounded-2xl border border-white/10 bg-surface"
                 style={{ borderLeft: `4px solid ${MUSCLE_TONE[group]}` }}
               >
                 <div className="flex items-center gap-2 px-4 pt-4">

@@ -898,7 +898,7 @@ function AddSheet({
       <div
         role="dialog"
         aria-label="Add exercise"
-        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[80vh] w-full max-w-md flex-col rounded-t-3xl bg-page shadow-xl safe-bottom"
+        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex h-[80dvh] w-full max-w-md flex-col rounded-t-3xl bg-page shadow-xl safe-bottom"
       >
         <div className="flex items-center gap-3 px-4 pb-2 pt-4">
           {group && (

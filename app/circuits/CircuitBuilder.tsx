@@ -370,7 +370,7 @@ function AddExerciseSheet({
       <div
         role="dialog"
         aria-label="Add exercise"
-        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[80vh] w-full max-w-md flex-col rounded-t-3xl bg-page p-4 shadow-xl safe-bottom"
+        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[80dvh] w-full max-w-md flex-col rounded-t-3xl bg-page p-4 shadow-xl safe-bottom"
       >
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-base font-semibold text-ink">Add Exercise</h3>

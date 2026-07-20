@@ -1273,7 +1273,7 @@ function Sheet({
         aria-label={title}
         className={[
           "fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-md flex-col rounded-t-3xl bg-page shadow-xl safe-bottom",
-          tall ? "max-h-[90vh]" : "max-h-[85vh]",
+          tall ? "max-h-[90dvh]" : "max-h-[85dvh]",
         ].join(" ")}
       >
         <div className="flex items-center justify-between px-4 pb-1 pt-4">
