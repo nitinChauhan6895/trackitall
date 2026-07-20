@@ -1,2 +1,2 @@
 // Single source for the displayed app version (keep in sync with package.json).
-export const APP_VERSION = "6.14.4";
+export const APP_VERSION = "6.15.1";

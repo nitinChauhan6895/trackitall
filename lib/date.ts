@@ -58,12 +58,3 @@ export function buildCalendarGrid(year: number, month: number): Date[] {
   return days;
 }
 
-export function formatDayHeading(dateKey: string): string {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-}

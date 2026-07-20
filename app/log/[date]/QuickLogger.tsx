@@ -28,10 +28,18 @@ import { libraryFor, type LibraryItem } from "@/lib/presets";
 import { HIIT_EXERCISES, resolveHiitMetrics } from "@/lib/hiit";
 import { enqueue, isOffline, removeQueuedOps } from "@/lib/offlineQueue";
 import { qk, type MonthSummary } from "@/lib/browserData";
+import { formatWeekdayDayMonth } from "@/lib/dateFormat";
 import MuscleBadge from "@/components/MuscleBadge";
 
 // Cardio "Exercise" dropdown options (JSON cardio names → field type).
 const CARDIO_LIBRARY = libraryFor("cardio");
+
+// Flat index over every group's presets for the add-sheet's global search.
+// HIIT is excluded — it's a circuit builder, not a pickable exercise list.
+const SEARCH_INDEX: { group: MuscleGroup; item: LibraryItem }[] =
+  MUSCLE_GROUPS.filter((g) => g !== "hiit").flatMap((g) =>
+    libraryFor(g).map((item) => ({ group: g, item })),
+  );
 
 type Mode = "cardio" | "hiit" | "strength";
 function modeFor(g: MuscleGroup): Mode {
@@ -120,14 +128,9 @@ function newExercise(group: MuscleGroup, init?: Partial<DraftExercise>): DraftEx
   };
 }
 
-function shortDate(date: string) {
-  const [y, m, d] = date.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-}
+// Locale-independent: toLocaleDateString gave "Mon, Jul 20" on the server and
+// "Mon 20 Jul" on the device, mismatching on hydration (see lib/dateFormat.ts).
+const shortDate = formatWeekdayDayMonth;
 
 function num(s: string): number | null {
   if (s.trim() === "") return null;
@@ -841,9 +844,22 @@ function AddSheet({
   const [group, setGroup] = useState<MuscleGroup | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [custom, setCustom] = useState("");
+  const [query, setQuery] = useState("");
 
   const mode = group ? modeFor(group) : "strength";
   const items = group ? libraryFor(group) : [];
+  // The custom input doubles as a live filter over the presets; it only
+  // becomes a custom name if nothing was matched and added.
+  const filter = custom.trim().toLowerCase();
+  const visibleItems =
+    mode === "strength" && filter
+      ? items.filter((i) => i.name.toLowerCase().includes(filter))
+      : items;
+
+  const q = query.trim().toLowerCase();
+  const results = q
+    ? SEARCH_INDEX.filter(({ item }) => item.name.toLowerCase().includes(q)).slice(0, 30)
+    : [];
 
   function toggle(name: string) {
     setSelected((prev) => {
@@ -851,6 +867,9 @@ function AddSheet({
       next.has(name) ? next.delete(name) : next.add(name);
       return next;
     });
+    // The text found what they were looking for — clear it so it isn't also
+    // added as a custom exercise.
+    if (filter) setCustom("");
   }
 
   function confirm() {
@@ -915,20 +934,71 @@ function AddSheet({
         </div>
 
         {!group ? (
-          <div className="grid grid-cols-3 gap-2.5 overflow-y-auto px-4 pb-6 pt-1">
-            {MUSCLE_GROUPS.map((g) => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => setGroup(g)}
-                className="flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-surface px-2 py-4 transition active:scale-[0.97] active:border-green"
-              >
-                <MuscleBadge group={g} className="h-10 w-10" />
-                <span className="text-sm font-semibold text-ink">
-                  {MUSCLE_GROUP_LABELS[g]}
-                </span>
-              </button>
-            ))}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="px-4 pb-2">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search all exercises…"
+                aria-label="Search all exercises"
+                className={INPUT_CLASS}
+              />
+            </div>
+            {q ? (
+              <ul className="space-y-2 overflow-y-auto px-4 pb-6 pt-1">
+                {results.length === 0 && (
+                  <li className="py-6 text-center text-sm text-muted">
+                    No exercise matches “{query.trim()}”. Pick a muscle group to
+                    add it as a custom exercise.
+                  </li>
+                )}
+                {results.map(({ group: g, item }) => (
+                  <li key={`${g}:${item.name}`}>
+                    <button
+                      type="button"
+                      // One tap adds it under its own group and closes the sheet.
+                      onClick={() =>
+                        onAdd(g, [
+                          item.cardioType
+                            ? { name: item.name, cardioType: item.cardioType }
+                            : { name: item.name },
+                        ])
+                      }
+                      className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-surface px-4 py-3 text-left active:bg-white/10"
+                    >
+                      <MuscleBadge group={g} className="h-8 w-8 shrink-0" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-ink">
+                          {item.name}
+                        </span>
+                        <span className="block text-xs text-muted">
+                          {MUSCLE_GROUP_LABELS[g]}
+                        </span>
+                      </span>
+                      <span className="text-lg text-green" aria-hidden>
+                        +
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="grid grid-cols-3 gap-2.5 overflow-y-auto px-4 pb-6 pt-1">
+                {MUSCLE_GROUPS.map((g) => (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setGroup(g)}
+                    className="flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-surface px-2 py-4 transition active:scale-[0.97] active:border-green"
+                  >
+                    <MuscleBadge group={g} className="h-10 w-10" />
+                    <span className="text-sm font-semibold text-ink">
+                      {MUSCLE_GROUP_LABELS[g]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -941,13 +1011,13 @@ function AddSheet({
                 <input
                   value={custom}
                   onChange={(e) => setCustom(e.target.value)}
-                  placeholder="Custom exercise… (e.g. Bench press)"
+                  placeholder="Search, or type a custom exercise…"
                   className={INPUT_CLASS}
                 />
               )}
 
               <ul className="space-y-2 pb-2">
-                {items.map((item) => {
+                {visibleItems.map((item) => {
                   const on = selected.has(item.name);
                   return (
                     <li key={item.name}>
