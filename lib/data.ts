@@ -38,6 +38,7 @@ import {
   type SavedMeal,
 } from "@/lib/nutrition";
 import { toDateKey } from "@/lib/date";
+import { type HabitsData } from "@/lib/habits";
 
 export async function getProfile(): Promise<Profile> {
   const supabase = createClient();
@@ -953,4 +954,35 @@ export async function getCurrentStreak(): Promise<number> {
   if (error) throw error;
   const days = Array.from(new Set((data ?? []).map((r) => r.workout_date as string)));
   return currentStreak(days, toDateKey(today));
+}
+
+// ---------- Habits ----------
+
+/** Habits plus a bounded window of logs (enough for streaks + the calendar). */
+export async function getHabitsData(days = 200): Promise<HabitsData> {
+  const supabase = createClient();
+  const from = new Date();
+  from.setDate(from.getDate() - days);
+  const [hRes, lRes] = await Promise.all([
+    supabase
+      .from("habits")
+      .select("id, name, description, icon, color, cadence, target_per_period, unit, reminder_time, archived, position")
+      .eq("archived", false)
+      .order("position", { ascending: true }),
+    supabase
+      .from("habit_logs")
+      .select("habit_id, log_date, count, note")
+      .gte("log_date", toDateKey(from)),
+  ]);
+  // Missing table (migration_016 not run yet) — degrade to an empty section
+  // rather than crashing the whole page.
+  if (hRes.error) {
+    if (isMissingTable(hRes.error)) return { habits: [], logs: [] };
+    throw hRes.error;
+  }
+  if (lRes.error && !isMissingTable(lRes.error)) throw lRes.error;
+  return {
+    habits: (hRes.data ?? []) as HabitsData["habits"],
+    logs: (lRes.data ?? []) as HabitsData["logs"],
+  };
 }

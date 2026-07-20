@@ -107,7 +107,7 @@ export default function CalendarCard({
                   hasWorkout
                     ? "bg-green font-semibold text-ink-inverse"
                     : "bg-white/[0.05] text-ink",
-                  isToday ? "ring-2 ring-green ring-offset-2 ring-offset-page" : "",
+                  isToday ? "ring-2 ring-orange ring-offset-2 ring-offset-page" : "",
                 ].join(" ")}
               >
                 {d.getDate()}

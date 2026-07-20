@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { monthParam } from "@/lib/date";
@@ -20,6 +21,8 @@ import {
 } from "@/lib/types";
 import { resolveHiitMetrics, type ResolvedMetric } from "@/lib/hiit";
 import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
+import SharePicker from "@/components/SharePicker";
+import { shareWholeDay } from "@/app/actions";
 import DayExercise from "./DayExercise";
 import GroupMenu from "./GroupMenu";
 
@@ -49,6 +52,7 @@ function inputsFor(exercise: Exercise, kind: SetKind): InputSpec[] {
 // day key to refetch.
 export default function DayView({ date }: { date: string }) {
   const queryClient = useQueryClient();
+  const [shareOpen, setShareOpen] = useState(false);
   // Local-first: whatever is in the persisted (IndexedDB) cache renders
   // immediately; the network refresh is a background nicety. Offline with
   // nothing cached simply means an empty day, which is the truth.
@@ -124,12 +128,15 @@ export default function DayView({ date }: { date: string }) {
             </p>
           </div>
         </div>
-        <Link
-          href="/stats"
-          className="flex shrink-0 items-center gap-1 rounded-full border border-green/30 bg-green/5 px-3 py-1.5 text-sm font-semibold text-green active:scale-95"
+        <button
+          type="button"
+          onClick={() => setShareOpen(true)}
+          disabled={exercises.length === 0}
+          aria-label="Share this workout"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-green/30 bg-green/5 text-green active:scale-95 disabled:opacity-40"
         >
-          📊 Summary
-        </Link>
+          <ShareIcon />
+        </button>
       </header>
 
       {/* Day summary stats, with prev/next-day arrows flush in the banner */}
@@ -170,8 +177,12 @@ export default function DayView({ date }: { date: string }) {
                   <h2 className="text-sm font-bold uppercase tracking-wide text-ink">
                     {MUSCLE_GROUP_LABELS[group]}
                   </h2>
-                  <span className="rounded-full bg-orange-soft px-2 py-0.5 text-xs font-semibold text-orange">
-                    {list.length} {list.length === 1 ? "Exercise" : "Exercises"}
+                  <span
+                    className="rounded-full px-2 py-0.5 text-xs font-semibold"
+                    style={{ backgroundColor: `${MUSCLE_TONE[group]}1F`, color: MUSCLE_TONE[group] }}
+                  >
+                    {list.length} {list.length === 1 ? "Exercise" : "Exercises"} ·{" "}
+                    {list.reduce((n, e) => n + e.sets.length, 0)} sets
                   </span>
                   <div className="ml-auto">
                     <GroupMenu
@@ -187,12 +198,14 @@ export default function DayView({ date }: { date: string }) {
                   </div>
                 </div>
                 <div className="px-4">
-                  {list.map((ex) => (
+                  {list.map((ex, i) => (
                     <DayExercise
                       key={ex.id}
                       exerciseId={ex.id}
                       date={date}
                       name={ex.name}
+                      index={i + 1}
+                      tone={MUSCLE_TONE[group]}
                       sets={ex.sets.map((s) => ({
                         id: s.id,
                         label: formatSavedSet(ex, kind, s),
@@ -233,15 +246,44 @@ export default function DayView({ date }: { date: string }) {
         </div>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md px-4 pb-5 pt-2 safe-bottom">
+      {/* Floating add button, bottom-right (replaces the full-width bar). */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md safe-bottom">
         <Link
           href={`/log/${date}`}
-          className="flex w-full items-center justify-center rounded-2xl bg-green px-4 py-4 text-base font-semibold text-ink-inverse transition active:scale-[0.98]"
+          aria-label="Add to this day"
+          className="pointer-events-auto absolute bottom-5 right-4 flex h-14 w-14 items-center justify-center rounded-full bg-green text-3xl font-light text-ink-inverse shadow-[0_8px_24px_rgba(0,0,0,0.5)] transition active:scale-95"
         >
-          + Add to this day
+          +
         </Link>
       </div>
+
+      {shareOpen && (
+        <ShareDayModal date={date} onClose={() => setShareOpen(false)} />
+      )}
     </main>
+  );
+}
+
+function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+    </svg>
+  );
+}
+
+function ShareDayModal({ date, onClose }: { date: string; onClose: () => void }) {
+  return (
+    <SharePicker
+      title="Share this workout"
+      subtitle="Every muscle group from this day."
+      onShare={(toUserId) => shareWholeDay({ toUserId, date })}
+      onClose={onClose}
+    />
   );
 }
 

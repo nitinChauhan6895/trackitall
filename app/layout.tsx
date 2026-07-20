@@ -10,8 +10,8 @@ export const metadata: Metadata = {
   description: "A mobile-first workout tracker.",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/icons/Logo.png",
-    apple: "/icons/Logo.png",
+    icon: "/icons/logo_new.png",
+    apple: "/icons/logo_new.png",
   },
   appleWebApp: {
     capable: true,

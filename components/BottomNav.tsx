@@ -30,7 +30,7 @@ export default function BottomNav() {
     <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md px-4 pb-3 safe-bottom">
       <div className="grid grid-cols-5 items-center rounded-[28px] border border-white/10 bg-surface px-2 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.55)]">
         <NavItem href="/" label="Home" active={isActive("/")} icon={HomeIcon} />
-        <NavItem href="/community" label="Community" active={isActive("/community")} icon={PeopleIcon} />
+        <NavItem href="/habits" label="Habits" active={isActive("/habits")} icon={LeafIcon} />
 
         <div className="flex justify-center">
           <Link
@@ -95,12 +95,11 @@ function HomeIcon() {
     </svg>
   );
 }
-function PeopleIcon() {
+function LeafIcon() {
   return (
     <svg {...svg}>
-      <circle cx="9" cy="8" r="3" />
-      <path d="M3 20a6 6 0 0 1 12 0" />
-      <path d="M16 6a3 3 0 0 1 0 6M21 20a6 6 0 0 0-5-5.9" />
+      <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+      <path d="M2 21c0-3 1.85-5.36 5.08-6" />
     </svg>
   );
 }

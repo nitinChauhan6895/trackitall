@@ -1,6 +1,6 @@
 {
   "name": "trackitall",
-  "version": "6.15.2",
+  "version": "7.0.1",
   "private": true,
   "scripts": {
     "dev": "next dev",

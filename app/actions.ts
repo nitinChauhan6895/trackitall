@@ -20,6 +20,7 @@ import {
   getCoachTemplates,
   buildCoachHistory,
   getNutritionWeek,
+  getHabitsData,
   getStatsData,
   searchFoods,
 } from "@/lib/data";
@@ -1340,4 +1341,133 @@ export async function exportNutritionCsv(): Promise<string> {
     r.computed_calories, r.computed_protein, r.computed_carbs, r.computed_fat, r.computed_fiber,
   ]);
   return toCsv(headers, rows);
+}
+
+/** Share every muscle group logged on `date` with one person.
+ *
+ *  Reuses the per-group RPC rather than adding a whole-day one: no schema
+ *  change, and the recipient gets one inbox card per group so they can accept
+ *  the parts they actually did. */
+export async function shareWholeDay(input: { toUserId: string; date: string }) {
+  if (!DATE_RE.test(input.date)) throw new Error("Invalid date");
+  const { supabase, user } = await requireUser();
+  const { data, error } = await supabase
+    .from("exercises")
+    .select("muscle_group")
+    .eq("user_id", user.id)
+    .eq("workout_date", input.date);
+  if (error) throw error;
+
+  const groups = Array.from(new Set((data ?? []).map((r) => r.muscle_group as MuscleGroup)));
+  if (groups.length === 0) throw new Error("Nothing logged on this day");
+
+  for (const group of groups) {
+    const { error: e } = await supabase.rpc("share_workout", {
+      p_to: input.toUserId,
+      p_date: input.date,
+      p_group: group,
+    });
+    if (e) throw e;
+  }
+}
+
+// ---------- Habits ----------
+
+const CADENCE_SET = new Set(["daily", "weekly"]);
+
+export async function saveHabit(input: {
+  id?: string;
+  name: string;
+  description?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  cadence: string;
+  target_per_period: number;
+  unit?: string | null;
+  reminder_time?: string | null;
+}): Promise<{ id: string }> {
+  const name = input.name.trim();
+  if (!name) throw new Error("Name is required");
+  if (!CADENCE_SET.has(input.cadence)) throw new Error("Invalid cadence");
+  const target = Math.max(1, Math.round(Number(input.target_per_period) || 1));
+
+  const { supabase, user } = await requireUser();
+  const row = {
+    name: name.slice(0, 80),
+    description: input.description?.trim().slice(0, 300) || null,
+    icon: input.icon || null,
+    color: input.color || null,
+    cadence: input.cadence,
+    target_per_period: target,
+    unit: input.unit?.trim().slice(0, 20) || null,
+    reminder_time: input.reminder_time || null,
+  };
+
+  if (input.id) {
+    const { error } = await supabase.from("habits").update(row).eq("id", input.id);
+    if (error) throw error;
+    revalidatePath("/habits");
+    return { id: input.id };
+  }
+  const { count } = await supabase
+    .from("habits")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  const { data, error } = await supabase
+    .from("habits")
+    .insert({ ...row, user_id: user.id, position: count ?? 0 })
+    .select("id")
+    .single();
+  if (error) throw error;
+  revalidatePath("/habits");
+  return { id: data.id as string };
+}
+
+export async function deleteHabit(id: string) {
+  const { supabase } = await requireUser();
+  // habit_logs cascade on delete.
+  const { error } = await supabase.from("habits").delete().eq("id", id);
+  if (error) throw error;
+  revalidatePath("/habits");
+}
+
+/** Set a habit's progress for one day. count 0 clears the day. */
+export async function setHabitCount(input: {
+  habitId: string;
+  date: string;
+  count: number;
+  note?: string | null;
+}) {
+  if (!DATE_RE.test(input.date)) throw new Error("Invalid date");
+  const { supabase, user } = await requireUser();
+  const count = Math.max(0, Math.round(Number(input.count) || 0));
+
+  if (count === 0 && !input.note) {
+    const { error } = await supabase
+      .from("habit_logs")
+      .delete()
+      .eq("habit_id", input.habitId)
+      .eq("log_date", input.date);
+    if (error) throw error;
+    revalidatePath("/habits");
+    return;
+  }
+  // One row per habit per day — upsert on that pair.
+  const { error } = await supabase.from("habit_logs").upsert(
+    {
+      habit_id: input.habitId,
+      user_id: user.id,
+      log_date: input.date,
+      count,
+      note: input.note?.trim().slice(0, 500) || null,
+    },
+    { onConflict: "habit_id,log_date" },
+  );
+  if (error) throw error;
+  revalidatePath("/habits");
+}
+
+export async function loadHabitsAction() {
+  await requireUser();
+  return getHabitsData();
 }

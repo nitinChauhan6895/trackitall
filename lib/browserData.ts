@@ -30,6 +30,7 @@ export const qk = {
   measurements: () => ["measurements"] as const,
   stats: () => ["stats"] as const,
   circuits: () => ["circuits"] as const,
+  habits: () => ["habits"] as const,
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");

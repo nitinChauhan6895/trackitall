@@ -29,6 +29,7 @@ import { HIIT_EXERCISES, resolveHiitMetrics } from "@/lib/hiit";
 import { enqueue, isOffline, removeQueuedOps } from "@/lib/offlineQueue";
 import { qk, type MonthSummary } from "@/lib/browserData";
 import { formatWeekdayDayMonth } from "@/lib/dateFormat";
+import { fuzzySearch } from "@/lib/fuzzy";
 import MuscleBadge from "@/components/MuscleBadge";
 
 // Cardio "Exercise" dropdown options (JSON cardio names → field type).
@@ -850,15 +851,16 @@ function AddSheet({
   const items = group ? libraryFor(group) : [];
   // The custom input doubles as a live filter over the presets; it only
   // becomes a custom name if nothing was matched and added.
-  const filter = custom.trim().toLowerCase();
+  const filter = custom.trim();
   const visibleItems =
     mode === "strength" && filter
-      ? items.filter((i) => i.name.toLowerCase().includes(filter))
+      ? fuzzySearch(items, filter, (i) => i.name, 40).map((r) => r.item)
       : items;
 
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
+  // Typo-tolerant: "benchpres", "sqaut" and "rdl" all find their exercise.
   const results = q
-    ? SEARCH_INDEX.filter(({ item }) => item.name.toLowerCase().includes(q)).slice(0, 30)
+    ? fuzzySearch(SEARCH_INDEX, q, (e) => e.item.name, 30).map((r) => r.item)
     : [];
 
   function toggle(name: string) {

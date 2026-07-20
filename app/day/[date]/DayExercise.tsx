@@ -16,6 +16,8 @@ export default function DayExercise({
   exerciseId,
   date,
   name,
+  index,
+  tone,
   sets,
   inputs,
   onAddSet,
@@ -25,6 +27,10 @@ export default function DayExercise({
   exerciseId: string;
   date: string;
   name: string;
+  /** 1-based position within its muscle group, shown as "01", "02", … */
+  index: number;
+  /** Muscle-group accent colour, used for the number, chips and set count. */
+  tone: string;
   sets: { id: string; label: string }[];
   inputs: InputSpec[];
   onAddSet: (fields: Record<string, string>) => void;
@@ -50,18 +56,36 @@ export default function DayExercise({
         type="button"
         onClick={() => setEditing((v) => !v)}
         aria-expanded={editing}
-        className="flex w-full items-center gap-3 py-3 text-left active:opacity-80"
+        className="flex w-full items-start gap-3 py-3 text-left active:opacity-80"
       >
+        {/* Zero-padded index, tinted to the muscle group. */}
+        <span
+          aria-hidden
+          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-sm font-bold tabular-nums"
+          style={{ borderColor: `${tone}66`, color: tone }}
+        >
+          {String(index).padStart(2, "0")}
+        </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-semibold text-ink">{name}</span>
+          <span className="flex items-baseline gap-2">
+            <span className="min-w-0 flex-1 truncate font-semibold text-ink">{name}</span>
+            <span className="shrink-0 text-xs font-semibold" style={{ color: tone }}>
+              {sets.length} {sets.length === 1 ? "set" : "sets"}
+            </span>
+            <span aria-hidden className="shrink-0 text-muted">
+              {editing ? "⌃" : "⌄"}
+            </span>
+          </span>
           {editing ? null : sets.length > 0 ? (
-            <span className="mt-1.5 flex flex-wrap gap-1.5">
+            <span className="mt-2 flex flex-wrap gap-1.5">
               {sets.map((s, i) => (
                 <span
                   key={s.id}
-                  className="inline-flex items-center gap-1 rounded-lg bg-white/[0.06] px-2.5 py-1 text-sm tabular-nums text-ink"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-sm tabular-nums text-ink"
                 >
-                  <span className="text-[10px] font-semibold text-muted">{i + 1}</span>
+                  <span className="text-[11px] font-bold" style={{ color: tone }}>
+                    {i + 1}
+                  </span>
                   {s.label}
                 </span>
               ))}
@@ -69,14 +93,6 @@ export default function DayExercise({
           ) : (
             <span className="mt-1 block text-sm italic text-muted">No sets yet</span>
           )}
-        </span>
-        <span className="flex shrink-0 flex-col items-end gap-1">
-          <span className="text-xs font-medium text-muted">
-            {sets.length} {sets.length === 1 ? "set" : "sets"}
-          </span>
-          <span aria-hidden className="text-muted">
-            {editing ? "⌃" : "⌄"}
-          </span>
         </span>
       </button>
 
@@ -128,7 +144,7 @@ export default function DayExercise({
               onClick={onDeleteExercise}
               className="text-sm font-semibold text-orange active:opacity-70"
             >
-              🗑 Delete exercise
+              Delete exercise
             </button>
             <button
               type="button"
