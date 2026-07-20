@@ -1,5 +1,6 @@
 "use client";
 
+import { formatShortDate } from "@/lib/dateFormat";
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -17,14 +18,9 @@ import { toDateKey } from "@/lib/date";
 import { deletePr, savePr } from "@/app/actions";
 import { Sparkline } from "@/components/Sparkline";
 
-function fmtDate(key: string) {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+// Locale-independent so the server-rendered HTML matches every device
+// (see lib/dateFormat.ts).
+const fmtDate = formatShortDate;
 
 function isRecent(dateKey: string | null, days = 21): boolean {
   if (!dateKey) return false;

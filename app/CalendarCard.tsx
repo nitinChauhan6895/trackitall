@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { fetchMonthSummary, qk, type MonthSummary } from "@/lib/browserData";
@@ -33,6 +33,14 @@ export default function CalendarCard({
 }) {
   const [{ year, month }, setYM] = useState({ year: initialYear, month: initialMonth });
   const isInitial = year === initialYear && month === initialMonth;
+
+  // The prop is the SERVER's today (UTC) — for an IST user that's yesterday
+  // until 05:30, ringing the wrong date. Re-derive on the device after mount;
+  // starting from the prop keeps hydration consistent.
+  const [today, setToday] = useState(todayKey);
+  useEffect(() => {
+    setToday(toDateKey(new Date()));
+  }, [todayKey]);
 
   const { data: summary = {} } = useQuery({
     queryKey: qk.month(year, month),
@@ -82,7 +90,7 @@ export default function CalendarCard({
           if (!inMonth) return <div key={key} aria-hidden />;
           const groups = summary[key] ?? [];
           const hasWorkout = groups.length > 0;
-          const isToday = key === todayKey;
+          const isToday = key === today;
           return (
             <div key={key} className="flex flex-col items-center py-0.5">
               <Link

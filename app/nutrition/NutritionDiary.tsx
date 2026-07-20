@@ -1,5 +1,6 @@
 "use client";
 
+import { formatWeekdayDayMonth } from "@/lib/dateFormat";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,12 +43,8 @@ function heading(key: string, today: string): string {
   if (key === today) return "Today";
   if (key === shiftKey(today, -1)) return "Yesterday";
   if (key === shiftKey(today, 1)) return "Tomorrow";
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
+  // Locale-independent so the server-rendered HTML matches every device.
+  return formatWeekdayDayMonth(key);
 }
 
 export default function NutritionDiary({

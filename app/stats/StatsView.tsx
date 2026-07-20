@@ -46,7 +46,9 @@ export default function StatsView({
   // instantly from IndexedDB and refresh in the background.
   const { data } = useQuery({
     queryKey: qk.stats(),
-    queryFn: loadStatsAction,
+    // Pass the device's "today": the server clock is UTC, which is yesterday
+    // for IST users until 05:30, shifting every week/month boundary.
+    queryFn: () => loadStatsAction(toDateKey(new Date())),
     initialData: { stats: initialStats, nutrition: initialNutrition ?? null },
   });
   const stats = (data?.stats ?? initialStats) as StatsData;

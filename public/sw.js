@@ -138,7 +138,19 @@ async function writeQueue(queue) {
 }
 
 // Post the queue to /api/sync and keep whatever didn't apply.
-async function flushQueueFromSW() {
+//
+// The same Web Lock the page's flush takes: the ops are at-least-once, so two
+// concurrent replays would double-apply writes. Unlike the page (which skips
+// if busy), waiting is right here — once the other flush finishes, whatever it
+// couldn't drain is still ours to send.
+function flushQueueFromSW() {
+  if (self.navigator && navigator.locks && navigator.locks.request) {
+    return navigator.locks.request("tia-flush", () => flushQueueFromSWUnlocked());
+  }
+  return flushQueueFromSWUnlocked();
+}
+
+async function flushQueueFromSWUnlocked() {
   const queue = await readQueue();
   if (queue.length === 0) return { flushed: 0, remaining: 0 };
 

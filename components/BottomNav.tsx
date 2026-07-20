@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { toDateKey } from "@/lib/date";
@@ -10,9 +11,18 @@ const HIDDEN = ["/login", "/forgot", "/reset", "/auth", "/log", "/day"];
 
 export default function BottomNav() {
   const path = usePathname() ?? "/";
-  if (HIDDEN.some((p) => path === p || path.startsWith(p + "/"))) return null;
 
-  const today = toDateKey(new Date());
+  // The + button's date must come from the DEVICE, after mount. Rendering
+  // new Date() directly bakes the server's UTC date into the SSR'd (and
+  // SW-cached) HTML — a stale href that opens yesterday's log at night, and a
+  // hydration mismatch when the device disagrees. Recomputed per navigation so
+  // a session left open across midnight stays fresh.
+  const [today, setToday] = useState("");
+  useEffect(() => {
+    setToday(toDateKey(new Date()));
+  }, [path]);
+
+  if (HIDDEN.some((p) => path === p || path.startsWith(p + "/"))) return null;
   const isActive = (href: string) =>
     href === "/" ? path === "/" : path.startsWith(href);
 
@@ -24,7 +34,7 @@ export default function BottomNav() {
 
         <div className="flex justify-center">
           <Link
-            href={`/log/${today}`}
+            href={today ? `/log/${today}` : "/"}
             aria-label="Log workout"
             className="-mt-8 flex h-14 w-14 items-center justify-center rounded-full bg-green text-ink-inverse shadow-lg ring-4 ring-surface transition active:scale-95"
           >

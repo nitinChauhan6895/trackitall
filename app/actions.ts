@@ -951,9 +951,12 @@ export async function deleteMeasurement(id: string) {
 // Stats are computed server-side (heavy aggregation), so instead of porting the
 // maths to the browser we expose the *result* as an action and let React Query
 // cache it in IndexedDB — instant on revisit, refreshed in the background.
-export async function loadStatsAction() {
+export async function loadStatsAction(todayKey?: string) {
   await requireUser();
-  const [stats, nutrition] = await Promise.all([getStatsData(), getNutritionWeek()]);
+  const [stats, nutrition] = await Promise.all([
+    getStatsData(todayKey),
+    getNutritionWeek(),
+  ]);
   return { stats, nutrition };
 }
 

@@ -34,6 +34,10 @@ export type QueuedOp = {
   /** Owner at enqueue time — a shared device must never replay these under
    *  a different account. */
   userId?: string | null;
+  /** Client-side identity of what this op writes. Re-queuing with the same
+   *  key REPLACES the earlier op: an offline draft has no server id, so two
+   *  queued upserts of the same draft would insert twice on sync. */
+  replaceKey?: string;
 };
 
 async function currentUserId(): Promise<string | null> {
@@ -93,8 +97,16 @@ async function requestBackgroundSync(): Promise<void> {
   }
 }
 
-export async function enqueue(type: QueuedOp["type"], payload: any): Promise<void> {
-  const [q, userId] = await Promise.all([readQueue(), currentUserId()]);
+export async function enqueue(
+  type: QueuedOp["type"],
+  payload: any,
+  opts?: { replaceKey?: string },
+): Promise<void> {
+  const [q0, userId] = await Promise.all([readQueue(), currentUserId()]);
+  // Same draft queued again (edited while still offline): supersede, don't add.
+  const q = opts?.replaceKey
+    ? q0.filter((op) => op.replaceKey !== opts.replaceKey)
+    : q0;
   q.push({
     id:
       typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -104,9 +116,18 @@ export async function enqueue(type: QueuedOp["type"], payload: any): Promise<voi
     payload,
     createdAt: Date.now(),
     userId,
+    replaceKey: opts?.replaceKey,
   });
   await writeQueue(q);
   await requestBackgroundSync();
+}
+
+/** Cancel pending op(s) for a draft — e.g. the user deleted an exercise that
+ *  only ever existed in the queue, so syncing it would resurrect it. */
+export async function removeQueuedOps(replaceKey: string): Promise<void> {
+  const q = await readQueue();
+  const next = q.filter((op) => op.replaceKey !== replaceKey);
+  if (next.length !== q.length) await writeQueue(next);
 }
 
 // Form-action payloads are stored as plain field maps (FormData isn't
@@ -137,10 +158,31 @@ export const isOffline = () =>
 
 // Replay queued ops oldest-first. Stops at the first failure (keeps that op and
 // the rest for the next attempt). No-op while offline or already flushing.
+//
+// Guarded by a Web Lock shared with the service worker: Background Sync can
+// fire while the page's own reconnect flush is running, and the ops are only
+// at-least-once — two concurrent replays would apply the same write twice.
 export async function flushQueue(): Promise<{ flushed: number; remaining: number }> {
   if (flushing || (typeof navigator !== "undefined" && !navigator.onLine)) {
     return { flushed: 0, remaining: (await readQueue()).length };
   }
+  const locks = typeof navigator !== "undefined" ? (navigator as any).locks : null;
+  if (locks?.request) {
+    return locks.request(
+      "tia-flush",
+      { ifAvailable: true },
+      async (lock: unknown) => {
+        // Held by the SW — it's already draining; don't double-apply.
+        if (!lock) return { flushed: 0, remaining: (await readQueue()).length };
+        return flushQueueUnlocked();
+      },
+    );
+  }
+  return flushQueueUnlocked();
+}
+
+async function flushQueueUnlocked(): Promise<{ flushed: number; remaining: number }> {
+  if (flushing) return { flushed: 0, remaining: (await readQueue()).length };
   flushing = true;
   let flushed = 0;
   try {

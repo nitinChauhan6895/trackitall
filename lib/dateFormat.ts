@@ -33,3 +33,33 @@ export function formatDayMonth(key: string): string {
   if (!m || !d) return key;
   return `${d} ${MONTHS_SHORT[m - 1]}`;
 }
+
+const MONTHS_LONG = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** (2026, 8) -> "August 2026". */
+export function formatMonthYear(year: number, month: number): string {
+  return `${MONTHS_LONG[month - 1] ?? month} ${year}`;
+}
+
+/** "2026-08-13" -> "Thu, 13 Aug". */
+export function formatWeekdayDayMonth(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  if (!y || !m || !d) return key;
+  const dow = new Date(y, m - 1, d).getDay(); // day-of-week is locale-free
+  return `${WEEKDAYS_SHORT[dow]}, ${d} ${MONTHS_SHORT[m - 1]}`;
+}

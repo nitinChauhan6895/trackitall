@@ -490,7 +490,10 @@ export async function getIncomingShares(): Promise<IncomingShare[]> {
   });
 }
 
-export async function getStatsData(): Promise<StatsData> {
+// todayKey lets the CLIENT define "today". The server runs in UTC, which for
+// an IST user is yesterday until 05:30 — computing week/month boundaries from
+// the server clock put early-morning workouts in the wrong window.
+export async function getStatsData(todayKey?: string): Promise<StatsData> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("exercises")
@@ -498,7 +501,15 @@ export async function getStatsData(): Promise<StatsData> {
       "workout_date, muscle_group, name, cardio_type, sets(position, reps, weight_kg, distance_km, distance_m)",
     );
   if (error) throw error;
-  return computeStats((data ?? []) as any[], new Date());
+  const today =
+    todayKey && /^\d{4}-\d{2}-\d{2}$/.test(todayKey)
+      ? new Date(
+          Number(todayKey.slice(0, 4)),
+          Number(todayKey.slice(5, 7)) - 1,
+          Number(todayKey.slice(8, 10)),
+        )
+      : new Date();
+  return computeStats((data ?? []) as any[], today);
 }
 
 // ---------- Coach ----------

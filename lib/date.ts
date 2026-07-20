@@ -1,3 +1,4 @@
+import { formatMonthYear } from "@/lib/dateFormat";
 export function toDateKey(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -17,11 +18,11 @@ export function parseMonthParam(
   return { year: now.getFullYear(), month: now.getMonth() + 1 };
 }
 
+
 export function monthLabel(year: number, month: number): string {
-  return new Date(year, month - 1, 1).toLocaleDateString(undefined, {
-    month: "long",
-    year: "numeric",
-  });
+  // Deterministic: this renders inside a client component that is server-
+  // rendered, and locale-dependent output mismatches on hydration.
+  return formatMonthYear(year, month);
 }
 
 export function prevMonth(year: number, month: number) {

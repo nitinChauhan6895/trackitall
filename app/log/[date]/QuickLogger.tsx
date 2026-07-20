@@ -26,8 +26,8 @@ import {
 } from "@/app/actions";
 import { libraryFor, type LibraryItem } from "@/lib/presets";
 import { HIIT_EXERCISES, resolveHiitMetrics } from "@/lib/hiit";
-import { enqueue } from "@/lib/offlineQueue";
-import { qk } from "@/lib/browserData";
+import { enqueue, isOffline, removeQueuedOps } from "@/lib/offlineQueue";
+import { qk, type MonthSummary } from "@/lib/browserData";
 import MuscleBadge from "@/components/MuscleBadge";
 
 // Cardio "Exercise" dropdown options (JSON cardio names → field type).
@@ -303,7 +303,10 @@ export default function QuickLogger({
       .catch(async () => {
         // Offline → keep the write, sync on reconnect. Genuine error → surface.
         if (typeof navigator !== "undefined" && !navigator.onLine) {
-          await enqueue("upsertExercise", payload);
+          // replaceKey: saving this draft again while still offline must
+          // REPLACE the queued op — the draft has no server id, so a second
+          // queued upsert would insert a duplicate when the queue syncs.
+          await enqueue("upsertExercise", payload, { replaceKey: ex.id });
           // Write it into the day's local cache too, so the day view shows the
           // exercise straight away instead of looking empty until it syncs.
           queryClient.setQueryData<Exercise[]>(qk.day(date), (prev) => {
@@ -336,6 +339,14 @@ export default function QuickLogger({
             const rest = (prev ?? []).filter((e) => e.id !== pending.id);
             return [...rest, pending];
           });
+          // And the home calendar's month summary, so the day fills in even
+          // before the queue syncs.
+          const [yy, mm] = [Number(date.slice(0, 4)), Number(date.slice(5, 7))];
+          queryClient.setQueryData<MonthSummary>(qk.month(yy, mm), (prev) => {
+            const cur = prev?.[date] ?? [];
+            if (cur.includes(ex.group)) return prev;
+            return { ...(prev ?? {}), [date]: [...cur, ex.group] };
+          });
           update(id, { status: "queued" });
         } else {
           update(id, { status: "error" });
@@ -351,7 +362,24 @@ export default function QuickLogger({
   function removeExercise(ex: DraftExercise) {
     // Optimistic removal; the server delete runs in the background.
     setItems((prev) => prev.filter((e) => e.id !== ex.id));
-    if (ex.savedId) deleteExerciseById(ex.savedId, date).catch(() => {});
+
+    if (ex.status === "queued") {
+      // Never reached the server — cancel the queued insert (or syncing would
+      // resurrect it) and drop its pending entry from the day cache.
+      removeQueuedOps(ex.id).catch(() => {});
+      queryClient.setQueryData<Exercise[]>(qk.day(date), (prev) =>
+        (prev ?? []).filter((e) => e.id !== `pending-${ex.id}`),
+      );
+    }
+
+    if (ex.savedId) {
+      deleteExerciseById(ex.savedId, date).catch(() => {
+        // Offline: queue the delete, or the exercise comes back on next sync.
+        if (isOffline()) {
+          enqueue("deleteExercise", { id: ex.savedId, date }).catch(() => {});
+        }
+      });
+    }
   }
 
   async function finish() {

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatShortDate } from "@/lib/dateFormat";
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,14 +25,9 @@ function latestValues(entries: Measurement[]) {
 const inputClass =
   "w-full rounded-xl border border-white/10 bg-surface px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
 
-function fmtDate(key: string) {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+// Locale-independent so the server-rendered HTML matches every device
+// (see lib/dateFormat.ts).
+const fmtDate = formatShortDate;
 
 export default function MeasurementsManager({
   initial,
