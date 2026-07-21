@@ -20,6 +20,7 @@ import {
   getCoachTemplates,
   buildCoachHistory,
   getNutritionWeek,
+  getGoalsData,
   getHabitsData,
   getStatsData,
   searchFoods,
@@ -1399,6 +1400,7 @@ export async function saveHabit(input: {
   target_per_period: number;
   unit?: string | null;
   reminder_time?: string | null;
+  reminder_dow?: number | null;
 }): Promise<{ id: string }> {
   const name = input.name.trim();
   if (!name) throw new Error("Name is required");
@@ -1418,6 +1420,14 @@ export async function saveHabit(input: {
     target_per_period: target,
     unit: input.unit?.trim().slice(0, 20) || null,
     reminder_time: input.reminder_time || null,
+    // Only weekly habits carry a day; a daily habit fires every day.
+    reminder_dow:
+      input.cadence === "weekly" &&
+      typeof input.reminder_dow === "number" &&
+      input.reminder_dow >= 0 &&
+      input.reminder_dow <= 6
+        ? input.reminder_dow
+        : null,
   };
 
   if (input.id) {
@@ -1489,4 +1499,76 @@ export async function setHabitCount(input: {
 export async function loadHabitsAction() {
   await requireUser();
   return getHabitsData();
+}
+
+// ---------- Goals ----------
+//
+// No revalidatePath: /goals reads through the client query cache, and
+// revalidating an async route with a loading.tsx remounts its client component
+// and discards state (see the habits note).
+
+const GOAL_METRIC_SET = new Set([
+  "sets",
+  "hard_sets",
+  "frequency",
+  "cardio_time",
+  "running_distance",
+]);
+
+export async function saveGoal(input: {
+  id?: string;
+  metric: string;
+  target: number;
+  start_date: string;
+  end_date: string;
+  name?: string | null;
+  notes?: string | null;
+}): Promise<{ id: string }> {
+  if (!GOAL_METRIC_SET.has(input.metric)) throw new Error("Invalid goal type");
+  if (!DATE_RE.test(input.start_date) || !DATE_RE.test(input.end_date)) {
+    throw new Error("Invalid dates");
+  }
+  if (input.end_date < input.start_date) throw new Error("End date is before the start");
+  const target = Number(input.target);
+  if (!Number.isFinite(target) || target <= 0) throw new Error("Target must be above zero");
+
+  const { supabase, user } = await requireUser();
+  const row = {
+    metric: input.metric,
+    target,
+    start_date: input.start_date,
+    end_date: input.end_date,
+    name: input.name?.trim().slice(0, 60) || null,
+    notes: input.notes?.trim().slice(0, 300) || null,
+  };
+
+  if (input.id) {
+    const { error } = await supabase.from("goals").update(row).eq("id", input.id);
+    if (error) throw error;
+    return { id: input.id };
+  }
+  const { data, error } = await supabase
+    .from("goals")
+    .insert({ ...row, user_id: user.id })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { id: data.id as string };
+}
+
+export async function deleteGoal(id: string) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.from("goals").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function setGoalArchived(id: string, archived: boolean) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.from("goals").update({ archived }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function loadGoalsAction() {
+  await requireUser();
+  return getGoalsData();
 }

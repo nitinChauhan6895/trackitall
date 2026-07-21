@@ -144,7 +144,7 @@ async function run() {
     const { data: habits } = await supabase
       .from("habits")
       .select(
-        "id, name, description, icon, color, cadence, kind, category, target_per_period, unit, reminder_time, archived, position",
+        "id, name, description, icon, color, cadence, kind, category, target_per_period, unit, reminder_time, reminder_dow, archived, position",
       )
       .eq("user_id", userId)
       .eq("archived", false);
@@ -154,7 +154,10 @@ async function run() {
     if (withReminder.length === 0) continue;
 
     for (const device of devices) {
-      const { date: localDate, minutes: nowMinutes } = localNow(device.timezone, now);
+      const { date: localDate, minutes: nowMinutes, dow: localDow } = localNow(
+        device.timezone,
+        now,
+      );
 
       // Today's logs, to skip habits already done.
       const { data: logs } = await supabase
@@ -164,6 +167,11 @@ async function run() {
         .eq("log_date", localDate);
 
       for (const habit of withReminder) {
+        // A weekly habit fires on its chosen weekday only; without this it
+        // would nag every single day at the same time.
+        if (habit.cadence === "weekly") {
+          if (habit.reminder_dow == null || habit.reminder_dow !== localDow) continue;
+        }
         const at = parseReminderMinutes(habit.reminder_time);
         if (at == null || !isDue(at, nowMinutes, WINDOW_MINUTES)) continue;
         checked++;

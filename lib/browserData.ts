@@ -31,6 +31,7 @@ export const qk = {
   stats: () => ["stats"] as const,
   circuits: () => ["circuits"] as const,
   habits: () => ["habits"] as const,
+  goals: () => ["goals"] as const,
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");

@@ -39,6 +39,7 @@ import {
 } from "@/lib/nutrition";
 import { toDateKey } from "@/lib/date";
 import { type HabitsData } from "@/lib/habits";
+import { type Goal, type GoalExercise } from "@/lib/goals";
 
 export async function getProfile(): Promise<Profile> {
   const supabase = createClient();
@@ -976,7 +977,7 @@ export async function getHabitsData(days = 200): Promise<HabitsData> {
   const [hRes, lRes] = await Promise.all([
     supabase
       .from("habits")
-      .select("id, name, description, icon, color, cadence, kind, category, target_per_period, unit, reminder_time, archived, position")
+      .select("id, name, description, icon, color, cadence, kind, category, target_per_period, unit, reminder_time, reminder_dow, archived, position")
       .eq("archived", false)
       .order("position", { ascending: true }),
     supabase
@@ -996,3 +997,46 @@ export async function getHabitsData(days = 200): Promise<HabitsData> {
     logs: (lRes.data ?? []) as HabitsData["logs"],
   };
 }
+
+// ---------- Goals ----------
+
+/** Goals plus the exercise rows their progress is derived from.
+ *
+ *  One query for each: progress is never stored, so the goal window and the
+ *  workouts behind it can't drift apart. */
+export async function getGoalsData(): Promise<{
+  goals: Goal[];
+  exercises: GoalExercise[];
+}> {
+  const supabase = createClient();
+  const [gRes, eRes] = await Promise.all([
+    supabase
+      .from("goals")
+      .select("id, metric, target, start_date, end_date, name, notes, archived")
+      .order("end_date", { ascending: false }),
+    // Bounded window: goals older than this are history, and their progress
+    // bars would be pulling a year of sets into the browser otherwise.
+    supabase.from("exercises").select(GOAL_EXERCISE_SELECT(true)),
+  ]);
+
+  if (gRes.error) {
+    if (isMissingTable(gRes.error)) return { goals: [], exercises: [] };
+    throw gRes.error;
+  }
+  let exercises = eRes.data;
+  if (eRes.error && isMissingColumn(eRes.error)) {
+    const retry = await supabase.from("exercises").select(GOAL_EXERCISE_SELECT(false));
+    exercises = retry.data;
+  } else if (eRes.error) {
+    throw eRes.error;
+  }
+  return {
+    goals: (gRes.data ?? []) as Goal[],
+    exercises: (exercises ?? []) as unknown as GoalExercise[],
+  };
+}
+
+const GOAL_EXERCISE_SELECT = (withHard: boolean) =>
+  `workout_date, muscle_group, cardio_type, sets(reps, weight_kg, time_seconds, distance_km, distance_m${
+    withHard ? ", is_hard" : ""
+  })`;

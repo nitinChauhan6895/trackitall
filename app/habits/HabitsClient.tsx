@@ -14,6 +14,7 @@ import { toDateKey } from "@/lib/date";
 import { formatShortDate } from "@/lib/dateFormat";
 import {
   CADENCES,
+  DOW_LABELS,
   HABIT_COLORS,
   HABIT_CATEGORIES,
   HABIT_ICONS,
@@ -494,9 +495,16 @@ function LoggerView({
         >
           ←
         </button>
-        <h1 className="flex items-center gap-2 truncate px-2 text-base font-bold">
-          <span aria-hidden>{habit.icon ?? "✅"}</span>
-          <span className="truncate">{habit.name}</span>
+        <h1 className="flex min-w-0 flex-1 flex-col items-center px-2">
+          <span className="flex max-w-full items-center gap-2 text-base font-bold">
+            <span aria-hidden>{habit.icon ?? "✅"}</span>
+            <span className="truncate">{habit.name}</span>
+          </span>
+          {habit.description && (
+            <span className="max-w-full truncate text-xs font-normal text-muted">
+              {habit.description}
+            </span>
+          )}
         </h1>
         <button
           type="button"
@@ -925,6 +933,7 @@ function EditView({
   );
   const [unit, setUnit] = useState(habit?.unit ?? "");
   const [reminder, setReminder] = useState(habit?.reminder_time ?? "");
+  const [reminderDow, setReminderDow] = useState<number | null>(habit?.reminder_dow ?? null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -946,6 +955,7 @@ function EditView({
         target_per_period: kind === "timer" ? n * 60 : n,
         unit: kind === "timer" ? "min" : unit,
         reminder_time: reminder || null,
+        reminder_dow: cadence === "weekly" ? reminderDow : null,
       });
       onDone();
     } catch (e: any) {
@@ -1116,17 +1126,45 @@ function EditView({
           )}
         </div>
 
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-muted">
-            Reminder time (optional)
-          </span>
+        <div>
+          <p className="mb-1 text-sm font-medium text-muted">Reminder (optional)</p>
+          {cadence === "weekly" && (
+            <>
+              {/* A weekly habit needs a DAY as well as a time — "Sunday 09:00",
+                  not just 09:00, which would fire every day of the week. */}
+              <div className="mb-2 flex gap-1.5">
+                {DOW.map((d, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setReminderDow(reminderDow === i ? null : i)}
+                    aria-pressed={reminderDow === i}
+                    aria-label={DOW_LABELS[i]}
+                    className={[
+                      "h-9 flex-1 rounded-lg border text-xs font-semibold transition",
+                      reminderDow === i
+                        ? "border-green bg-green-tint text-green"
+                        : "border-white/10 text-muted",
+                    ].join(" ")}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+              <p className="mb-2 text-xs text-muted">
+                {reminderDow === null
+                  ? "No day picked — the reminder won't fire. Choose one."
+                  : `Every ${DOW_LABELS[reminderDow]}`}
+              </p>
+            </>
+          )}
           <input
             value={reminder}
             onChange={(e) => setReminder(e.target.value)}
             type="time"
             className={INPUT}
           />
-        </label>
+        </div>
 
         {error && <p className="text-sm text-orange">{error}</p>}
 

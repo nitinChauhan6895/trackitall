@@ -78,7 +78,12 @@ export async function sendPush(
  * server runs in UTC while the user is in IST — the mismatch that has caused
  * every date bug in this app so far.
  */
-export function localNow(timeZone: string, now = new Date()) {
+export function localNow(timeZone: string, now = new Date()): {
+  date: string;
+  minutes: number;
+  /** Monday = 0 .. Sunday = 6, matching habits.reminder_dow. */
+  dow: number;
+} {
   let parts: Intl.DateTimeFormatPart[];
   try {
     parts = new Intl.DateTimeFormat("en-CA", {
@@ -97,9 +102,12 @@ export function localNow(timeZone: string, now = new Date()) {
   }
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
   const hour = Number(get("hour")) % 24;
+  const date = `${get("year")}-${get("month")}-${get("day")}`;
+  const [y, m, d] = date.split("-").map(Number);
   return {
-    date: `${get("year")}-${get("month")}-${get("day")}`,
+    date,
     minutes: hour * 60 + Number(get("minute")),
+    dow: (new Date(y, m - 1, d).getDay() + 6) % 7,
   };
 }
 

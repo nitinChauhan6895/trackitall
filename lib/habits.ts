@@ -27,6 +27,8 @@ export type Habit = {
   target_per_period: number;
   unit: string | null;
   reminder_time: string | null;
+  /** Weekly habits only: 0 = Monday .. 6 = Sunday. null means any day. */
+  reminder_dow: number | null;
   archived: boolean;
   position: number;
 };
@@ -48,6 +50,11 @@ export const HABIT_COLORS = [
   "#5A6FE0",
   "#C79BE8",
   "#E0A52A",
+];
+
+/** Reminder weekday labels, Monday-first to match the app's week strips. */
+export const DOW_LABELS = [
+  "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
 ];
 
 export const HABIT_ICONS = [

@@ -1,17 +1,14 @@
 import type { EvaluatedBadge } from "@/lib/badges";
+import { formatShortDate } from "@/lib/dateFormat";
 
 function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function fmtDate(key: string): string {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+// Locale-independent: this now renders inside the client Goals page, where
+// toLocaleDateString would resolve differently on server and device and
+// mismatch on hydration (see lib/dateFormat.ts).
+const fmtDate = formatShortDate;
 
 // Orange progress ring shown only while a badge is in progress.
 function Ring({ frac }: { frac: number }) {
