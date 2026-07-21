@@ -7,6 +7,13 @@
 export const CADENCES = ["daily", "weekly"] as const;
 export type Cadence = (typeof CADENCES)[number];
 
+/** A habit is either a tally or a duration. */
+export const KINDS = ["count", "timer"] as const;
+export type HabitKind = (typeof KINDS)[number];
+
+/** Starter categories for the filter chips; users can type their own. */
+export const HABIT_CATEGORIES = ["Health", "Diet", "Fitness", "Mind", "Work"];
+
 export type Habit = {
   id: string;
   name: string;
@@ -14,7 +21,9 @@ export type Habit = {
   icon: string | null;
   color: string | null;
   cadence: Cadence;
-  /** daily: units per day (8 glasses). weekly: times per week (5 runs). */
+  kind: HabitKind;
+  category: string | null;
+  /** Counter: units per period (8 glasses). Timer: SECONDS per period. */
   target_per_period: number;
   unit: string | null;
   reminder_time: string | null;
@@ -216,4 +225,40 @@ export function nextCount(habit: Habit, logs: HabitLog[], date: string): number 
 export function completeCount(habit: Habit, logs: HabitLog[], date: string): number {
   if (isComplete(habit, logs, date)) return 0;
   return habit.cadence === "daily" ? habit.target_per_period : 1;
+}
+
+
+// ---- counter / timer presentation ----
+
+/** "7:05", or "12:03:20" once it passes an hour. */
+export function formatDuration(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+}
+
+/** The "7/10 g" or "0/10min" badge under a habit's name. */
+export function progressLabel(habit: Habit, logs: HabitLog[], date: string): string {
+  const cur = countOn(logs, habit.id, date);
+  if (habit.kind === "timer") {
+    return `${Math.floor(cur / 60)}/${Math.round(habit.target_per_period / 60)}min`;
+  }
+  return `${cur}/${habit.target_per_period}${habit.unit ? ` ${habit.unit}` : ""}`;
+}
+
+/** 0..1 share of the period's target reached on `date`. */
+export function progressRatio(habit: Habit, logs: HabitLog[], date: string): number {
+  if (habit.cadence === "weekly") {
+    return Math.min(1, weekProgress(habit, logs, date) / habit.target_per_period);
+  }
+  const cur = countOn(logs, habit.id, date);
+  return Math.min(1, habit.target_per_period > 0 ? cur / habit.target_per_period : 0);
+}
+
+/** How much one tap of "+" adds: a minute for timers, one unit otherwise. */
+export function stepSize(habit: Habit): number {
+  return habit.kind === "timer" ? 60 : 1;
 }

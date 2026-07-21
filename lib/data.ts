@@ -966,7 +966,7 @@ export async function getHabitsData(days = 200): Promise<HabitsData> {
   const [hRes, lRes] = await Promise.all([
     supabase
       .from("habits")
-      .select("id, name, description, icon, color, cadence, target_per_period, unit, reminder_time, archived, position")
+      .select("id, name, description, icon, color, cadence, kind, category, target_per_period, unit, reminder_time, archived, position")
       .eq("archived", false)
       .order("position", { ascending: true }),
     supabase

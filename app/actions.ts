@@ -1389,6 +1389,8 @@ export async function saveHabit(input: {
   icon?: string | null;
   color?: string | null;
   cadence: string;
+  kind?: string;
+  category?: string | null;
   target_per_period: number;
   unit?: string | null;
   reminder_time?: string | null;
@@ -1396,6 +1398,7 @@ export async function saveHabit(input: {
   const name = input.name.trim();
   if (!name) throw new Error("Name is required");
   if (!CADENCE_SET.has(input.cadence)) throw new Error("Invalid cadence");
+  const kind = input.kind === "timer" ? "timer" : "count";
   const target = Math.max(1, Math.round(Number(input.target_per_period) || 1));
 
   const { supabase, user } = await requireUser();
@@ -1405,6 +1408,8 @@ export async function saveHabit(input: {
     icon: input.icon || null,
     color: input.color || null,
     cadence: input.cadence,
+    kind,
+    category: input.category?.trim().slice(0, 40) || null,
     target_per_period: target,
     unit: input.unit?.trim().slice(0, 20) || null,
     reminder_time: input.reminder_time || null,
@@ -1426,6 +1431,13 @@ export async function saveHabit(input: {
     .single();
   if (error) throw error;
   return { id: data.id as string };
+}
+
+/** Archive hides a habit from the list without destroying its history. */
+export async function setHabitArchived(id: string, archived: boolean) {
+  const { supabase } = await requireUser();
+  const { error } = await supabase.from("habits").update({ archived }).eq("id", id);
+  if (error) throw error;
 }
 
 export async function deleteHabit(id: string) {

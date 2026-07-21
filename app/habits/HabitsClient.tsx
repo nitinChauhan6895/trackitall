@@ -2,19 +2,31 @@
 
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { loadHabitsAction, saveHabit, setHabitCount, deleteHabit } from "@/app/actions";
+import {
+  loadHabitsAction,
+  saveHabit,
+  setHabitCount,
+  deleteHabit,
+  setHabitArchived,
+} from "@/app/actions";
 import { qk } from "@/lib/browserData";
 import { toDateKey } from "@/lib/date";
 import { formatShortDate } from "@/lib/dateFormat";
 import {
   CADENCES,
   HABIT_COLORS,
+  HABIT_CATEGORIES,
   HABIT_ICONS,
+  KINDS,
   addDaysKey,
   applyLog,
   completeCount,
   countOn,
+  formatDuration,
   nextCount,
+  progressLabel,
+  progressRatio,
+  stepSize,
   habitStreak,
   isComplete,
   weekDays,
@@ -22,16 +34,18 @@ import {
   weekProgress,
   type Cadence,
   type Habit,
+  type HabitKind,
   type HabitsData,
 } from "@/lib/habits";
 
 const DOW = ["M", "T", "W", "T", "F", "S", "S"];
+const DOW_2 = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const INPUT =
   "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-green";
 
 type View =
   | { name: "list" }
-  | { name: "day" }
+  | { name: "logger"; habitId: string }
   | { name: "detail"; habitId: string }
   | { name: "edit"; habitId?: string };
 
@@ -90,33 +104,54 @@ export default function HabitsClient({
   }
 
   const detail = view.name === "detail" ? habits.find((h) => h.id === view.habitId) : null;
+  const logging = view.name === "logger" ? habits.find((h) => h.id === view.habitId) : null;
+
+  /** Share a habit's progress through the OS share sheet, clipboard otherwise. */
+  async function share(habit: Habit) {
+    const streak = habitStreak(habit, logs, today);
+    const text = `${habit.icon ?? ""} ${habit.name} — ${streak} ${
+      habit.cadence === "daily" ? "day" : "week"
+    } streak on TrackItAll`.trim();
+    try {
+      const nav = navigator as any;
+      if (nav?.share) await nav.share({ text });
+      else await nav?.clipboard?.writeText(text);
+    } catch {
+      // User dismissed the sheet — nothing to report.
+    }
+  }
 
   return (
     <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
       {view.name === "list" && (
-        <ListView
-          habits={habits}
-          logs={logs}
-          today={today}
-          onOpenDay={() => setView({ name: "day" })}
-          onOpen={(id) => setView({ name: "detail", habitId: id })}
-          onNew={() => setView({ name: "edit" })}
-          onToggle={(h, d) => bump(h, d)}
-          onStep={(h, d) => bump(h, d, "step")}
-          onSetCount={(h, d, c) => bump(h, d, c)}
-        />
-      )}
-
-      {view.name === "day" && (
-        <DayView
+        <TodayView
           habits={habits}
           logs={logs}
           today={today}
           date={selectedDay}
           onDate={setSelectedDay}
+          onOpen={(id) => setView({ name: "logger", habitId: id })}
+          onNew={() => setView({ name: "edit" })}
+          onToggle={(h, d) => bump(h, d)}
+        />
+      )}
+
+      {view.name === "logger" && logging && (
+        <LoggerView
+          habit={logging}
+          logs={logs}
+          today={today}
+          date={selectedDay}
           onBack={() => setView({ name: "list" })}
-          onOpen={(id) => setView({ name: "detail", habitId: id })}
-          onToggle={(h) => bump(h, selectedDay)}
+          onSetCount={(c) => bump(logging, selectedDay, c)}
+          onEdit={() => setView({ name: "edit", habitId: logging.id })}
+          onShare={() => share(logging)}
+          onArchive={async () => {
+            await setHabitArchived(logging.id, true);
+            setView({ name: "list" });
+            refresh();
+          }}
+          onDelete={() => setView({ name: "detail", habitId: logging.id })}
         />
       )}
 
@@ -125,7 +160,7 @@ export default function HabitsClient({
           habit={detail}
           logs={logs}
           today={today}
-          onBack={() => setView({ name: "list" })}
+          onBack={() => setView({ name: "logger", habitId: detail.id })}
           onEdit={() => setView({ name: "edit", habitId: detail.id })}
           onToggle={() => bump(detail, today)}
           onToggleDay={(d) => bump(detail, d)}
@@ -149,209 +184,183 @@ export default function HabitsClient({
     </main>
   );
 }
+// ---------------- today list ----------------
 
-// ---------------- list ----------------
-
-function ListView({
+// The list is date-aware: the week strip picks the day everything below acts
+// on, which folds the old separate "daily" screen into one screen and makes
+// back-dating the same gesture as logging today.
+function TodayView({
   habits,
   logs,
   today,
+  date,
+  onDate,
   onOpen,
-  onOpenDay,
   onNew,
   onToggle,
-  onStep,
-  onSetCount,
 }: {
   habits: Habit[];
   logs: HabitsData["logs"];
   today: string;
+  date: string;
+  onDate: (d: string) => void;
   onOpen: (id: string) => void;
-  onOpenDay: () => void;
   onNew: () => void;
   onToggle: (h: Habit, date: string) => void;
-  onStep: (h: Habit, date: string) => void;
-  onSetCount: (h: Habit, date: string, count: number) => void;
 }) {
-  const [filter, setFilter] = useState<"all" | Cadence>("all");
-  const ov = weekOverview(habits, logs, today);
-  const shown = habits.filter((h) => filter === "all" || h.cadence === filter);
-  const daily = shown.filter((h) => h.cadence === "daily");
-  const weekly = shown.filter((h) => h.cadence === "weekly");
-  const maxDone = Math.max(1, ...ov.perDay.map((d) => d.done));
+  const [cat, setCat] = useState<string>("All");
+
+  const categories = [
+    "All",
+    ...Array.from(new Set(habits.map((h) => h.category).filter(Boolean) as string[])),
+  ];
+  const shown = habits.filter((h) => cat === "All" || h.category === cat);
+  const days = weekDays(date);
+  const isPast = date !== today;
 
   return (
     <>
-      <header className="flex items-start justify-between gap-3 pb-3 pt-5">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            Habits <span aria-hidden>🌿</span>
-          </h1>
-          <p className="mt-0.5 text-sm text-muted">Small habits, big changes.</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={onOpenDay}
-            aria-label="Today's habits"
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-surface text-lg active:bg-white/10"
-          >
-            🗓
-          </button>
-          <button
-            type="button"
-            onClick={onNew}
-            aria-label="New habit"
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-green text-2xl font-light text-ink-inverse active:scale-95"
-          >
-            +
-          </button>
-        </div>
+      <header className="flex items-center justify-between gap-3 pb-2 pt-5">
+        <button
+          type="button"
+          onClick={() => onDate(today)}
+          className={[
+            "rounded-full px-3 py-1.5 text-xs font-bold transition",
+            isPast ? "bg-orange text-white" : "bg-green/15 text-green",
+          ].join(" ")}
+        >
+          {isPast ? "Back to today" : "Today"}
+        </button>
+        <h1 className="text-lg font-bold tracking-tight">
+          {isPast ? formatShortDate(date) : "Today"}
+        </h1>
+        <button
+          type="button"
+          onClick={onNew}
+          aria-label="New habit"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-green text-2xl font-light text-ink-inverse active:scale-95"
+        >
+          +
+        </button>
       </header>
+
+      {/* Week strip — each day shows how much of that day was completed. */}
+      <div className="mt-2 flex justify-between">
+        {days.map((d, i) => {
+          const sel = d === date;
+          const future = d > today;
+          const due = habits.filter((h) => h.cadence === "daily");
+          const done = due.filter((h) => isComplete(h, logs, d)).length;
+          const pct = due.length ? done / due.length : 0;
+          return (
+            <button
+              key={d}
+              type="button"
+              disabled={future}
+              onClick={() => onDate(d)}
+              aria-label={`Show ${d}`}
+              aria-pressed={sel}
+              className="flex flex-1 flex-col items-center gap-1.5 disabled:opacity-30"
+            >
+              <span className="text-[11px] text-muted">{DOW_2[i]}</span>
+              <span className="relative flex h-9 w-9 items-center justify-center">
+                <svg viewBox="0 0 36 36" className="absolute inset-0 h-full w-full -rotate-90">
+                  <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
+                  {!future && pct > 0 && (
+                    <circle
+                      cx="18" cy="18" r="16" fill="none" stroke="#A8E830" strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeDasharray={2 * Math.PI * 16}
+                      strokeDashoffset={2 * Math.PI * 16 * (1 - pct)}
+                    />
+                  )}
+                </svg>
+                <span
+                  className={[
+                    "relative text-sm",
+                    sel ? "font-bold text-ink" : "text-muted",
+                  ].join(" ")}
+                >
+                  {Number(d.slice(8, 10))}
+                </span>
+                {sel && (
+                  <span
+                    aria-hidden
+                    className="absolute -inset-1 rounded-full border-2 border-orange"
+                  />
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {categories.length > 1 && (
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+          {categories.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setCat(c)}
+              className={[
+                "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition",
+                cat === c ? "bg-green text-ink-inverse" : "bg-white/[0.06] text-muted",
+              ].join(" ")}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
 
       {habits.length === 0 ? (
         <EmptyState onNew={onNew} />
       ) : (
-        <>
-          {/* This week overview */}
-          <section className="rounded-2xl border border-white/10 bg-surface p-4">
-            <p className="text-sm font-medium text-ink">This Week Overview</p>
-            <div className="mt-3 flex items-center gap-4">
-              <Ring percent={ov.percent} />
-              <div className="min-w-0 flex-1 space-y-2">
-                <p className="flex items-center gap-2 text-sm">
-                  <span className="text-green" aria-hidden>
-                    ✓
-                  </span>
-                  <span className="font-bold text-ink">{ov.completed}</span>
-                  <span className="text-muted">Completed</span>
-                </p>
-                <p className="flex items-center gap-2 text-sm">
-                  <span className="text-orange" aria-hidden>
-                    ◷
-                  </span>
-                  <span className="font-bold text-ink">{ov.remaining}</span>
-                  <span className="text-muted">Remaining</span>
-                </p>
-              </div>
-              <div className="flex h-16 shrink-0 items-end gap-0.5">
-                {ov.perDay.map((d, i) => (
-                  <div key={d.key} className="flex w-2.5 flex-col items-center gap-1">
-                    <div
-                      className="w-full rounded-sm"
-                      style={{
-                        height: `${d.future ? 4 : Math.max(4, (d.done / maxDone) * 44)}px`,
-                        background: d.future
-                          ? "#2A2D24"
-                          : d.due > 0 && d.done >= d.due
-                            ? "#A8E830"
-                            : d.done > 0
-                              ? "#FF6233"
-                              : "#33362C",
-                      }}
-                    />
-                    <span className="text-[9px] text-muted">{DOW[i]}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* Filters */}
-          <div className="mt-4 flex rounded-xl bg-white/[0.06] p-1">
-            {(["all", "daily", "weekly"] as const).map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className={[
-                  "flex-1 rounded-lg py-2 text-xs font-semibold capitalize transition",
-                  filter === f ? "bg-green text-ink-inverse" : "text-muted",
-                ].join(" ")}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-
-          {daily.length > 0 && (
-            <>
-              <h2 className="mb-2 mt-5 text-sm font-semibold text-muted">Daily Habits</h2>
-              <ul className="space-y-2.5">
-                {daily.map((h) => (
-                  <li key={h.id}>
-                    <HabitRow
-                      habit={h}
-                      logs={logs}
-                      today={today}
-                      onOpen={() => onOpen(h.id)}
-                      onToggleDay={(d) => onToggle(h, d)}
-                      onStep={(d) => onStep(h, d)}
-                      onSetCount={(d, c) => onSetCount(h, d, c)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          {weekly.length > 0 && (
-            <>
-              <h2 className="mb-2 mt-5 text-sm font-semibold text-muted">Weekly Habits</h2>
-              <ul className="space-y-2.5">
-                {weekly.map((h) => (
-                  <li key={h.id}>
-                    <HabitRow
-                      habit={h}
-                      logs={logs}
-                      today={today}
-                      onOpen={() => onOpen(h.id)}
-                      onToggleDay={(d) => onToggle(h, d)}
-                      onStep={(d) => onStep(h, d)}
-                      onSetCount={(d, c) => onSetCount(h, d, c)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </>
+        <ul className="mt-4 space-y-2.5">
+          {shown.map((h) => (
+            <li key={h.id}>
+              <HabitCard
+                habit={h}
+                logs={logs}
+                date={date}
+                onOpen={() => onOpen(h.id)}
+                onToggle={() => onToggle(h, date)}
+              />
+            </li>
+          ))}
+        </ul>
       )}
     </>
   );
 }
 
-function HabitRow({
+/** A row whose background fills left-to-right with the day's progress. */
+function HabitCard({
   habit,
   logs,
-  today,
+  date,
   onOpen,
-  onToggleDay,
-  onStep,
-  onSetCount,
+  onToggle,
 }: {
   habit: Habit;
   logs: HabitsData["logs"];
-  today: string;
+  date: string;
   onOpen: () => void;
-  onToggleDay: (date: string) => void;
-  onStep: (date: string) => void;
-  onSetCount: (date: string, count: number) => void;
+  onToggle: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  // The day the user last acted on, so back-dating has a visible anchor
-  // rather than a dot that silently changes somewhere in the strip.
-  const [picked, setPicked] = useState<string | null>(null);
   const tone = habit.color ?? "#A8E830";
-  const streak = habitStreak(habit, logs, today);
-  const days = weekDays(today);
-  const doneToday = isComplete(habit, logs, today);
-  const cur = countOn(logs, habit.id, today);
-  const multi = habit.cadence === "daily" && habit.target_per_period > 1;
+  const ratio = progressRatio(habit, logs, date);
+  const done = isComplete(habit, logs, date);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-surface">
-      <div className="flex items-center gap-3 p-3">
+    <div className="relative overflow-hidden rounded-2xl bg-surface">
+      {/* Progress fill behind the content. */}
+      <div
+        aria-hidden
+        className="absolute inset-y-0 left-0 transition-[width] duration-300"
+        style={{ width: `${ratio * 100}%`, backgroundColor: `${tone}${done ? "" : "40"}` }}
+      />
+      <div className="relative flex items-center gap-3 p-3">
         <button
           type="button"
           onClick={onOpen}
@@ -359,175 +368,37 @@ function HabitRow({
         >
           <span
             aria-hidden
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl"
-            style={{ backgroundColor: `${tone}1F` }}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-page/40 text-xl"
           >
             {habit.icon ?? "✅"}
           </span>
           <span className="min-w-0">
-            <span className="block truncate font-semibold text-ink">{habit.name}</span>
-            <span className="mt-0.5 block text-xs text-muted">
-              {streak > 0 ? (
-                <>
-                  <span aria-hidden>🔥</span> {streak}{" "}
-                  {habit.cadence === "daily" ? "day" : "week"} streak
-                </>
-              ) : habit.cadence === "weekly" ? (
-                `${weekProgress(habit, logs, today)} / ${habit.target_per_period} this week`
-              ) : (
-                "No streak yet"
-              )}
+            <span
+              className="block truncate font-semibold"
+              style={{ color: done ? "#141807" : undefined }}
+            >
+              {habit.name}
+            </span>
+            <span
+              className="mt-1 inline-block rounded-md bg-page/50 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-ink"
+            >
+              {progressLabel(habit, logs, date)}
             </span>
           </span>
         </button>
-
-        {/* Today's action, always one tap away. */}
-        {multi ? (
-          <button
-            type="button"
-            onClick={() => onStep(today)}
-            aria-label={`Add one to ${habit.name}`}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-bold tabular-nums active:scale-95"
-            style={{ borderColor: `${tone}66`, color: tone }}
-          >
-            <span className="text-base leading-none">+</span>
-            {cur}/{habit.target_per_period}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => onToggleDay(today)}
-            aria-label={doneToday ? `Undo ${habit.name}` : `Mark ${habit.name} done`}
-            aria-pressed={doneToday}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm active:scale-95"
-            style={{
-              backgroundColor: doneToday ? tone : "transparent",
-              border: doneToday ? "none" : "1.5px solid rgba(255,255,255,0.25)",
-              color: doneToday ? "#141807" : "transparent",
-            }}
-          >
-            ✓
-          </button>
-        )}
-
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          aria-label={`${open ? "Hide" : "Show"} ${habit.name} week`}
-          className="shrink-0 px-1 text-muted active:opacity-70"
+          onClick={onToggle}
+          aria-label={done ? `Undo ${habit.name}` : `Complete ${habit.name}`}
+          aria-pressed={done}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm transition active:scale-90"
+          style={{
+            backgroundColor: done ? "#141807" : "rgba(255,255,255,0.07)",
+            color: done ? tone : "rgba(255,255,255,0.35)",
+          }}
         >
-          {open ? "⌃" : "⌄"}
+          ✓
         </button>
-      </div>
-
-      {/* Expanded: tap any past day to mark it done or undo it. */}
-      {open && (
-        <div className="border-t border-white/10 px-3 py-3">
-          <div className="flex justify-between">
-            {days.map((d, i) => {
-              const done = isComplete(habit, logs, d);
-              const future = d > today;
-              return (
-                <button
-                  key={d}
-                  type="button"
-                  disabled={future}
-                  onClick={() => {
-                    setPicked(d);
-                    onToggleDay(d);
-                  }}
-                  aria-label={`${habit.name} on ${d}`}
-                  aria-pressed={done}
-                  className="flex flex-col items-center gap-1.5 disabled:opacity-25"
-                >
-                  <span className="text-[10px] text-muted">{DOW[i]}</span>
-                  <span
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-xs"
-                    style={{
-                      backgroundColor: done ? tone : "transparent",
-                      border: done ? "none" : "1px solid rgba(255,255,255,0.2)",
-                      color: done ? "#141807" : "transparent",
-                      outline: picked === d ? `2px solid ${tone}` : "none",
-                      outlineOffset: "2px",
-                    }}
-                    aria-hidden
-                  >
-                    ✓
-                  </span>
-                  <span
-                    className="text-[10px]"
-                    style={{ color: picked === d ? tone : undefined }}
-                  >
-                    {Number(d.slice(8, 10))}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {picked && (
-            <p className="mt-3 text-center text-xs">
-              <span className="font-semibold" style={{ color: tone }}>
-                {formatShortDate(picked)}
-              </span>
-              <span className="text-muted">
-                {" "}
-                · {isComplete(habit, logs, picked) ? "marked done" : "cleared"}
-                {picked === today ? " (today)" : ""}
-              </span>
-            </p>
-          )}
-          {multi && (
-            <div className="mt-3 flex items-center justify-center gap-4">
-              <button
-                type="button"
-                onClick={() => onSetCount(today, Math.max(0, cur - 1))}
-                aria-label="Decrease"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-lg text-ink active:bg-white/10"
-              >
-                −
-              </button>
-              <span className="text-sm font-semibold tabular-nums text-ink">
-                {cur} / {habit.target_per_period} {habit.unit ?? ""}
-              </span>
-              <button
-                type="button"
-                onClick={() => onSetCount(today, cur + 1)}
-                aria-label="Increase"
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-lg text-ink active:bg-white/10"
-              >
-                +
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Ring({ percent }: { percent: number }) {
-  const R = 30;
-  const C = 2 * Math.PI * R;
-  return (
-    <div className="relative h-[76px] w-[76px] shrink-0">
-      <svg viewBox="0 0 76 76" className="h-full w-full -rotate-90">
-        <circle cx="38" cy="38" r={R} fill="none" stroke="#2A2D24" strokeWidth="7" />
-        <circle
-          cx="38"
-          cy="38"
-          r={R}
-          fill="none"
-          stroke="#A8E830"
-          strokeWidth="7"
-          strokeLinecap="round"
-          strokeDasharray={C}
-          strokeDashoffset={C - (C * Math.min(100, percent)) / 100}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-lg font-bold leading-none text-ink">{percent}%</span>
-        <span className="text-[9px] text-muted">Completed</span>
       </div>
     </div>
   );
@@ -554,158 +425,229 @@ function EmptyState({ onNew }: { onNew: () => void }) {
   );
 }
 
-// ---------------- day ----------------
+// ---------------- logger (counter / timer) ----------------
 
-function DayView({
-  habits,
+function LoggerView({
+  habit,
   logs,
   today,
   date,
-  onDate,
   onBack,
-  onOpen,
-  onToggle,
+  onSetCount,
+  onEdit,
+  onArchive,
+  onDelete,
+  onShare,
 }: {
-  habits: Habit[];
+  habit: Habit;
   logs: HabitsData["logs"];
   today: string;
   date: string;
-  onDate: (d: string) => void;
   onBack: () => void;
-  onOpen: (id: string) => void;
-  onToggle: (h: Habit) => void;
+  onSetCount: (count: number) => void;
+  onEdit: () => void;
+  onArchive: () => void;
+  onDelete: () => void;
+  onShare: () => void;
 }) {
-  const days = weekDays(date);
-  const due = habits.filter((h) => h.cadence === "daily");
-  const doneCount = due.filter((h) => isComplete(h, logs, date)).length;
-  const pct = due.length === 0 ? 0 : Math.round((doneCount / due.length) * 100);
+  const tone = habit.color ?? "#A8E830";
+  const cur = countOn(logs, habit.id, date);
+  const target = habit.target_per_period;
+  const ratio = Math.min(1, target > 0 ? cur / target : 0);
+  const done = cur >= target;
+  const [menu, setMenu] = useState(false);
+
+  // Timer: ticks locally and only persists when paused or completed, so a
+  // running timer doesn't write a row every second.
+  const [running, setRunning] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+  const shown = habit.kind === "timer" ? cur + elapsed : cur;
+  const shownRatio = Math.min(1, target > 0 ? shown / target : 0);
+
+  function stopTimer() {
+    setRunning(false);
+    if (elapsed > 0) {
+      onSetCount(cur + elapsed);
+      setElapsed(0);
+    }
+  }
+
+  const R = 92;
+  const C = 2 * Math.PI * R;
 
   return (
     <>
-      <header className="flex items-center gap-3 py-4">
+      <header className="relative flex items-center justify-between py-4">
         <button
           type="button"
-          onClick={onBack}
+          onClick={() => {
+            if (running) stopTimer();
+            onBack();
+          }}
           aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-surface text-xl active:bg-white/10"
+          className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-ink active:bg-white/10"
         >
           ←
         </button>
-        <h1 className="flex-1 text-center text-lg font-bold">Daily</h1>
-        <span className="h-9 w-9" />
+        <h1 className="flex items-center gap-2 truncate px-2 text-base font-bold">
+          <span aria-hidden>{habit.icon ?? "✅"}</span>
+          <span className="truncate">{habit.name}</span>
+        </h1>
+        <button
+          type="button"
+          onClick={() => setMenu((v) => !v)}
+          aria-label="Habit options"
+          aria-expanded={menu}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-muted active:bg-white/10"
+        >
+          ⋯
+        </button>
+
+        {menu && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setMenu(false)} aria-hidden />
+            <div className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-xl border border-white/10 bg-surface py-1 shadow-lg">
+              <MenuItem label="Edit" onClick={() => { setMenu(false); onEdit(); }} />
+              <MenuItem label="Share progress" onClick={() => { setMenu(false); onShare(); }} />
+              <MenuItem label="Archive" onClick={() => { setMenu(false); onArchive(); }} />
+              <MenuItem label="Delete" danger onClick={() => { setMenu(false); onDelete(); }} />
+            </div>
+          </>
+        )}
       </header>
 
-      <div className="flex justify-between gap-1">
-        {days.map((d, i) => {
-          const on = d === date;
-          const future = d > today;
-          return (
-            <button
-              key={d}
-              type="button"
-              disabled={future}
-              onClick={() => onDate(d)}
-              className={[
-                "flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-xs transition disabled:opacity-30",
-                on ? "bg-green text-ink-inverse font-bold" : "text-muted active:bg-white/10",
-              ].join(" ")}
-            >
-              <span>{DOW[i]}</span>
-              <span className={on ? "" : "text-ink"}>{Number(d.slice(8, 10))}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="mt-5 flex items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-ink">
-          {formatShortDate(date)}
-          {date === today && <span className="text-muted"> · Today</span>}
-        </h2>
-        {date !== today && (
-          <button
-            type="button"
-            onClick={() => onDate(today)}
-            className="shrink-0 rounded-full border border-green/40 px-3 py-1 text-xs font-semibold text-green active:bg-green/10"
-          >
-            Back to today
-          </button>
-        )}
-      </div>
       {date !== today && (
-        <p className="mt-1.5 rounded-xl bg-orange-soft px-3 py-1.5 text-xs font-medium text-orange">
-          Editing a past day — anything you tick is saved to{" "}
-          {formatShortDate(date)}.
+        <p className="rounded-xl bg-orange-soft px-3 py-1.5 text-center text-xs font-medium text-orange">
+          Logging for {formatShortDate(date)}
         </p>
       )}
-      <p className="mt-1 text-sm text-muted">
-        {doneCount} of {due.length} habits completed
-      </p>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-        <div className="h-full rounded-full bg-green" style={{ width: `${pct}%` }} />
+
+      {/* Big progress dial */}
+      <div className="flex flex-1 items-center justify-center py-6">
+        <div className="relative h-[220px] w-[220px]">
+          <svg viewBox="0 0 220 220" className="h-full w-full -rotate-90">
+            <circle cx="110" cy="110" r={R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="14" />
+            <circle
+              cx="110" cy="110" r={R} fill="none" stroke={tone} strokeWidth="14"
+              strokeLinecap="round"
+              strokeDasharray={C}
+              strokeDashoffset={C * (1 - shownRatio)}
+              style={{ transition: "stroke-dashoffset 300ms" }}
+            />
+          </svg>
+
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-3xl" aria-hidden>
+              {habit.icon ?? "✅"}
+            </span>
+            {habit.kind === "timer" ? (
+              <span className="mt-1 text-4xl font-bold tabular-nums text-ink">
+                {formatDuration(Math.max(0, target - shown))}
+              </span>
+            ) : (
+              <span className="mt-1 flex items-center gap-5">
+                <button
+                  type="button"
+                  onClick={() => onSetCount(Math.max(0, cur - 1))}
+                  aria-label="Decrease"
+                  className="text-2xl text-muted active:text-ink"
+                >
+                  −
+                </button>
+                <span className="text-4xl font-bold tabular-nums text-ink">{cur}</span>
+                <button
+                  type="button"
+                  onClick={() => onSetCount(cur + 1)}
+                  aria-label="Increase"
+                  className="text-2xl text-muted active:text-ink"
+                >
+                  +
+                </button>
+              </span>
+            )}
+            <span className="mt-1 text-sm text-muted">
+              {habit.kind === "timer"
+                ? `${Math.round(target / 60)} min goal`
+                : `/${target}${habit.unit ? ` ${habit.unit}` : ""}`}
+            </span>
+          </div>
+        </div>
       </div>
 
-      <ul className="mt-4 space-y-2.5">
-        {due.map((h) => {
-          const done = isComplete(h, logs, date);
-          const tone = h.color ?? "#A8E830";
-          const cur = countOn(logs, h.id, date);
-          return (
-            <li
-              key={h.id}
-              className="flex items-center gap-3 rounded-2xl border border-white/10 bg-surface p-3"
-            >
-              <button
-                type="button"
-                onClick={() => onOpen(h.id)}
-                className="flex min-w-0 flex-1 items-center gap-3 text-left"
-              >
-                <span
-                  aria-hidden
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl"
-                  style={{ backgroundColor: `${tone}1F` }}
-                >
-                  {h.icon ?? "✅"}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate font-semibold text-ink">{h.name}</span>
-                  {h.description && (
-                    <span className="block truncate text-xs text-muted">
-                      {h.description}
-                    </span>
-                  )}
-                  {h.target_per_period > 1 && (
-                    <span className="mt-0.5 block text-xs font-medium" style={{ color: tone }}>
-                      {cur} / {h.target_per_period} {h.unit ?? ""}
-                    </span>
-                  )}
-                  {h.reminder_time && (
-                    <span className="block text-xs text-muted">{h.reminder_time}</span>
-                  )}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onToggle(h)}
-                aria-label={done ? `Undo ${h.name}` : `Mark ${h.name} done`}
-                aria-pressed={done}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm"
-                style={{
-                  backgroundColor: done ? tone : "transparent",
-                  border: done ? "none" : "1.5px solid rgba(255,255,255,0.25)",
-                  color: done ? "#141807" : "transparent",
-                }}
-              >
-                ✓
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      {due.length === 0 && (
-        <p className="mt-8 text-center text-sm text-muted">No daily habits yet.</p>
-      )}
+      {/* Actions */}
+      <div className="flex items-center justify-center gap-5 pb-2">
+        <button
+          type="button"
+          onClick={() => { setElapsed(0); setRunning(false); onSetCount(0); }}
+          aria-label="Reset"
+          className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.06] text-lg text-muted active:scale-95"
+        >
+          ↺
+        </button>
+
+        {habit.kind === "timer" ? (
+          <button
+            type="button"
+            onClick={() => (running ? stopTimer() : setRunning(true))}
+            className="flex h-14 min-w-[140px] items-center justify-center rounded-full text-base font-bold text-ink-inverse active:scale-95"
+            style={{ backgroundColor: tone }}
+          >
+            {running ? "❚❚ Pause" : "▶ Start"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onSetCount(cur + stepSize(habit))}
+            className="flex h-14 min-w-[140px] items-center justify-center rounded-full text-base font-bold text-ink-inverse active:scale-95"
+            style={{ backgroundColor: tone }}
+          >
+            Add
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => { setElapsed(0); setRunning(false); onSetCount(done ? 0 : target); }}
+          aria-label={done ? "Mark not done" : "Mark complete"}
+          aria-pressed={done}
+          className="flex h-12 w-12 items-center justify-center rounded-full text-lg active:scale-95"
+          style={{
+            backgroundColor: done ? tone : "rgba(255,255,255,0.06)",
+            color: done ? "#141807" : "rgba(255,255,255,0.4)",
+          }}
+        >
+          ✓
+        </button>
+      </div>
     </>
+  );
+}
+
+function MenuItem({
+  label,
+  onClick,
+  danger,
+}: {
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        "block w-full px-4 py-2.5 text-left text-sm font-medium active:bg-white/10",
+        danger ? "text-orange" : "text-ink",
+      ].join(" ")}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -969,7 +911,18 @@ function EditView({
   const [icon, setIcon] = useState(habit?.icon ?? HABIT_ICONS[0]);
   const [color, setColor] = useState(habit?.color ?? HABIT_COLORS[0]);
   const [cadence, setCadence] = useState<Cadence>(habit?.cadence ?? "daily");
-  const [target, setTarget] = useState(String(habit?.target_per_period ?? 1));
+  const [kind, setKind] = useState<HabitKind>(habit?.kind ?? "count");
+  const [category, setCategory] = useState(habit?.category ?? "");
+  // Timer targets are stored in seconds; the form talks in minutes.
+  const [target, setTarget] = useState(
+    String(
+      habit
+        ? habit.kind === "timer"
+          ? Math.round(habit.target_per_period / 60)
+          : habit.target_per_period
+        : 1,
+    ),
+  );
   const [unit, setUnit] = useState(habit?.unit ?? "");
   const [reminder, setReminder] = useState(habit?.reminder_time ?? "");
   const [busy, setBusy] = useState(false);
@@ -980,6 +933,7 @@ function EditView({
     setBusy(true);
     setError("");
     try {
+      const n = Math.max(1, Number(target) || 1);
       await saveHabit({
         id: habit?.id,
         name,
@@ -987,8 +941,10 @@ function EditView({
         icon,
         color,
         cadence,
-        target_per_period: Number(target) || 1,
-        unit,
+        kind,
+        category: category || null,
+        target_per_period: kind === "timer" ? n * 60 : n,
+        unit: kind === "timer" ? "min" : unit,
         reminder_time: reminder || null,
       });
       onDone();
@@ -1072,6 +1028,45 @@ function EditView({
         </div>
 
         <div>
+          <p className="mb-2 text-sm font-medium text-muted">Track by</p>
+          <div className="flex rounded-xl bg-white/[0.06] p-1">
+            {KINDS.map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setKind(k)}
+                className={[
+                  "flex-1 rounded-lg py-2 text-sm font-semibold transition",
+                  kind === k ? "bg-green text-ink-inverse" : "text-muted",
+                ].join(" ")}
+              >
+                {k === "count" ? "Counter" : "Timer"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-sm font-medium text-muted">Category</p>
+          <div className="flex flex-wrap gap-2">
+            {HABIT_CATEGORIES.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCategory(category === c ? "" : c)}
+                aria-pressed={category === c}
+                className={[
+                  "rounded-full px-3.5 py-1.5 text-xs font-semibold transition",
+                  category === c ? "bg-green text-ink-inverse" : "bg-white/[0.06] text-muted",
+                ].join(" ")}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
           <p className="mb-2 text-sm font-medium text-muted">Repeats</p>
           <div className="flex rounded-xl bg-white/[0.06] p-1">
             {CADENCES.map((c) => (
@@ -1093,7 +1088,11 @@ function EditView({
         <div className="flex gap-2">
           <label className="flex-1">
             <span className="mb-1 block text-sm font-medium text-muted">
-              {cadence === "daily" ? "Target per day" : "Times per week"}
+              {kind === "timer"
+                ? "Minutes per day"
+                : cadence === "daily"
+                  ? "Target per day"
+                  : "Times per week"}
             </span>
             <input
               value={target}
@@ -1104,7 +1103,7 @@ function EditView({
               className={INPUT}
             />
           </label>
-          {cadence === "daily" && (
+          {cadence === "daily" && kind === "count" && (
             <label className="flex-1">
               <span className="mb-1 block text-sm font-medium text-muted">Unit</span>
               <input
