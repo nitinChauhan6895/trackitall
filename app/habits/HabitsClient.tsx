@@ -11,7 +11,9 @@ import {
   HABIT_COLORS,
   HABIT_ICONS,
   addDaysKey,
+  applyLog,
   countOn,
+  nextCount,
   habitStreak,
   isComplete,
   weekDays,
@@ -65,31 +67,11 @@ export default function HabitsClient({
 
   /** Toggle or step a habit's progress for a day, optimistically. */
   async function bump(habit: Habit, date: string, next?: number) {
-    const cur = countOn(logs, habit.id, date);
-    const value =
-      next !== undefined
-        ? next
-        : habit.cadence === "daily" && habit.target_per_period > 1
-          ? cur >= habit.target_per_period
-            ? 0
-            : cur + 1
-          : cur > 0
-            ? 0
-            : 1;
+    const value = next !== undefined ? next : nextCount(habit, logs, date);
 
-    queryClient.setQueryData<HabitsData>(qk.habits(), (prev) => {
-      if (!prev) return prev;
-      const rest = prev.logs.filter(
-        (l) => !(l.habit_id === habit.id && l.log_date === date),
-      );
-      return {
-        ...prev,
-        logs:
-          value > 0
-            ? [...rest, { habit_id: habit.id, log_date: date, count: value, note: null }]
-            : rest,
-      };
-    });
+    queryClient.setQueryData<HabitsData>(qk.habits(), (prev) =>
+      prev ? { ...prev, logs: applyLog(prev.logs, habit.id, date, value) } : prev,
+    );
     try {
       await setHabitCount({ habitId: habit.id, date, count: value });
     } finally {
@@ -110,6 +92,7 @@ export default function HabitsClient({
           onOpen={(id) => setView({ name: "detail", habitId: id })}
           onNew={() => setView({ name: "edit" })}
           onToggle={(h, d) => bump(h, d)}
+          onSetCount={(h, d, c) => bump(h, d, c)}
         />
       )}
 
@@ -134,6 +117,7 @@ export default function HabitsClient({
           onBack={() => setView({ name: "list" })}
           onEdit={() => setView({ name: "edit", habitId: detail.id })}
           onToggle={() => bump(detail, today)}
+          onToggleDay={(d) => bump(detail, d)}
           onDeleted={() => {
             setView({ name: "list" });
             refresh();
@@ -165,6 +149,7 @@ function ListView({
   onOpenDay,
   onNew,
   onToggle,
+  onSetCount,
 }: {
   habits: Habit[];
   logs: HabitsData["logs"];
@@ -173,6 +158,7 @@ function ListView({
   onOpenDay: () => void;
   onNew: () => void;
   onToggle: (h: Habit, date: string) => void;
+  onSetCount: (h: Habit, date: string, count: number) => void;
 }) {
   const [filter, setFilter] = useState<"all" | Cadence>("all");
   const ov = weekOverview(habits, logs, today);
@@ -219,7 +205,7 @@ function ListView({
             <p className="text-sm font-medium text-ink">This Week Overview</p>
             <div className="mt-3 flex items-center gap-4">
               <Ring percent={ov.percent} />
-              <div className="flex-1 space-y-2">
+              <div className="min-w-0 flex-1 space-y-2">
                 <p className="flex items-center gap-2 text-sm">
                   <span className="text-green" aria-hidden>
                     ✓
@@ -235,9 +221,9 @@ function ListView({
                   <span className="text-muted">Remaining</span>
                 </p>
               </div>
-              <div className="flex h-16 items-end gap-1">
+              <div className="flex h-16 shrink-0 items-end gap-0.5">
                 {ov.perDay.map((d, i) => (
-                  <div key={d.key} className="flex w-3 flex-col items-center gap-1">
+                  <div key={d.key} className="flex w-2.5 flex-col items-center gap-1">
                     <div
                       className="w-full rounded-sm"
                       style={{
@@ -287,6 +273,7 @@ function ListView({
                       today={today}
                       onOpen={() => onOpen(h.id)}
                       onToggleDay={(d) => onToggle(h, d)}
+                      onSetCount={(d, c) => onSetCount(h, d, c)}
                     />
                   </li>
                 ))}
@@ -306,6 +293,7 @@ function ListView({
                       today={today}
                       onOpen={() => onOpen(h.id)}
                       onToggleDay={(d) => onToggle(h, d)}
+                      onSetCount={(d, c) => onSetCount(h, d, c)}
                     />
                   </li>
                 ))}
@@ -324,98 +312,152 @@ function HabitRow({
   today,
   onOpen,
   onToggleDay,
+  onSetCount,
 }: {
   habit: Habit;
   logs: HabitsData["logs"];
   today: string;
   onOpen: () => void;
   onToggleDay: (date: string) => void;
+  onSetCount: (date: string, count: number) => void;
 }) {
+  const [open, setOpen] = useState(false);
   const tone = habit.color ?? "#A8E830";
   const streak = habitStreak(habit, logs, today);
   const days = weekDays(today);
+  const doneToday = isComplete(habit, logs, today);
+  const cur = countOn(logs, habit.id, today);
+  const multi = habit.cadence === "daily" && habit.target_per_period > 1;
 
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-surface p-3">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left"
-      >
-        <span
-          aria-hidden
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl"
-          style={{ backgroundColor: `${tone}1F` }}
+    <div className="rounded-2xl border border-white/10 bg-surface">
+      <div className="flex items-center gap-3 p-3">
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          {habit.icon ?? "✅"}
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate font-semibold text-ink">{habit.name}</span>
-          <span className="mt-0.5 block text-xs text-muted">
-            {streak > 0 ? (
-              <>
-                <span aria-hidden>🔥</span> {streak}{" "}
-                {habit.cadence === "daily" ? "day" : "week"} streak
-              </>
-            ) : habit.cadence === "weekly" ? (
-              `${weekProgress(habit, logs, today)} / ${habit.target_per_period} this week`
-            ) : (
-              "No streak yet"
-            )}
+          <span
+            aria-hidden
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl"
+            style={{ backgroundColor: `${tone}1F` }}
+          >
+            {habit.icon ?? "✅"}
           </span>
-        </span>
-      </button>
+          <span className="min-w-0">
+            <span className="block truncate font-semibold text-ink">{habit.name}</span>
+            <span className="mt-0.5 block text-xs text-muted">
+              {streak > 0 ? (
+                <>
+                  <span aria-hidden>🔥</span> {streak}{" "}
+                  {habit.cadence === "daily" ? "day" : "week"} streak
+                </>
+              ) : habit.cadence === "weekly" ? (
+                `${weekProgress(habit, logs, today)} / ${habit.target_per_period} this week`
+              ) : (
+                "No streak yet"
+              )}
+            </span>
+          </span>
+        </button>
 
-      {habit.cadence === "daily" ? (
-        <div className="flex shrink-0 gap-1">
-          {days.map((d, i) => {
-            const done = isComplete(habit, logs, d);
-            const future = d > today;
-            return (
-              <button
-                key={d}
-                type="button"
-                disabled={future}
-                onClick={() => onToggleDay(d)}
-                aria-label={`${habit.name} on ${d}`}
-                className="flex flex-col items-center gap-1 disabled:opacity-30"
-              >
-                <span className="text-[9px] text-muted">{DOW[i]}</span>
-                <span
-                  className="flex h-4 w-4 items-center justify-center rounded-full text-[9px]"
-                  style={{
-                    backgroundColor: done ? tone : "transparent",
-                    border: done ? "none" : "1px solid rgba(255,255,255,0.2)",
-                    color: done ? "#141807" : "transparent",
-                  }}
-                  aria-hidden
+        {/* Today's action, always one tap away. */}
+        {multi ? (
+          <button
+            type="button"
+            onClick={() => onSetCount(today, cur >= habit.target_per_period ? 0 : cur + 1)}
+            aria-label={`Add one to ${habit.name}`}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-bold tabular-nums active:scale-95"
+            style={{ borderColor: `${tone}66`, color: tone }}
+          >
+            <span className="text-base leading-none">+</span>
+            {cur}/{habit.target_per_period}
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onToggleDay(today)}
+            aria-label={doneToday ? `Undo ${habit.name}` : `Mark ${habit.name} done`}
+            aria-pressed={doneToday}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm active:scale-95"
+            style={{
+              backgroundColor: doneToday ? tone : "transparent",
+              border: doneToday ? "none" : "1.5px solid rgba(255,255,255,0.25)",
+              color: doneToday ? "#141807" : "transparent",
+            }}
+          >
+            ✓
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label={`${open ? "Hide" : "Show"} ${habit.name} week`}
+          className="shrink-0 px-1 text-muted active:opacity-70"
+        >
+          {open ? "⌃" : "⌄"}
+        </button>
+      </div>
+
+      {/* Expanded: tap any past day to mark it done or undo it. */}
+      {open && (
+        <div className="border-t border-white/10 px-3 py-3">
+          <div className="flex justify-between">
+            {days.map((d, i) => {
+              const done = isComplete(habit, logs, d);
+              const future = d > today;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  disabled={future}
+                  onClick={() => onToggleDay(d)}
+                  aria-label={`${habit.name} on ${d}`}
+                  aria-pressed={done}
+                  className="flex flex-col items-center gap-1.5 disabled:opacity-25"
                 >
-                  ✓
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="flex shrink-0 flex-col items-center gap-1">
-          <span className="text-[9px] text-muted">Week</span>
-          <div className="flex gap-1">
-            {Array.from({ length: habit.target_per_period }, (_, i) => (
-              <span
-                key={i}
-                className="h-4 w-4 rounded-full"
-                style={{
-                  backgroundColor:
-                    i < weekProgress(habit, logs, today) ? tone : "transparent",
-                  border:
-                    i < weekProgress(habit, logs, today)
-                      ? "none"
-                      : "1px solid rgba(255,255,255,0.2)",
-                }}
-                aria-hidden
-              />
-            ))}
+                  <span className="text-[10px] text-muted">{DOW[i]}</span>
+                  <span
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-xs"
+                    style={{
+                      backgroundColor: done ? tone : "transparent",
+                      border: done ? "none" : "1px solid rgba(255,255,255,0.2)",
+                      color: done ? "#141807" : "transparent",
+                    }}
+                    aria-hidden
+                  >
+                    ✓
+                  </span>
+                  <span className="text-[10px] text-muted">{Number(d.slice(8, 10))}</span>
+                </button>
+              );
+            })}
           </div>
+          {multi && (
+            <div className="mt-3 flex items-center justify-center gap-4">
+              <button
+                type="button"
+                onClick={() => onSetCount(today, Math.max(0, cur - 1))}
+                aria-label="Decrease"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-lg text-ink active:bg-white/10"
+              >
+                −
+              </button>
+              <span className="text-sm font-semibold tabular-nums text-ink">
+                {cur} / {habit.target_per_period} {habit.unit ?? ""}
+              </span>
+              <button
+                type="button"
+                onClick={() => onSetCount(today, cur + 1)}
+                aria-label="Increase"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-white/15 text-lg text-ink active:bg-white/10"
+              >
+                +
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -614,6 +656,7 @@ function DetailView({
   onBack,
   onEdit,
   onToggle,
+  onToggleDay,
   onDeleted,
 }: {
   habit: Habit;
@@ -622,6 +665,8 @@ function DetailView({
   onBack: () => void;
   onEdit: () => void;
   onToggle: () => void;
+  /** Toggle any past day straight from the week strip or the calendar. */
+  onToggleDay: (date: string) => void;
   onDeleted: () => void;
 }) {
   const tone = habit.color ?? "#A8E830";
@@ -691,8 +736,17 @@ function DetailView({
         <div className="mt-3 flex justify-between">
           {days.map((d, i) => {
             const ok = isComplete(habit, logs, d);
+            const future = d > today;
             return (
-              <div key={d} className="flex flex-col items-center gap-1.5">
+              <button
+                key={d}
+                type="button"
+                disabled={future}
+                onClick={() => onToggleDay(d)}
+                aria-label={`${habit.name} on ${d}`}
+                aria-pressed={ok}
+                className="flex flex-col items-center gap-1.5 disabled:opacity-25"
+              >
                 <span className="text-[11px] text-muted">{DOW[i]}</span>
                 <span
                   className="flex h-7 w-7 items-center justify-center rounded-full text-xs"
@@ -705,7 +759,7 @@ function DetailView({
                 >
                   ✓
                 </span>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -746,19 +800,25 @@ function DetailView({
             const key = addDaysKey(first, i);
             const ok = isComplete(habit, logs, key);
             const isToday = key === today;
+            const future = key > today;
             return (
               <span key={key} className="flex justify-center">
-                <span
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-xs"
+                <button
+                  type="button"
+                  disabled={future}
+                  onClick={() => onToggleDay(key)}
+                  aria-label={`${habit.name} on ${key}`}
+                  aria-pressed={ok}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-xs active:scale-90"
                   style={{
                     backgroundColor: ok ? tone : "transparent",
-                    color: ok ? "#141807" : key > today ? "#5A6052" : "#F1F3EA",
+                    color: ok ? "#141807" : future ? "#5A6052" : "#F1F3EA",
                     border: isToday && !ok ? `1.5px solid ${tone}` : "none",
                     fontWeight: ok || isToday ? 700 : 400,
                   }}
                 >
                   {i + 1}
-                </span>
+                </button>
               </span>
             );
           })}

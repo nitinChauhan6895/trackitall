@@ -173,3 +173,32 @@ export function weekOverview(
   const percent = due === 0 ? 0 : Math.round((completed / due) * 100);
   return { percent, completed, remaining: Math.max(0, due - completed), perDay };
 }
+
+/**
+ * Apply a habit-day change to a log list — the optimistic update behind every
+ * tap. Pure so it can be tested directly; a count of 0 removes the day.
+ */
+export function applyLog(
+  logs: HabitLog[],
+  habitId: string,
+  date: string,
+  count: number,
+  note: string | null = null,
+): HabitLog[] {
+  const rest = logs.filter((l) => !(l.habit_id === habitId && l.log_date === date));
+  return count > 0
+    ? [...rest, { habit_id: habitId, log_date: date, count, note }]
+    : rest;
+}
+
+/**
+ * What a tap should set the count to: cycle up to the target for multi-count
+ * daily habits, otherwise toggle done/not-done.
+ */
+export function nextCount(habit: Habit, logs: HabitLog[], date: string): number {
+  const cur = countOn(logs, habit.id, date);
+  if (habit.cadence === "daily" && habit.target_per_period > 1) {
+    return cur >= habit.target_per_period ? 0 : cur + 1;
+  }
+  return cur > 0 ? 0 : 1;
+}

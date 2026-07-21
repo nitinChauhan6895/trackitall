@@ -39,7 +39,7 @@ export default function RootLayout({
       <body>
         <Providers>
           <OfflineSync />
-          <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col">
+          <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col overflow-x-hidden">
             {children}
           </div>
           <BottomNav />

@@ -1372,6 +1372,13 @@ export async function shareWholeDay(input: { toUserId: string; date: string }) {
 }
 
 // ---------- Habits ----------
+//
+// NOTE: deliberately no revalidatePath in these mutations. /habits is an async
+// server component with a loading.tsx, so revalidating re-suspends the route,
+// remounts HabitsClient and throws away both its view state and the optimistic
+// cache update — the tap appears to do nothing and has to be repeated. The
+// client query cache is the source of freshness here (same reasoning as
+// upsertExercise).
 
 const CADENCE_SET = new Set(["daily", "weekly"]);
 
@@ -1406,7 +1413,6 @@ export async function saveHabit(input: {
   if (input.id) {
     const { error } = await supabase.from("habits").update(row).eq("id", input.id);
     if (error) throw error;
-    revalidatePath("/habits");
     return { id: input.id };
   }
   const { count } = await supabase
@@ -1419,7 +1425,6 @@ export async function saveHabit(input: {
     .select("id")
     .single();
   if (error) throw error;
-  revalidatePath("/habits");
   return { id: data.id as string };
 }
 
@@ -1428,7 +1433,6 @@ export async function deleteHabit(id: string) {
   // habit_logs cascade on delete.
   const { error } = await supabase.from("habits").delete().eq("id", id);
   if (error) throw error;
-  revalidatePath("/habits");
 }
 
 /** Set a habit's progress for one day. count 0 clears the day. */
@@ -1449,7 +1453,6 @@ export async function setHabitCount(input: {
       .eq("habit_id", input.habitId)
       .eq("log_date", input.date);
     if (error) throw error;
-    revalidatePath("/habits");
     return;
   }
   // One row per habit per day — upsert on that pair.
@@ -1464,7 +1467,6 @@ export async function setHabitCount(input: {
     { onConflict: "habit_id,log_date" },
   );
   if (error) throw error;
-  revalidatePath("/habits");
 }
 
 export async function loadHabitsAction() {
