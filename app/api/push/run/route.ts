@@ -51,18 +51,49 @@ export async function GET(request: Request) {
     serviceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
   };
   let database = "not checked";
+  let devices = 0;
+  // Which reminders exist and when they next fall due, so "nothing sent" can be
+  // told apart from "nothing is subscribed" or "no reminder is set".
+  const reminders: { name: string; at: string; timezone: string; localNow: string; due: boolean }[] = [];
+
   if (env.supabaseUrl && env.serviceRoleKey) {
     try {
       const supabase = createAdminClient();
-      const { error } = await supabase
+      const { data: subs, error } = await supabase
         .from("push_subscriptions")
-        .select("id", { count: "exact", head: true });
+        .select("user_id, timezone");
       database = error ? `error: ${error.message}` : "ok";
+      devices = subs?.length ?? 0;
+
+      if (!error && subs?.length) {
+        const now = new Date();
+        for (const sub of subs) {
+          const { minutes } = localNow(sub.timezone, now);
+          const { data: hs } = await supabase
+            .from("habits")
+            .select("name, reminder_time")
+            .eq("user_id", sub.user_id)
+            .eq("archived", false)
+            .not("reminder_time", "is", null);
+          for (const h of hs ?? []) {
+            const at = parseReminderMinutes(h.reminder_time as string);
+            if (at == null) continue;
+            const hh = Math.floor(minutes / 60);
+            reminders.push({
+              name: h.name as string,
+              at: h.reminder_time as string,
+              timezone: sub.timezone,
+              localNow: `${String(hh).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`,
+              due: isDue(at, minutes, WINDOW_MINUTES),
+            });
+          }
+        }
+      }
     } catch (e: any) {
       database = `error: ${String(e?.message ?? e)}`;
     }
   }
-  return NextResponse.json({ env, database });
+  return NextResponse.json({ env, database, devices, reminders });
 }
 
 export async function POST(request: Request) {
