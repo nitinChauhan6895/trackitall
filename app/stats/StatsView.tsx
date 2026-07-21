@@ -62,7 +62,10 @@ export default function StatsView({
   const [range, setRange] = useState<RangeKey>("thisWeek");
   // A StatsData cached by an older release has no `ranges` — fall back rather
   // than crash on a stale IndexedDB entry.
-  const week = stats.ranges?.[range] ?? EMPTY_RANGE;
+  // A StatsData cached by an older release has `ranges` but its entries
+  // predate newer fields (v7.2.4 added `load`). Merging against EMPTY_RANGE
+  // fills the gaps — reading week.load directly crashed the whole page.
+  const week: WeekStats = { ...EMPTY_RANGE, ...(stats.ranges?.[range] ?? {}) };
   const rangeLabel = RANGE_LABELS[range].toLowerCase();
   // Older cached StatsData has no month block — fall back rather than crash.
   const month = stats.month ?? { sessions: 0, sets: 0, volumeKg: 0, groups: 0 };
@@ -198,8 +201,8 @@ export default function StatsView({
   );
 }
 
-function LoadStats({ load }: { load: GroupLoad[] }) {
-  if (load.length === 0) {
+function LoadStats({ load }: { load?: GroupLoad[] }) {
+  if (!load || load.length === 0) {
     return <Empty>Nothing logged in this window.</Empty>;
   }
   const maxSets = Math.max(...load.map((l) => l.sets), 1);

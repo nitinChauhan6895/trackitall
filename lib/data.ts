@@ -494,13 +494,23 @@ export async function getIncomingShares(): Promise<IncomingShare[]> {
 // todayKey lets the CLIENT define "today". The server runs in UTC, which for
 // an IST user is yesterday until 05:30 — computing week/month boundaries from
 // the server clock put early-morning workouts in the wrong window.
+// 42703 = undefined column. Selecting a column the database doesn't have yet
+// fails the whole query, so a deploy that lands before its migration would
+// take the entire Stats page down.
+const isMissingColumn = (err: { code?: string } | null) => err?.code === "42703";
+
+const STATS_SELECT = (withHard: boolean) =>
+  `workout_date, muscle_group, name, cardio_type, sets(position, reps, weight_kg, distance_km, distance_m${
+    withHard ? ", is_hard" : ""
+  })`;
+
 export async function getStatsData(todayKey?: string): Promise<StatsData> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("exercises")
-    .select(
-      "workout_date, muscle_group, name, cardio_type, sets(position, reps, weight_kg, distance_km, distance_m, is_hard)",
-    );
+  let { data, error } = await supabase.from("exercises").select(STATS_SELECT(true));
+  if (error && isMissingColumn(error)) {
+    // migration_018 not run yet — every set simply reads as not-hard.
+    ({ data, error } = await supabase.from("exercises").select(STATS_SELECT(false)));
+  }
   if (error) throw error;
   const today =
     todayKey && /^\d{4}-\d{2}-\d{2}$/.test(todayKey)
