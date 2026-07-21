@@ -377,3 +377,58 @@ self.addEventListener("fetch", (event) => {
     })(),
   );
 });
+
+// ---- Push notifications ----
+//
+// A push message is the only thing that can wake this worker once the app is
+// closed, which is why habit reminders go through a server rather than being
+// scheduled locally (the web has no working API for that).
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+  const title = data.title || "TrackItAll";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || "",
+      // Same icon as the launcher so the notification is recognisably the app.
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      // Replaces an earlier copy of the same reminder rather than stacking.
+      tag: data.tag || "trackitall",
+      renotify: false,
+      data: { url: data.url || "/" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({
+        type: "window",
+        includeUncontrolled: true,
+      });
+      // Reuse an open window if there is one — opening a second copy of an
+      // installed PWA is jarring.
+      for (const client of all) {
+        if ("focus" in client) {
+          await client.focus();
+          if ("navigate" in client) {
+            try {
+              await client.navigate(target);
+            } catch {}
+          }
+          return;
+        }
+      }
+      if (self.clients.openWindow) await self.clients.openWindow(target);
+    })(),
+  );
+});

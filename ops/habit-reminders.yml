@@ -1,0 +1,27 @@
+# Hourly trigger for habit reminders.
+#
+# Vercel's Hobby plan can't run cron this often, so the schedule lives here.
+# GitHub may delay a scheduled run by several minutes under load, which is why
+# the sender accepts a 60-minute delivery window rather than requiring an exact
+# match — a reminder arriving late beats one that never arrives.
+name: Habit reminders
+
+on:
+  schedule:
+    - cron: "0 * * * *" # every hour, on the hour (UTC)
+  workflow_dispatch: {} # lets you fire one manually to test
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger reminder send
+        run: |
+          code=$(curl -sS -o /tmp/out.json -w '%{http_code}' \
+            -X POST "${{ secrets.APP_URL }}/api/push/run" \
+            -H "Authorization: Bearer ${{ secrets.PUSH_CRON_SECRET }}")
+          echo "HTTP $code"
+          cat /tmp/out.json
+          # Fail the job on a non-2xx so a broken secret or deploy is visible
+          # in the Actions tab instead of silently sending nothing forever.
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ]

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -10,6 +10,13 @@ import {
   updateProfile,
   signOut,
 } from "@/app/actions";
+import {
+  checkPushSupport,
+  isSubscribed,
+  notificationPermission,
+  subscribeToPush,
+  unsubscribeFromPush,
+} from "@/lib/pushClient";
 import { displayName, profileInitial, type Profile } from "@/lib/types";
 import { APP_VERSION } from "@/lib/version";
 
@@ -89,6 +96,10 @@ function Menu({
         <Row icon="⬇️" label="Export data" onClick={onExport} />
       </div>
 
+      <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-surface">
+        <PushRow />
+      </div>
+
       <form action={signOut} className="mt-6">
         <button
           type="submit"
@@ -101,6 +112,77 @@ function Menu({
       <p className="mt-6 text-center text-xs text-muted">
         TrackItAll · v{APP_VERSION}
       </p>
+    </div>
+  );
+}
+
+/** Habit reminders. A PWA can't schedule a notification for a future time, so
+ *  these arrive as a push from the server — which needs permission first. */
+function PushRow() {
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [support, setSupport] = useState<{ supported: boolean; reason?: string }>({
+    supported: true,
+  });
+
+  useEffect(() => {
+    setSupport(checkPushSupport());
+    isSubscribed().then((s) => setOn(s && notificationPermission() === "granted"));
+  }, []);
+
+  async function toggle() {
+    setBusy(true);
+    setError("");
+    if (on) {
+      await unsubscribeFromPush();
+      setOn(false);
+    } else {
+      const res = await subscribeToPush();
+      if (res.ok) setOn(true);
+      else setError(res.error);
+    }
+    setBusy(false);
+  }
+
+  return (
+    <div className="px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex min-w-0 items-center gap-3">
+          <span aria-hidden className="text-lg">
+            🔔
+          </span>
+          <span className="min-w-0">
+            <span className="block text-base text-ink">Habit reminders</span>
+            <span className="block text-xs text-muted">
+              Get a nudge at each habit&rsquo;s reminder time
+            </span>
+          </span>
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label="Habit reminders"
+          disabled={busy || !support.supported}
+          onClick={toggle}
+          className={[
+            "relative h-6 w-11 shrink-0 rounded-full transition disabled:opacity-40",
+            on ? "bg-green" : "bg-white/15",
+          ].join(" ")}
+        >
+          <span
+            className={[
+              "absolute top-0.5 h-5 w-5 rounded-full bg-surface shadow transition-transform",
+              on ? "translate-x-[22px]" : "translate-x-0.5",
+            ].join(" ")}
+          />
+        </button>
+      </div>
+      {!support.supported && support.reason && (
+        <p className="mt-2 text-xs text-muted">{support.reason}</p>
+      )}
+      {error && <p className="mt-2 text-xs text-orange">{error}</p>}
     </div>
   );
 }
