@@ -36,10 +36,53 @@ function authorized(request: Request): boolean {
   return header === `Bearer ${secret}`;
 }
 
+/** Configuration check. Same bearer token, no sends, no data returned —
+ *  just which pieces are wired up, so a broken deploy can be diagnosed
+ *  without reading server logs. */
+export async function GET(request: Request) {
+  if (!authorized(request)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const env = {
+    vapidPublic: !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    vapidPrivate: !!process.env.VAPID_PRIVATE_KEY,
+    vapidSubject: !!process.env.VAPID_SUBJECT,
+    supabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+    serviceRoleKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+  };
+  let database = "not checked";
+  if (env.supabaseUrl && env.serviceRoleKey) {
+    try {
+      const supabase = createAdminClient();
+      const { error } = await supabase
+        .from("push_subscriptions")
+        .select("id", { count: "exact", head: true });
+      database = error ? `error: ${error.message}` : "ok";
+    } catch (e: any) {
+      database = `error: ${String(e?.message ?? e)}`;
+    }
+  }
+  return NextResponse.json({ env, database });
+}
+
 export async function POST(request: Request) {
   if (!authorized(request)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  // Anything below can throw (missing env, database error). Without this the
+  // caller gets a bare 500 with an empty body and nothing to act on — which is
+  // exactly how this route first failed in production.
+  try {
+    return await run();
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: String(e?.message ?? e), stage: "run" },
+      { status: 500 },
+    );
+  }
+}
+
+async function run() {
   if (!configurePush()) {
     return NextResponse.json({ error: "VAPID keys not configured" }, { status: 500 });
   }
