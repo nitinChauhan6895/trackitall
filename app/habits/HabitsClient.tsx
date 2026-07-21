@@ -12,6 +12,7 @@ import {
   HABIT_ICONS,
   addDaysKey,
   applyLog,
+  completeCount,
   countOn,
   nextCount,
   habitStreak,
@@ -65,9 +66,18 @@ export default function HabitsClient({
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: qk.habits() });
 
-  /** Toggle or step a habit's progress for a day, optimistically. */
-  async function bump(habit: Habit, date: string, next?: number) {
-    const value = next !== undefined ? next : nextCount(habit, logs, date);
+  /** Optimistically change a habit-day.
+   *
+   *  mode "done"  -> fill or clear the whole period in one tap (default)
+   *  mode "step"  -> +1, for the counter control
+   *  a number     -> set exactly (the -/+ stepper) */
+  async function bump(habit: Habit, date: string, next?: number | "step") {
+    const value =
+      typeof next === "number"
+        ? next
+        : next === "step"
+          ? nextCount(habit, logs, date)
+          : completeCount(habit, logs, date);
 
     queryClient.setQueryData<HabitsData>(qk.habits(), (prev) =>
       prev ? { ...prev, logs: applyLog(prev.logs, habit.id, date, value) } : prev,
@@ -92,6 +102,7 @@ export default function HabitsClient({
           onOpen={(id) => setView({ name: "detail", habitId: id })}
           onNew={() => setView({ name: "edit" })}
           onToggle={(h, d) => bump(h, d)}
+          onStep={(h, d) => bump(h, d, "step")}
           onSetCount={(h, d, c) => bump(h, d, c)}
         />
       )}
@@ -149,6 +160,7 @@ function ListView({
   onOpenDay,
   onNew,
   onToggle,
+  onStep,
   onSetCount,
 }: {
   habits: Habit[];
@@ -158,6 +170,7 @@ function ListView({
   onOpenDay: () => void;
   onNew: () => void;
   onToggle: (h: Habit, date: string) => void;
+  onStep: (h: Habit, date: string) => void;
   onSetCount: (h: Habit, date: string, count: number) => void;
 }) {
   const [filter, setFilter] = useState<"all" | Cadence>("all");
@@ -273,6 +286,7 @@ function ListView({
                       today={today}
                       onOpen={() => onOpen(h.id)}
                       onToggleDay={(d) => onToggle(h, d)}
+                      onStep={(d) => onStep(h, d)}
                       onSetCount={(d, c) => onSetCount(h, d, c)}
                     />
                   </li>
@@ -293,6 +307,7 @@ function ListView({
                       today={today}
                       onOpen={() => onOpen(h.id)}
                       onToggleDay={(d) => onToggle(h, d)}
+                      onStep={(d) => onStep(h, d)}
                       onSetCount={(d, c) => onSetCount(h, d, c)}
                     />
                   </li>
@@ -312,6 +327,7 @@ function HabitRow({
   today,
   onOpen,
   onToggleDay,
+  onStep,
   onSetCount,
 }: {
   habit: Habit;
@@ -319,9 +335,13 @@ function HabitRow({
   today: string;
   onOpen: () => void;
   onToggleDay: (date: string) => void;
+  onStep: (date: string) => void;
   onSetCount: (date: string, count: number) => void;
 }) {
   const [open, setOpen] = useState(false);
+  // The day the user last acted on, so back-dating has a visible anchor
+  // rather than a dot that silently changes somewhere in the strip.
+  const [picked, setPicked] = useState<string | null>(null);
   const tone = habit.color ?? "#A8E830";
   const streak = habitStreak(habit, logs, today);
   const days = weekDays(today);
@@ -365,7 +385,7 @@ function HabitRow({
         {multi ? (
           <button
             type="button"
-            onClick={() => onSetCount(today, cur >= habit.target_per_period ? 0 : cur + 1)}
+            onClick={() => onStep(today)}
             aria-label={`Add one to ${habit.name}`}
             className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-bold tabular-nums active:scale-95"
             style={{ borderColor: `${tone}66`, color: tone }}
@@ -413,7 +433,10 @@ function HabitRow({
                   key={d}
                   type="button"
                   disabled={future}
-                  onClick={() => onToggleDay(d)}
+                  onClick={() => {
+                    setPicked(d);
+                    onToggleDay(d);
+                  }}
                   aria-label={`${habit.name} on ${d}`}
                   aria-pressed={done}
                   className="flex flex-col items-center gap-1.5 disabled:opacity-25"
@@ -425,16 +448,35 @@ function HabitRow({
                       backgroundColor: done ? tone : "transparent",
                       border: done ? "none" : "1px solid rgba(255,255,255,0.2)",
                       color: done ? "#141807" : "transparent",
+                      outline: picked === d ? `2px solid ${tone}` : "none",
+                      outlineOffset: "2px",
                     }}
                     aria-hidden
                   >
                     ✓
                   </span>
-                  <span className="text-[10px] text-muted">{Number(d.slice(8, 10))}</span>
+                  <span
+                    className="text-[10px]"
+                    style={{ color: picked === d ? tone : undefined }}
+                  >
+                    {Number(d.slice(8, 10))}
+                  </span>
                 </button>
               );
             })}
           </div>
+          {picked && (
+            <p className="mt-3 text-center text-xs">
+              <span className="font-semibold" style={{ color: tone }}>
+                {formatShortDate(picked)}
+              </span>
+              <span className="text-muted">
+                {" "}
+                · {isComplete(habit, logs, picked) ? "marked done" : "cleared"}
+                {picked === today ? " (today)" : ""}
+              </span>
+            </p>
+          )}
           {multi && (
             <div className="mt-3 flex items-center justify-center gap-4">
               <button
@@ -575,7 +617,27 @@ function DayView({
         })}
       </div>
 
-      <h2 className="mt-5 text-base font-semibold text-ink">{formatShortDate(date)}</h2>
+      <div className="mt-5 flex items-center justify-between gap-2">
+        <h2 className="text-base font-semibold text-ink">
+          {formatShortDate(date)}
+          {date === today && <span className="text-muted"> · Today</span>}
+        </h2>
+        {date !== today && (
+          <button
+            type="button"
+            onClick={() => onDate(today)}
+            className="shrink-0 rounded-full border border-green/40 px-3 py-1 text-xs font-semibold text-green active:bg-green/10"
+          >
+            Back to today
+          </button>
+        )}
+      </div>
+      {date !== today && (
+        <p className="mt-1.5 rounded-xl bg-orange-soft px-3 py-1.5 text-xs font-medium text-orange">
+          Editing a past day — anything you tick is saved to{" "}
+          {formatShortDate(date)}.
+        </p>
+      )}
       <p className="mt-1 text-sm text-muted">
         {doneCount} of {due.length} habits completed
       </p>
@@ -677,6 +739,7 @@ function DetailView({
   const pct = elapsed === 0 ? 0 : Math.round((doneThisWeek / elapsed) * 100);
   const done = isComplete(habit, logs, today);
   const [confirm, setConfirm] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
 
   // Month grid for the history calendar.
   const [y, m] = [Number(today.slice(0, 4)), Number(today.slice(5, 7))];
@@ -742,7 +805,10 @@ function DetailView({
                 key={d}
                 type="button"
                 disabled={future}
-                onClick={() => onToggleDay(d)}
+                onClick={() => {
+                  setPicked(d);
+                  onToggleDay(d);
+                }}
                 aria-label={`${habit.name} on ${d}`}
                 aria-pressed={ok}
                 className="flex flex-col items-center gap-1.5 disabled:opacity-25"
@@ -754,6 +820,8 @@ function DetailView({
                     backgroundColor: ok ? tone : "transparent",
                     border: ok ? "none" : "1px solid rgba(255,255,255,0.15)",
                     color: ok ? "#141807" : "transparent",
+                    outline: picked === d ? `2px solid ${tone}` : "none",
+                    outlineOffset: "2px",
                   }}
                   aria-hidden
                 >
@@ -806,7 +874,10 @@ function DetailView({
                 <button
                   type="button"
                   disabled={future}
-                  onClick={() => onToggleDay(key)}
+                  onClick={() => {
+                    setPicked(key);
+                    onToggleDay(key);
+                  }}
                   aria-label={`${habit.name} on ${key}`}
                   aria-pressed={ok}
                   className="flex h-7 w-7 items-center justify-center rounded-full text-xs active:scale-90"
@@ -814,6 +885,8 @@ function DetailView({
                     backgroundColor: ok ? tone : "transparent",
                     color: ok ? "#141807" : future ? "#5A6052" : "#F1F3EA",
                     border: isToday && !ok ? `1.5px solid ${tone}` : "none",
+                    outline: picked === key ? `2px solid ${tone}` : "none",
+                    outlineOffset: "1px",
                     fontWeight: ok || isToday ? 700 : 400,
                   }}
                 >
@@ -826,6 +899,16 @@ function DetailView({
       </section>
 
       <div className="mt-5 space-y-2.5">
+        {picked && picked !== today && (
+          <p
+            className="rounded-xl px-3 py-2 text-center text-xs"
+            style={{ backgroundColor: `${tone}1F`, color: tone }}
+          >
+            <strong>{formatShortDate(picked)}</strong>{" "}
+            {isComplete(habit, logs, picked) ? "marked done" : "cleared"} — tap it
+            again to undo
+          </p>
+        )}
         <button
           type="button"
           onClick={onToggle}

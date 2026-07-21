@@ -202,3 +202,18 @@ export function nextCount(habit: Habit, logs: HabitLog[], date: string): number 
   }
   return cur > 0 ? 0 : 1;
 }
+
+/**
+ * Count for an explicit "mark as done" action: fill the period in one tap, or
+ * clear it if it's already done.
+ *
+ * Distinct from nextCount, which steps by one for the "+" counter. A button
+ * labelled "Mark as Done" must finish the habit outright — stepping would make
+ * a 10-unit habit take ten taps to complete.
+ *
+ * A weekly habit's day counts as one occurrence, not the weekly target.
+ */
+export function completeCount(habit: Habit, logs: HabitLog[], date: string): number {
+  if (isComplete(habit, logs, date)) return 0;
+  return habit.cadence === "daily" ? habit.target_per_period : 1;
+}
