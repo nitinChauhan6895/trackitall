@@ -209,6 +209,7 @@ export default function DayView({ date }: { date: string }) {
                       sets={ex.sets.map((s) => ({
                         id: s.id,
                         label: formatSavedSet(ex, kind, s),
+                        isHard: s.is_hard === true,
                       }))}
                       inputs={inputsFor(ex, kind)}
                       onAddSet={(fields) =>

@@ -49,8 +49,11 @@ function modeFor(g: MuscleGroup): Mode {
   return "strength";
 }
 
+/** DraftSet keys that hold a free-text value (excludes id and the hard flag). */
+type DraftValueKey = Exclude<keyof DraftSet, "id" | "isHard">;
+
 type FieldDesc = {
-  draftKey: keyof DraftSet;
+  draftKey: DraftValueKey;
   label: string;
   unit: string;
   kind: "number" | "time";
@@ -69,6 +72,7 @@ type DraftSet = {
   sets_count: string;
   height: string;
   floors: string;
+  isHard: boolean;
 };
 
 // Sync lifecycle: draft (local only / edited) → syncing → saved | error.
@@ -104,6 +108,7 @@ const emptySet = (): DraftSet => ({
   sets_count: "",
   height: "",
   floors: "",
+  isHard: false,
 });
 
 // A fresh card for `group`. Strength starts with one empty set row;
@@ -142,7 +147,7 @@ function num(s: string): number | null {
 function cardioDesc(f: CardioField): FieldDesc {
   const meta = CARDIO_FIELD_META[f];
   return {
-    draftKey: f as keyof DraftSet,
+    draftKey: f as DraftValueKey,
     label: meta.label,
     unit: meta.unit,
     kind: f === "time" ? "time" : "number",
@@ -162,7 +167,7 @@ function fieldDescriptors(mode: Mode, ex: DraftExercise): FieldDesc[] {
   return [];
 }
 
-function setFromDraftKey(out: SetInput, key: keyof DraftSet, raw: string) {
+function setFromDraftKey(out: SetInput, key: DraftValueKey, raw: string) {
   switch (key) {
     case "reps": out.reps = num(raw); break;
     case "weight": out.weight_kg = num(raw); break;
@@ -180,7 +185,7 @@ function setFromDraftKey(out: SetInput, key: keyof DraftSet, raw: string) {
 
 function toSetInput(mode: Mode, ex: DraftExercise, s: DraftSet): SetInput {
   if (mode === "strength") {
-    return { reps: num(s.reps), weight_kg: num(s.weight) };
+    return { reps: num(s.reps), weight_kg: num(s.weight), is_hard: s.isHard };
   }
   const out: SetInput = {};
   for (const d of fieldDescriptors(mode, ex)) {
@@ -233,7 +238,10 @@ function summarizeExercise(ex: DraftExercise): string {
 function draftFromMetrics(metrics: Record<string, string | number>): DraftSet {
   const base = emptySet();
   for (const [k, v] of Object.entries(metrics)) {
-    if (k in base) (base as Record<string, string>)[k] = String(v);
+    // Circuit metrics only ever carry the text fields; isHard is a per-set
+    // judgement and must not come from a saved template.
+    if (k === "isHard" || !(k in base)) continue;
+    (base as unknown as Record<string, string>)[k] = String(v);
   }
   return base;
 }
@@ -619,7 +627,7 @@ function ExerciseForm({
 }) {
   // Cardio/HIIT keep a single inline entry bound to sets[0].
   const entry = ex.sets[0] ?? emptySet();
-  function patchEntry(key: keyof DraftSet, value: string) {
+  function patchEntry(key: DraftValueKey, value: string) {
     const next = { ...entry, [key]: value };
     onChange({ sets: [next, ...ex.sets.slice(1)], status: "draft" });
   }
@@ -754,7 +762,7 @@ function StrengthSets({
   const inputClass =
     "min-w-0 flex-1 rounded-xl border border-white/10 bg-surface-2 px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-green";
 
-  function patch(id: string, key: keyof DraftSet, value: string) {
+  function patch(id: string, key: keyof DraftSet, value: string | boolean) {
     onChange(sets.map((s) => (s.id === id ? { ...s, [key]: value } : s)));
   }
 
@@ -765,6 +773,8 @@ function StrengthSets({
     if (last) {
       next.reps = last.reps;
       next.weight = last.weight;
+      // isHard deliberately not copied: whether a set was taken to failure is
+      // a judgement about that set, not a property of the template.
     }
     onChange([...sets, next]);
   }
@@ -796,6 +806,21 @@ function StrengthSets({
               placeholder="weight (kg)"
               className={inputClass}
             />
+            <button
+              type="button"
+              onClick={() => patch(s.id, "isHard", !s.isHard)}
+              aria-pressed={s.isHard}
+              aria-label={`Set ${i + 1}: ${s.isHard ? "hard set" : "mark as hard set"}`}
+              title="Hard set — taken to or near failure"
+              className={[
+                "shrink-0 rounded-lg border px-2 py-1.5 text-xs font-bold transition active:scale-95",
+                s.isHard
+                  ? "border-orange bg-orange-soft text-orange"
+                  : "border-white/10 text-muted",
+              ].join(" ")}
+            >
+              HARD
+            </button>
             <button
               type="button"
               onClick={() => onChange(sets.filter((x) => x.id !== s.id))}

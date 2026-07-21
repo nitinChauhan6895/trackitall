@@ -74,6 +74,7 @@ export type SetInput = {
   sets_count?: number | null;
   height?: number | null;
   floors?: number | null;
+  is_hard?: boolean | null;
 };
 export type ExerciseInput = { name: string; sets: SetInput[] };
 export type GroupInput = { muscle_group: MuscleGroup; exercises: ExerciseInput[] };
@@ -112,6 +113,7 @@ function setRow(s: SetInput, exerciseId: string, userId: string, position: numbe
     sets_count: cleanInt(s.sets_count),
     height: cleanNum(s.height),
     floors: cleanNum(s.floors),
+    is_hard: s.is_hard === true,
   };
 }
 
@@ -151,6 +153,7 @@ export async function upsertExercise(input: {
     sets_count: cleanInt(s.sets_count),
     height: cleanNum(s.height),
     floors: cleanNum(s.floors),
+    is_hard: s.is_hard === true,
   }));
 
   const { data, error } = await supabase.rpc("save_exercise_with_sets", {
@@ -328,6 +331,8 @@ export async function addSet(formData: FormData) {
     height: numOrNull(formData.get("height")),
     floors: numOrNull(formData.get("floors")),
     time_seconds: parseTimeToSeconds(String(formData.get("time") ?? "")),
+    // Checkbox arrives as "on" (or our explicit "1") only when ticked.
+    is_hard: ["on", "1", "true"].includes(String(formData.get("is_hard") ?? "")),
   };
 
   if (!setHasValue(input)) {

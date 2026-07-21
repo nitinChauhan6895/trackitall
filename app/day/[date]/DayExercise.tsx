@@ -31,13 +31,14 @@ export default function DayExercise({
   index: number;
   /** Muscle-group accent colour, used for the number, chips and set count. */
   tone: string;
-  sets: { id: string; label: string }[];
+  sets: { id: string; label: string; isHard?: boolean }[];
   inputs: InputSpec[];
   onAddSet: (fields: Record<string, string>) => void;
   onDeleteSet: (setId: string) => void;
   onDeleteExercise: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [hard, setHard] = useState(false);
 
   // The parent owns the mutation (optimistic cache update + queue when
   // offline); here we just collect the form fields.
@@ -46,7 +47,9 @@ export default function DayExercise({
     const form = e.currentTarget;
     const fields: Record<string, string> = {};
     for (const [k, v] of new FormData(form).entries()) fields[k] = String(v);
+    if (hard) fields.is_hard = "1";
     form.reset();
+    setHard(false);
     onAddSet(fields);
   }
 
@@ -87,6 +90,14 @@ export default function DayExercise({
                     {i + 1}
                   </span>
                   {s.label}
+                  {s.isHard && (
+                    <span
+                      className="rounded bg-orange-soft px-1 text-[9px] font-bold text-orange"
+                      title="Hard set"
+                    >
+                      HARD
+                    </span>
+                  )}
                 </span>
               ))}
             </span>
@@ -105,6 +116,11 @@ export default function DayExercise({
                   {i + 1}
                 </span>
                 {s.label}
+                {s.isHard && (
+                  <span className="rounded bg-orange-soft px-1 text-[9px] font-bold text-orange">
+                    HARD
+                  </span>
+                )}
               </span>
               <button
                 type="button"
@@ -130,6 +146,18 @@ export default function DayExercise({
                 className="min-w-0 flex-1 rounded-lg border border-white/10 bg-surface-2 px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus:border-green"
               />
             ))}
+            <button
+              type="button"
+              onClick={() => setHard((v) => !v)}
+              aria-pressed={hard}
+              title="Hard set — taken to or near failure"
+              className={[
+                "shrink-0 rounded-lg border px-2 py-2 text-xs font-bold transition active:scale-95",
+                hard ? "border-orange bg-orange-soft text-orange" : "border-white/10 text-muted",
+              ].join(" ")}
+            >
+              HARD
+            </button>
             <button
               type="submit"
               className="shrink-0 rounded-lg bg-green px-3 py-2 text-sm font-bold text-ink-inverse active:scale-95"

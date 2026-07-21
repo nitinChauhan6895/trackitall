@@ -116,6 +116,8 @@ export type WorkoutSet = {
   sets_count: number | null;
   height: number | null;
   floors: number | null;
+  /** Taken to (or near) failure — counted separately in Load stats. */
+  is_hard?: boolean | null;
 };
 
 export type Exercise = {

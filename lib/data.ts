@@ -499,7 +499,7 @@ export async function getStatsData(todayKey?: string): Promise<StatsData> {
   const { data, error } = await supabase
     .from("exercises")
     .select(
-      "workout_date, muscle_group, name, cardio_type, sets(position, reps, weight_kg, distance_km, distance_m)",
+      "workout_date, muscle_group, name, cardio_type, sets(position, reps, weight_kg, distance_km, distance_m, is_hard)",
     );
   if (error) throw error;
   const today =

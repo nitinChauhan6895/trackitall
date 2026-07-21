@@ -7,7 +7,8 @@ import { qk } from "@/lib/browserData";
 import { toDateKey } from "@/lib/date";
 import { formatDayMonth } from "@/lib/dateFormat";
 import { RANGE_KEYS, RANGE_LABELS, type RangeKey } from "@/lib/stats";
-import type { HistorySession, SeriesPoint, StatsData, WeekStats } from "@/lib/stats";
+import type { GroupLoad, HistorySession, SeriesPoint, StatsData, WeekStats } from "@/lib/stats";
+import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
 
 const GREEN = "#A8E830";
 const ORANGE = "#FF571F";
@@ -26,6 +27,7 @@ const EMPTY_RANGE: WeekStats = {
   cardioBucketDays: 1,
   muscles: [],
   neglected: [],
+  load: [],
 };
 
 export type NutritionWeekSummary = {
@@ -62,6 +64,8 @@ export default function StatsView({
   // than crash on a stale IndexedDB entry.
   const week = stats.ranges?.[range] ?? EMPTY_RANGE;
   const rangeLabel = RANGE_LABELS[range].toLowerCase();
+  // Older cached StatsData has no month block — fall back rather than crash.
+  const month = stats.month ?? { sessions: 0, sets: 0, volumeKg: 0, groups: 0 };
   const [exercise, setExercise] = useState(stats.strengthExercises[0] ?? "");
   const series = stats.strengthSeries[exercise] ?? [];
   // Older releases cached a StatsData without history — tolerate its absence
@@ -80,6 +84,20 @@ export default function StatsView({
         </h1>
         <p className="mt-0.5 text-sm text-muted">Your progress at a glance</p>
       </header>
+
+      {/* This calendar month — sits above the range filter and is unaffected
+          by it, so there is always a stable headline to glance at. */}
+      <SectionLabel>This month</SectionLabel>
+      <div className="grid grid-cols-2 gap-2">
+        <Card value={String(month.sessions)} unit="sessions" label="Workouts logged" />
+        <Card green value={String(month.sets)} unit="sets" label="Sets completed" />
+        <Card
+          value={month.volumeKg >= 1000 ? (month.volumeKg / 1000).toFixed(1) : String(month.volumeKg)}
+          unit={month.volumeKg >= 1000 ? "t" : "kg"}
+          label="Total weight lifted"
+        />
+        <Card green value={String(month.groups)} unit="groups" label="Muscle groups hit" />
+      </div>
 
       {/* Time range */}
       <label className="mt-4 block">
@@ -111,14 +129,9 @@ export default function StatsView({
         </>
       )}
 
-      {/* Summary */}
-      <SectionLabel>Summary</SectionLabel>
-      <div className="grid grid-cols-2 gap-2">
-        <Card value={String(week.workoutDays)} unit="days" label={`Workouts · ${rangeLabel}`} />
-        <Card green value={String(stats.monthTotal)} unit="sessions" label="This month total" />
-        <Card value={String(week.totalSets)} unit="sets" label={`Total sets · ${week.totalReps} reps`} />
-        <Card green value={weightVal} unit={weightUnit} label="Total weight lifted" />
-      </div>
+      {/* Load stats — per muscle group, for the selected range. */}
+      <SectionLabel>Load stats · {rangeLabel}</SectionLabel>
+      <LoadStats load={week.load} />
 
       {/* Streak */}
       <SectionLabel>Streak</SectionLabel>
@@ -182,6 +195,78 @@ export default function StatsView({
       )}
       <MuscleBreakdown week={week} />
     </main>
+  );
+}
+
+function LoadStats({ load }: { load: GroupLoad[] }) {
+  if (load.length === 0) {
+    return <Empty>Nothing logged in this window.</Empty>;
+  }
+  const maxSets = Math.max(...load.map((l) => l.sets), 1);
+  return (
+    <div className="space-y-2">
+      {load.map((l) => (
+        <div key={l.group} className="rounded-2xl border border-white/10 bg-surface p-3">
+          <div className="flex items-center gap-2">
+            <span className="h-5 w-5 shrink-0" style={{ color: MUSCLE_TONE[l.group] }}>
+              <MuscleIcon group={l.group} />
+            </span>
+            <span className="flex-1 truncate text-sm font-semibold text-ink">
+              {l.label}
+            </span>
+            <span className="text-xs text-muted">
+              {l.exercises} {l.exercises === 1 ? "exercise" : "exercises"}
+            </span>
+          </div>
+
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${(l.sets / maxSets) * 100}%`,
+                background: MUSCLE_TONE[l.group],
+              }}
+            />
+          </div>
+
+          <div className="mt-2.5 grid grid-cols-3 gap-2 text-center">
+            <Metric value={String(l.sets)} label="sets" />
+            <Metric
+              value={String(l.hardSets)}
+              label="hard sets"
+              tone={l.hardSets > 0 ? "#FF6233" : undefined}
+            />
+            <Metric
+              value={
+                l.volumeKg >= 1000
+                  ? `${(l.volumeKg / 1000).toFixed(1)}t`
+                  : `${l.volumeKg}kg`
+              }
+              label="volume"
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Metric({
+  value,
+  label,
+  tone,
+}: {
+  value: string;
+  label: string;
+  tone?: string;
+}) {
+  return (
+    <div>
+      <p className="text-base font-bold tabular-nums" style={{ color: tone ?? "#F1F3EA" }}>
+        {value}
+      </p>
+      <p className="text-[10px] text-muted">{label}</p>
+    </div>
   );
 }
 

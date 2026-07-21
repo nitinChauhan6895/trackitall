@@ -18,6 +18,7 @@ export type RawStatsExercise = {
     weight_kg: number | null;
     distance_km: number | null;
     distance_m: number | null;
+    is_hard?: boolean | null;
   }[];
 };
 
@@ -36,6 +37,8 @@ export type WeekStats = {
   cardioBucketDays: number;
   muscles: MuscleCount[]; // every tracked group (incl. 0), desc by count
   neglected: string[]; // group labels with 0 sessions
+  /** Per-group load, busiest first; groups with no work are omitted. */
+  load: GroupLoad[];
 };
 
 /** Selectable windows, in the order they're offered. */
@@ -61,6 +64,25 @@ export const RANGE_LABELS: Record<RangeKey, string> = {
 
 export type SeriesPoint = { date: string; value: number };
 
+/** Training load for one muscle group over the selected window. */
+export type GroupLoad = {
+  group: MuscleGroup;
+  label: string;
+  sets: number;
+  hardSets: number;
+  volumeKg: number;
+  /** Distinct exercise names trained in the window. */
+  exercises: number;
+};
+
+/** Headline numbers for the current calendar month. */
+export type MonthSummary = {
+  sessions: number;
+  sets: number;
+  volumeKg: number;
+  groups: number;
+};
+
 /** One logged set, as it appeared in a session. */
 export type HistorySet = { reps: number | null; weightKg: number | null };
 
@@ -84,6 +106,7 @@ export type StatsData = {
   currentStreak: number;
   bestStreak: number;
   ranges: Record<RangeKey, WeekStats>;
+  month: MonthSummary;
   strengthExercises: string[];
   strengthSeries: Record<string, SeriesPoint[]>;
   /** Most recent sessions first, capped at HISTORY_LIMIT per exercise. */
@@ -116,8 +139,10 @@ function weekStats(
   startKey: string,
   byDate: Map<string, DayAgg>,
   days = 7,
+  exs: RawStatsExercise[] = [],
 ): WeekStats {
   const dayKeys = Array.from({ length: days }, (_, i) => addDays(startKey, i));
+  const inWindow = new Set(dayKeys);
   let workoutDays = 0;
   let totalSets = 0;
   let totalReps = 0;
@@ -171,7 +196,41 @@ function weekStats(
   })).sort((a, b) => b.count - a.count);
   const neglected = muscles.filter((m) => m.count === 0).map((m) => m.label);
 
+  // Per-group training load. Built from the raw rows rather than the per-day
+  // aggregate because sets, hard sets and distinct exercises are all
+  // group-scoped, which the day rollup has already flattened away.
+  const loadMap = new Map<
+    MuscleGroup,
+    { sets: number; hardSets: number; volumeKg: number; names: Set<string> }
+  >();
+  for (const e of exs) {
+    if (!inWindow.has(e.workout_date)) continue;
+    const g = e.muscle_group as MuscleGroup;
+    let l = loadMap.get(g);
+    if (!l) {
+      l = { sets: 0, hardSets: 0, volumeKg: 0, names: new Set() };
+      loadMap.set(g, l);
+    }
+    l.names.add(e.name);
+    for (const st of e.sets ?? []) {
+      l.sets++;
+      if (st.is_hard) l.hardSets++;
+      if (st.reps != null && st.weight_kg != null) l.volumeKg += st.reps * st.weight_kg;
+    }
+  }
+  const load: GroupLoad[] = Array.from(loadMap.entries())
+    .map(([group, l]) => ({
+      group,
+      label: MUSCLE_GROUP_LABELS[group],
+      sets: l.sets,
+      hardSets: l.hardSets,
+      volumeKg: Math.round(l.volumeKg),
+      exercises: l.names.size,
+    }))
+    .sort((a, b) => b.sets - a.sets || b.volumeKg - a.volumeKg);
+
   return {
+    load,
     workoutDays,
     totalSets,
     totalReps,
@@ -283,19 +342,41 @@ export function computeStats(exs: RawStatsExercise[], today: Date): StatsData {
       .slice(0, HISTORY_LIMIT);
   }
 
+  // Whole calendar month to date: sessions, sets, volume and how many distinct
+  // muscle groups were hit.
+  let monthSets = 0;
+  let monthVolume = 0;
+  const monthGroups = new Set<string>();
+  for (const e of exs) {
+    if (!e.workout_date.startsWith(monthPrefix)) continue;
+    monthGroups.add(e.muscle_group);
+    for (const st of e.sets ?? []) {
+      monthSets++;
+      if (st.reps != null && st.weight_kg != null) monthVolume += st.reps * st.weight_kg;
+    }
+  }
+  const monthSummary: MonthSummary = {
+    sessions: monthTotal,
+    sets: monthSets,
+    volumeKg: Math.round(monthVolume),
+    groups: monthGroups.size,
+  };
+
   return {
     hasAnyData: exs.length > 0,
     monthTotal,
     currentStreak: currentStreak(allDates, todayKey),
     bestStreak: longestStreak(allDates),
     ranges: {
-      thisWeek: weekStats(thisMon, byDate, 7),
-      last7: weekStats(last7Start, byDate, 7),
-      thisMonth: weekStats(monthStart, byDate, daysSoFarThisMonth),
-      lastMonth: weekStats(prevMonthStart, byDate, prevMonthDays),
-      last30: weekStats(addDays(todayKey, -29), byDate, 30),
-      last60: weekStats(addDays(todayKey, -59), byDate, 60),
+      thisWeek: weekStats(thisMon, byDate, 7, exs),
+      last7: weekStats(last7Start, byDate, 7, exs),
+      thisMonth: weekStats(monthStart, byDate, daysSoFarThisMonth, exs),
+      lastMonth: weekStats(prevMonthStart, byDate, prevMonthDays, exs),
+      last30: weekStats(addDays(todayKey, -29), byDate, 30, exs),
+      last60: weekStats(addDays(todayKey, -59), byDate, 60, exs),
     },
+    // Calendar-month headline, independent of the range filter.
+    month: monthSummary,
     strengthExercises,
     strengthSeries,
     strengthHistory,
