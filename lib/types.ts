@@ -266,10 +266,26 @@ export function formatSeconds(total: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function parseTimeToSeconds(input: string): number | null {
+/**
+ * Parse a duration to whole seconds.
+ *
+ * Colon forms are unambiguous: "mm:ss" and "hh:mm:ss". A BARE number is the
+ * trap — for a rest interval "45" means 45 seconds, but for cardio "30" means
+ * 30 minutes (nobody logs "30 seconds of running"). `bareUnit` decides which,
+ * so the cardio Duration field can take plain minutes while HIIT intervals stay
+ * seconds.
+ */
+export function parseDuration(
+  input: string,
+  bareUnit: "seconds" | "minutes" = "seconds",
+): number | null {
   const t = input.trim();
   if (t === "") return null;
-  if (/^\d+$/.test(t)) return Number(t); // bare seconds
+  // Bare number (allow a decimal, e.g. "30.5" minutes).
+  if (/^\d+(\.\d+)?$/.test(t)) {
+    const n = Number(t);
+    return Math.round(bareUnit === "minutes" ? n * 60 : n);
+  }
   const hms = t.match(/^(\d{1,2}):([0-5]?\d):([0-5]?\d)$/);
   if (hms) {
     return Number(hms[1]) * 3600 + Number(hms[2]) * 60 + Number(hms[3]);
@@ -277,6 +293,11 @@ export function parseTimeToSeconds(input: string): number | null {
   const ms = t.match(/^(\d{1,3}):([0-5]?\d)$/);
   if (ms) return Number(ms[1]) * 60 + Number(ms[2]);
   return null;
+}
+
+/** Back-compat: a bare number is seconds. */
+export function parseTimeToSeconds(input: string): number | null {
+  return parseDuration(input, "seconds");
 }
 
 function trimNum(n: number): string {

@@ -8,6 +8,7 @@ import { getLocalUser } from "@/lib/supabase/user";
 import {
   MUSCLE_GROUPS,
   PR_UNIT_TYPES,
+  parseDuration,
   parseTimeToSeconds,
   type CardioType,
   type MuscleGroup,
@@ -331,7 +332,10 @@ export async function addSet(formData: FormData) {
     sets_count: numOrNull(formData.get("sets_count")),
     height: numOrNull(formData.get("height")),
     floors: numOrNull(formData.get("floors")),
-    time_seconds: parseTimeToSeconds(String(formData.get("time") ?? "")),
+    time_seconds: parseDuration(
+      String(formData.get("time") ?? ""),
+      formData.get("time_unit") === "minutes" ? "minutes" : "seconds",
+    ),
     // Checkbox arrives as "on" (or our explicit "1") only when ticked.
     is_hard: ["on", "1", "true"].includes(String(formData.get("is_hard") ?? "")),
   };

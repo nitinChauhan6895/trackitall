@@ -12,6 +12,7 @@ import {
   MUSCLE_GROUP_LABELS,
   formatSeconds,
   isCardio,
+  parseDuration,
   parseTimeToSeconds,
   type CardioField,
   type CardioType,
@@ -215,11 +216,18 @@ export default function DayView({ date }: { date: string }) {
                       onAddSet={(fields) =>
                         mutate(
                           "addSet",
-                          { ...fields, exercise_id: ex.id, date },
+                          {
+                            ...fields,
+                            exercise_id: ex.id,
+                            date,
+                            // Cardio durations are minutes; the server parses
+                            // "time" with this so a bare "30" isn't 30 seconds.
+                            time_unit: kind === "cardio" ? "minutes" : "seconds",
+                          },
                           (prev) =>
                             prev.map((e) =>
                               e.id === ex.id
-                                ? { ...e, sets: [...e.sets, synthSet(fields)] }
+                                ? { ...e, sets: [...e.sets, synthSet(fields, kind)] }
                                 : e,
                             ),
                         )
@@ -346,7 +354,7 @@ function fmtVolume(v: number): string {
 
 // Builds the row the server would have created, so a set added offline renders
 // immediately (and formats) exactly like a saved one.
-function synthSet(fields: Record<string, string>): WorkoutSet {
+function synthSet(fields: Record<string, string>, kind: SetKind): WorkoutSet {
   const n = (v?: string) => {
     if (v == null || v.trim() === "") return null;
     const x = Number(v);
@@ -360,7 +368,7 @@ function synthSet(fields: Record<string, string>): WorkoutSet {
     distance_km: n(fields.distance_km),
     distance_m: n(fields.distance_m),
     speed_kmh: n(fields.speed),
-    time_seconds: parseTimeToSeconds(fields.time ?? ""),
+    time_seconds: parseDuration(fields.time ?? "", kind === "cardio" ? "minutes" : "seconds"),
     calories: n(fields.calories),
     incline: n(fields.incline),
     resistance: n(fields.resistance),
@@ -437,7 +445,7 @@ const HIIT_INPUTS: Record<ResolvedMetric["draftKey"], InputSpec> = {
 const FIELD_INPUTS: Record<CardioField, InputSpec> = {
   distance_km: { name: "distance_km", placeholder: "Distance (km)", type: "number", step: "0.1" },
   distance_m: { name: "distance_m", placeholder: "Distance (m)", type: "number", step: "1" },
-  time: { name: "time", placeholder: "Duration (hh:mm:ss)", type: "text" },
+  time: { name: "time", placeholder: "Minutes (e.g. 30)", type: "text" },
   calories: { name: "calories", placeholder: "Calories (kcal)", type: "number", step: "1" },
   incline: { name: "incline", placeholder: "Incline", type: "number", step: "0.5" },
   resistance: { name: "resistance", placeholder: "Resistance", type: "number", step: "1" },

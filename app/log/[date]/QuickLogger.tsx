@@ -12,6 +12,7 @@ import {
   MUSCLE_GROUP_LABELS,
   defaultCardioType,
   formatSeconds,
+  parseDuration,
   parseTimeToSeconds,
   type CardioField,
   type CardioType,
@@ -167,13 +168,19 @@ function fieldDescriptors(mode: Mode, ex: DraftExercise): FieldDesc[] {
   return [];
 }
 
-function setFromDraftKey(out: SetInput, key: DraftValueKey, raw: string) {
+function setFromDraftKey(
+  out: SetInput,
+  key: DraftValueKey,
+  raw: string,
+  // Cardio durations are entered in minutes; HIIT interval times in seconds.
+  timeBareUnit: "seconds" | "minutes",
+) {
   switch (key) {
     case "reps": out.reps = num(raw); break;
     case "weight": out.weight_kg = num(raw); break;
     case "distance_km": out.distance_km = num(raw); break;
     case "distance_m": out.distance_m = num(raw); break;
-    case "time": out.time_seconds = parseTimeToSeconds(raw); break;
+    case "time": out.time_seconds = parseDuration(raw, timeBareUnit); break;
     case "calories": out.calories = num(raw); break;
     case "incline": out.incline = num(raw); break;
     case "resistance": out.resistance = num(raw); break;
@@ -188,8 +195,9 @@ function toSetInput(mode: Mode, ex: DraftExercise, s: DraftSet): SetInput {
     return { reps: num(s.reps), weight_kg: num(s.weight), is_hard: s.isHard };
   }
   const out: SetInput = {};
+  const timeBareUnit = mode === "cardio" ? "minutes" : "seconds";
   for (const d of fieldDescriptors(mode, ex)) {
-    setFromDraftKey(out, d.draftKey, s[d.draftKey]);
+    setFromDraftKey(out, d.draftKey, s[d.draftKey], timeBareUnit);
   }
   return out;
 }
@@ -225,7 +233,7 @@ function summarizeExercise(ex: DraftExercise): string {
     const v = s[d.draftKey];
     if (v === "") continue;
     if (d.kind === "time") {
-      const secs = parseTimeToSeconds(v);
+      const secs = parseDuration(v, mode === "cardio" ? "minutes" : "seconds");
       parts.push(secs == null ? v : formatSeconds(secs));
     } else {
       parts.push(d.unit ? `${v} ${d.unit}` : `${d.label} ${v}`);
@@ -683,7 +691,7 @@ function ExerciseForm({
                   type={isTime ? "text" : "number"}
                   inputMode={isTime ? "text" : "decimal"}
                   min={isTime ? undefined : 0}
-                  placeholder={isTime ? "00:45:00" : "0"}
+                  placeholder={isTime ? (mode === "cardio" ? "Minutes (e.g. 30)" : "hh:mm:ss") : "0"}
                   className={`${INPUT_CLASS} ${d.unit ? "pr-12" : ""}`}
                 />
                 {d.unit && (
