@@ -213,6 +213,7 @@ export default function DayView({ date }: { date: string }) {
                         isHard: s.is_hard === true,
                       }))}
                       inputs={inputsFor(ex, kind)}
+                      timeUnitSelectable={kind === "cardio"}
                       onAddSet={(fields) =>
                         mutate(
                           "addSet",
@@ -368,7 +369,14 @@ function synthSet(fields: Record<string, string>, kind: SetKind): WorkoutSet {
     distance_km: n(fields.distance_km),
     distance_m: n(fields.distance_m),
     speed_kmh: n(fields.speed),
-    time_seconds: parseDuration(fields.time ?? "", kind === "cardio" ? "minutes" : "seconds"),
+    time_seconds: parseDuration(
+      fields.time ?? "",
+      fields.time_unit === "seconds"
+        ? "seconds"
+        : kind === "cardio"
+          ? "minutes"
+          : "seconds",
+    ),
     calories: n(fields.calories),
     incline: n(fields.incline),
     resistance: n(fields.resistance),

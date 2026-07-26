@@ -51,7 +51,7 @@ function modeFor(g: MuscleGroup): Mode {
 }
 
 /** DraftSet keys that hold a free-text value (excludes id and the hard flag). */
-type DraftValueKey = Exclude<keyof DraftSet, "id" | "isHard">;
+type DraftValueKey = Exclude<keyof DraftSet, "id" | "isHard" | "timeUnit">;
 
 type FieldDesc = {
   draftKey: DraftValueKey;
@@ -74,6 +74,8 @@ type DraftSet = {
   height: string;
   floors: string;
   isHard: boolean;
+  /** Unit for the `time` field. Cardio defaults to minutes; HIIT to seconds. */
+  timeUnit: "seconds" | "minutes";
 };
 
 // Sync lifecycle: draft (local only / edited) → syncing → saved | error.
@@ -110,6 +112,7 @@ const emptySet = (): DraftSet => ({
   height: "",
   floors: "",
   isHard: false,
+  timeUnit: "minutes",
 });
 
 // A fresh card for `group`. Strength starts with one empty set row;
@@ -195,7 +198,8 @@ function toSetInput(mode: Mode, ex: DraftExercise, s: DraftSet): SetInput {
     return { reps: num(s.reps), weight_kg: num(s.weight), is_hard: s.isHard };
   }
   const out: SetInput = {};
-  const timeBareUnit = mode === "cardio" ? "minutes" : "seconds";
+  // Cardio: the user picks min/sec (default minutes). HIIT intervals are seconds.
+  const timeBareUnit = mode === "cardio" ? s.timeUnit : "seconds";
   for (const d of fieldDescriptors(mode, ex)) {
     setFromDraftKey(out, d.draftKey, s[d.draftKey], timeBareUnit);
   }
@@ -233,7 +237,7 @@ function summarizeExercise(ex: DraftExercise): string {
     const v = s[d.draftKey];
     if (v === "") continue;
     if (d.kind === "time") {
-      const secs = parseDuration(v, mode === "cardio" ? "minutes" : "seconds");
+      const secs = parseDuration(v, mode === "cardio" ? s.timeUnit : "seconds");
       parts.push(secs == null ? v : formatSeconds(secs));
     } else {
       parts.push(d.unit ? `${v} ${d.unit}` : `${d.label} ${v}`);
@@ -639,6 +643,9 @@ function ExerciseForm({
     const next = { ...entry, [key]: value };
     onChange({ sets: [next, ...ex.sets.slice(1)], status: "draft" });
   }
+  function setTimeUnit(timeUnit: "seconds" | "minutes") {
+    onChange({ sets: [{ ...entry, timeUnit }, ...ex.sets.slice(1)], status: "draft" });
+  }
 
   const descriptors = fieldDescriptors(mode, ex);
 
@@ -682,22 +689,55 @@ function ExerciseForm({
       ) : (
         descriptors.map((d, i) => {
           const isTime = d.kind === "time";
+          // Cardio duration gets an explicit min/sec selector so there's no
+          // guessing about what a bare number means.
+          const isCardioTime = isTime && mode === "cardio";
           return (
             <Field key={d.draftKey} label={d.label} optional={i > 0}>
-              <div className="relative">
-                <input
-                  value={entry[d.draftKey]}
-                  onChange={(e) => patchEntry(d.draftKey, e.target.value)}
-                  type={isTime ? "text" : "number"}
-                  inputMode={isTime ? "text" : "decimal"}
-                  min={isTime ? undefined : 0}
-                  placeholder={isTime ? (mode === "cardio" ? "Minutes (e.g. 30)" : "hh:mm:ss") : "0"}
-                  className={`${INPUT_CLASS} ${d.unit ? "pr-12" : ""}`}
-                />
-                {d.unit && (
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">
-                    {d.unit}
-                  </span>
+              <div className="flex items-stretch gap-2">
+                <div className="relative flex-1">
+                  <input
+                    value={entry[d.draftKey]}
+                    onChange={(e) => patchEntry(d.draftKey, e.target.value)}
+                    type={isTime && !isCardioTime ? "text" : "number"}
+                    inputMode={isTime && !isCardioTime ? "text" : "decimal"}
+                    min={isTime && !isCardioTime ? undefined : 0}
+                    placeholder={
+                      isCardioTime
+                        ? entry.timeUnit === "minutes"
+                          ? "e.g. 30"
+                          : "e.g. 90"
+                        : isTime
+                          ? "hh:mm:ss"
+                          : "0"
+                    }
+                    className={`${INPUT_CLASS} ${d.unit ? "pr-12" : ""}`}
+                  />
+                  {d.unit && (
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">
+                      {d.unit}
+                    </span>
+                  )}
+                </div>
+                {isCardioTime && (
+                  <div className="flex shrink-0 overflow-hidden rounded-xl border border-white/10">
+                    {(["minutes", "seconds"] as const).map((u) => (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => setTimeUnit(u)}
+                        aria-pressed={entry.timeUnit === u}
+                        className={[
+                          "px-3 text-sm font-semibold transition",
+                          entry.timeUnit === u
+                            ? "bg-green text-ink-inverse"
+                            : "text-muted active:bg-white/10",
+                        ].join(" ")}
+                      >
+                        {u === "minutes" ? "min" : "sec"}
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             </Field>

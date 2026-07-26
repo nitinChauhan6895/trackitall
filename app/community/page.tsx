@@ -1,6 +1,6 @@
 import { getIncomingShares } from "@/lib/data";
 import Community from "../Community";
-import ShareInbox from "./ShareInbox";
+import ShareInbox from "@/components/ShareInbox";
 
 export default async function CommunityPage() {
   const shares = await getIncomingShares();

@@ -9,6 +9,7 @@ import {
   getProfile,
   getAllPrs,
   getRecentTraining,
+  getIncomingShares,
 } from "@/lib/data";
 import CalendarCard from "./CalendarCard";
 import { fraction } from "@/lib/nutrition";
@@ -27,6 +28,7 @@ import { groupPrs } from "@/lib/prGroups";
 import { parseMonthParam, toDateKey } from "@/lib/date";
 import { Badge } from "@/components/Badge";
 import { MeasurementCard, PrCard } from "@/components/HomeCards";
+import ShareInbox from "@/components/ShareInbox";
 
 // Deduped per request: the streak pill and the badges row share one query.
 const loadBadges = cache(getBadgeData);
@@ -151,8 +153,20 @@ export default async function HomePage({
           <MeasurementsPreview />
         </Suspense>
       </PreviewSection>
+
+      {/* Shared workouts — the accept inbox used to live on Community, which
+          was removed from the nav; it renders nothing when there's nothing to
+          accept, so it's invisible until a share arrives. */}
+      <Suspense fallback={null}>
+        <SharedWorkouts />
+      </Suspense>
     </main>
   );
+}
+
+async function SharedWorkouts() {
+  const shares = await getIncomingShares();
+  return <ShareInbox shares={shares} />;
 }
 
 async function BadgesPreview() {
