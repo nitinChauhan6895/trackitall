@@ -501,7 +501,7 @@ export async function getIncomingShares(): Promise<IncomingShare[]> {
 const isMissingColumn = (err: { code?: string } | null) => err?.code === "42703";
 
 const STATS_SELECT = (withHard: boolean) =>
-  `workout_date, muscle_group, name, cardio_type, sets(position, reps, weight_kg, distance_km, distance_m${
+  `workout_date, muscle_group, name, cardio_type, sets(position, reps, weight_kg, distance_km, distance_m, time_seconds${
     withHard ? ", is_hard" : ""
   })`;
 

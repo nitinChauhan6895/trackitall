@@ -18,6 +18,7 @@ export type RawStatsExercise = {
     weight_kg: number | null;
     distance_km: number | null;
     distance_m: number | null;
+    time_seconds?: number | null;
     is_hard?: boolean | null;
   }[];
 };
@@ -31,6 +32,8 @@ export type WeekStats = {
   totalVolumeKg: number;
   /** km totals per bucket across the window (see cardioBucketDays). */
   cardioSeries: number[];
+  /** Cardio minutes per bucket, aligned 1:1 with cardioSeries/cardioLabels. */
+  cardioTimeSeries: number[];
   /** One label per bucket. */
   cardioLabels: string[];
   /** 1 for short windows; 7 once a per-day bar chart would be unreadable. */
@@ -133,6 +136,7 @@ type DayAgg = {
   reps: number;
   volume: number;
   cardioKm: number;
+  cardioSec: number;
 };
 
 function weekStats(
@@ -152,12 +156,15 @@ function weekStats(
   // overflow the card), so longer windows are bucketed by week.
   const cardioBucketDays = days <= 14 ? 1 : 7;
   const cardioSeries: number[] = [];
+  const cardioTimeSeries: number[] = [];
   const cardioLabels: string[] = [];
   let bucketKm = 0;
+  let bucketSec = 0;
 
   dayKeys.forEach((k, i) => {
     const a = byDate.get(k);
     bucketKm += a?.cardioKm ?? 0;
+    bucketSec += a?.cardioSec ?? 0;
     const bucketStart = i - (i % cardioBucketDays) === i;
     if (bucketStart) {
       cardioLabels.push(
@@ -170,7 +177,9 @@ function weekStats(
     const bucketEnd = i % cardioBucketDays === cardioBucketDays - 1 || i === days - 1;
     if (bucketEnd) {
       cardioSeries.push(Math.round(bucketKm * 10) / 10);
+      cardioTimeSeries.push(Math.round(bucketSec / 60));
       bucketKm = 0;
+      bucketSec = 0;
     }
     if (a) {
       workoutDays++;
@@ -236,6 +245,7 @@ function weekStats(
     totalReps,
     totalVolumeKg,
     cardioSeries,
+    cardioTimeSeries,
     cardioLabels,
     cardioBucketDays,
     muscles,
@@ -250,7 +260,7 @@ export function computeStats(exs: RawStatsExercise[], today: Date): StatsData {
   for (const e of exs) {
     let a = byDate.get(e.workout_date);
     if (!a) {
-      a = { groups: new Set(), sets: 0, reps: 0, volume: 0, cardioKm: 0 };
+      a = { groups: new Set(), sets: 0, reps: 0, volume: 0, cardioKm: 0, cardioSec: 0 };
       byDate.set(e.workout_date, a);
     }
     a.groups.add(e.muscle_group);
@@ -259,7 +269,10 @@ export function computeStats(exs: RawStatsExercise[], today: Date): StatsData {
       a.sets++;
       if (s.reps != null) a.reps += s.reps;
       if (s.reps != null && s.weight_kg != null) a.volume += s.reps * s.weight_kg;
-      if (cardioish) a.cardioKm += (s.distance_km ?? 0) + (s.distance_m ?? 0) / 1000;
+      if (cardioish) {
+        a.cardioKm += (s.distance_km ?? 0) + (s.distance_m ?? 0) / 1000;
+        a.cardioSec += s.time_seconds ?? 0;
+      }
     }
   }
 

@@ -23,6 +23,7 @@ const EMPTY_RANGE: WeekStats = {
   totalReps: 0,
   totalVolumeKg: 0,
   cardioSeries: [],
+  cardioTimeSeries: [],
   cardioLabels: [],
   cardioBucketDays: 1,
   muscles: [],
@@ -59,7 +60,7 @@ export default function StatsView({
     | null
     | undefined;
 
-  const [range, setRange] = useState<RangeKey>("thisWeek");
+  const [range, setRange] = useState<RangeKey>("last7");
   // A StatsData cached by an older release has no `ranges` — fall back rather
   // than crash on a stale IndexedDB entry.
   // A StatsData cached by an older release has `ranges` but its entries
@@ -180,13 +181,29 @@ export default function StatsView({
         )}
       </ChartBox>
 
-      {/* Cardio progress — daily distance */}
+      {/* Cardio progress — time first (the primary cardio metric), then distance. */}
       <SectionLabel>Cardio progress</SectionLabel>
+      <ChartBox
+        title={week.cardioBucketDays > 1 ? "Weekly time" : "Daily time"}
+        hint="min"
+      >
+        <CardioBars
+          values={week.cardioTimeSeries}
+          labels={week.cardioLabels}
+          format={fmtMin}
+          empty="No cardio time logged in this window."
+        />
+      </ChartBox>
       <ChartBox
         title={week.cardioBucketDays > 1 ? "Weekly distance" : "Daily distance"}
         hint="km"
       >
-        <DailyCardio km={week.cardioSeries} labels={week.cardioLabels} />
+        <CardioBars
+          values={week.cardioSeries}
+          labels={week.cardioLabels}
+          format={fmtKm}
+          empty="No cardio distance logged in this window."
+        />
       </ChartBox>
 
       {/* Muscle group breakdown */}
@@ -391,21 +408,33 @@ function fmtKm(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-function DailyCardio({ km, labels }: { km: number[]; labels: string[] }) {
-  const max = Math.max(...km, 0);
-  if (max === 0) return <Empty>No cardio logged in this window.</Empty>;
+/** One bar per bucket. Shared by the cardio time and distance charts — the
+ *  two differ only in their values and how a value is written out. */
+function CardioBars({
+  values,
+  labels,
+  format,
+  empty,
+}: {
+  values: number[];
+  labels: string[];
+  format: (n: number) => string;
+  empty: string;
+}) {
+  const max = Math.max(...values, 0);
+  if (max === 0) return <Empty>{empty}</Empty>;
   return (
     <div className="flex h-[140px] items-end gap-1.5">
-      {km.map((v, i) => (
+      {values.map((v, i) => (
         <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
           <span className="text-[9px] font-semibold text-ink/70">
-            {v > 0 ? fmtKm(v) : ""}
+            {v > 0 ? format(v) : ""}
           </span>
           <div
             className="w-full rounded-t"
             style={{
               height: v > 0 ? `${Math.max(6, (v / max) * 100)}%` : "2%",
-              background: v > 0 ? (i >= km.length - 2 ? TEAL_NEW : TEAL_OLD) : "#2A2D24",
+              background: v > 0 ? (i >= values.length - 2 ? TEAL_NEW : TEAL_OLD) : "#2A2D24",
             }}
           />
           <span className="text-[9px] text-muted">{labels[i]}</span>
@@ -413,6 +442,14 @@ function DailyCardio({ km, labels }: { km: number[]; labels: string[] }) {
       ))}
     </div>
   );
+}
+
+/** "45" under an hour, "1h20" past it — kept short enough for a bar label. */
+function fmtMin(n: number): string {
+  if (n < 60) return String(n);
+  const h = Math.floor(n / 60);
+  const m = n % 60;
+  return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, "0")}`;
 }
 
 function LineChart({ points }: { points: SeriesPoint[] }) {
