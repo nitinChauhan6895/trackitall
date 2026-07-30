@@ -1012,7 +1012,7 @@ export async function getGoalsData(): Promise<{
   const [gRes, eRes] = await Promise.all([
     supabase
       .from("goals")
-      .select("id, metric, target, start_date, end_date, name, notes, archived")
+      .select("id, metric, target, start_date, end_date, name, notes, archived, muscle_group, cardio_type")
       .order("end_date", { ascending: false }),
     // Bounded window: goals older than this are history, and their progress
     // bars would be pulling a year of sets into the browser otherwise.

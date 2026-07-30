@@ -87,7 +87,14 @@ export type Goal = {
   name: string | null;
   notes: string | null;
   archived: boolean;
+  /** sets/hard_sets/frequency: restrict to one muscle group. null = all. */
+  muscle_group: string | null;
+  /** cardio_time: restrict to one cardio machine. null = all. */
+  cardio_type: string | null;
 };
+
+/** Which metrics can be scoped to a single muscle group. */
+export const GROUP_SCOPED: GoalMetric[] = ["sets", "hard_sets", "frequency"];
 
 /** The shape the goal maths needs out of a logged exercise. */
 export type GoalExercise = {
@@ -120,6 +127,18 @@ export type GoalProgress = {
 
 function inWindow(date: string, start: string, end: string): boolean {
   return date >= start && date <= end;
+}
+
+/** Does this exercise fall within the goal's scope (muscle group / cardio type)?
+ *  A null scope means "all", so it always matches. */
+export function matchesScope(goal: Goal, e: GoalExercise): boolean {
+  if (GROUP_SCOPED.includes(goal.metric) && goal.muscle_group) {
+    return e.muscle_group === goal.muscle_group;
+  }
+  if (goal.metric === "cardio_time" && goal.cardio_type) {
+    return e.cardio_type === goal.cardio_type;
+  }
+  return true;
 }
 
 /** What one exercise contributes to a metric. Frequency is counted per DAY, so
@@ -185,6 +204,7 @@ export function computeProgress(
 
   for (const e of exercises) {
     if (!inWindow(e.workout_date, goal.start_date, goal.end_date)) continue;
+    if (!matchesScope(goal, e)) continue;
     if ((e.sets?.length ?? 0) > 0) trainedDays.add(e.workout_date);
     const add = contribution(goal.metric, e);
     if (add > 0) {

@@ -9,6 +9,7 @@ import { formatShortDate } from "@/lib/dateFormat";
 import {
   GOAL_METRICS,
   GOAL_META,
+  GROUP_SCOPED,
   computeProgress,
   formatValue,
   goalTitle,
@@ -20,8 +21,17 @@ import {
   type GoalMetric,
   type GoalProgress,
 } from "@/lib/goals";
+import {
+  CARDIO_TYPES,
+  CARDIO_TYPE_LABELS,
+  MUSCLE_GROUPS,
+  MUSCLE_GROUP_LABELS,
+} from "@/lib/types";
 import { Badge } from "@/components/Badge";
 import type { EvaluatedBadge } from "@/lib/badges";
+
+// Groups offered for a scoped goal — cardio/HIIT aren't "sets" work.
+const SCOPE_GROUPS = MUSCLE_GROUPS.filter((g) => g !== "cardio" && g !== "hiit");
 
 const INPUT =
   "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-green";
@@ -58,6 +68,16 @@ export default function GoalsClient({
   const [view, setView] = useState<View>({ name: "list" });
   const refresh = () => queryClient.invalidateQueries({ queryKey: qk.goals() });
 
+  // Write a saved goal straight into the cache so it shows without waiting on
+  // a refetch — the reason a new goal used to need an app restart to appear.
+  function upsertGoalCache(saved: Goal) {
+    queryClient.setQueryData<GoalsData>(qk.goals(), (prev) => {
+      if (!prev) return { goals: [saved], exercises: [] };
+      const rest = prev.goals.filter((g) => g.id !== saved.id);
+      return { ...prev, goals: [saved, ...rest] };
+    });
+  }
+
   const progressOf = (g: Goal) => computeProgress(g, exercises, today);
   const active = goals.filter((g) => isActive(g, today));
   const past = goals.filter((g) => !isActive(g, today));
@@ -70,7 +90,8 @@ export default function GoalsClient({
         <GoalForm
           goal={view.id ? goals.find((g) => g.id === view.id) : undefined}
           today={today}
-          onDone={() => {
+          onDone={(saved) => {
+            upsertGoalCache(saved);
             setView({ name: "list" });
             refresh();
           }}
@@ -598,7 +619,7 @@ function GoalForm({
 }: {
   goal?: Goal;
   today: string;
-  onDone: () => void;
+  onDone: (saved: Goal) => void;
   onCancel: () => void;
 }) {
   const [metric, setMetric] = useState<GoalMetric>(goal?.metric ?? "sets");
@@ -610,10 +631,14 @@ function GoalForm({
   const [end, setEnd] = useState(goal?.end_date ?? thisWeek(today).end);
   const [name, setName] = useState(goal?.name ?? "");
   const [notes, setNotes] = useState(goal?.notes ?? "");
+  const [muscleGroup, setMuscleGroup] = useState<string>(goal?.muscle_group ?? "");
+  const [cardioType, setCardioType] = useState<string>(goal?.cardio_type ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const meta = GOAL_META[metric];
+  const scopedByGroup = GROUP_SCOPED.includes(metric);
+  const scopedByCardio = metric === "cardio_time";
 
   function pickDuration(d: "week" | "month" | "custom") {
     setDuration(d);
@@ -632,7 +657,9 @@ function GoalForm({
     setBusy(true);
     setError("");
     try {
-      await saveGoal({
+      const mg = scopedByGroup && muscleGroup ? muscleGroup : null;
+      const ct = scopedByCardio && cardioType ? cardioType : null;
+      const { id } = await saveGoal({
         id: goal?.id,
         metric,
         target: Number(target) || 0,
@@ -640,8 +667,23 @@ function GoalForm({
         end_date: end,
         name,
         notes,
+        muscle_group: mg,
+        cardio_type: ct,
       });
-      onDone();
+      // Hand the full saved goal back so the list can show it immediately
+      // rather than waiting on a refetch (or an app restart).
+      onDone({
+        id,
+        metric,
+        target: Number(target) || 0,
+        start_date: start,
+        end_date: end,
+        name: name.trim() || null,
+        notes: notes.trim() || null,
+        archived: false,
+        muscle_group: mg,
+        cardio_type: ct,
+      });
     } catch (e: any) {
       setError(e?.message ?? "Couldn't save the goal.");
       setBusy(false);
@@ -725,6 +767,42 @@ function GoalForm({
             ))}
           </div>
         </div>
+
+        {scopedByGroup && (
+          <div>
+            <p className="mb-2 text-sm font-semibold text-ink">Muscle group</p>
+            <select
+              value={muscleGroup}
+              onChange={(e) => setMuscleGroup(e.target.value)}
+              className={INPUT}
+            >
+              <option value="">All muscle groups</option>
+              {SCOPE_GROUPS.map((g) => (
+                <option key={g} value={g}>
+                  {MUSCLE_GROUP_LABELS[g]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {scopedByCardio && (
+          <div>
+            <p className="mb-2 text-sm font-semibold text-ink">Cardio type</p>
+            <select
+              value={cardioType}
+              onChange={(e) => setCardioType(e.target.value)}
+              className={INPUT}
+            >
+              <option value="">All cardio</option>
+              {CARDIO_TYPES.map((c) => (
+                <option key={c} value={c}>
+                  {CARDIO_TYPE_LABELS[c]}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div>
           <p className="mb-2 text-sm font-semibold text-ink">3. Duration</p>

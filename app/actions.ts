@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { toCsv } from "@/lib/csv";
 import { getLocalUser } from "@/lib/supabase/user";
 import {
+  CARDIO_TYPES,
   MUSCLE_GROUPS,
   PR_UNIT_TYPES,
   parseDuration,
@@ -1527,6 +1528,8 @@ export async function saveGoal(input: {
   end_date: string;
   name?: string | null;
   notes?: string | null;
+  muscle_group?: string | null;
+  cardio_type?: string | null;
 }): Promise<{ id: string }> {
   if (!GOAL_METRIC_SET.has(input.metric)) throw new Error("Invalid goal type");
   if (!DATE_RE.test(input.start_date) || !DATE_RE.test(input.end_date)) {
@@ -1544,6 +1547,19 @@ export async function saveGoal(input: {
     end_date: input.end_date,
     name: input.name?.trim().slice(0, 60) || null,
     notes: input.notes?.trim().slice(0, 300) || null,
+    // Scope only applies to the metric it belongs to; ignore stray values.
+    muscle_group:
+      ["sets", "hard_sets", "frequency"].includes(input.metric) && input.muscle_group
+        ? MUSCLE_GROUPS.includes(input.muscle_group as any)
+          ? input.muscle_group
+          : null
+        : null,
+    cardio_type:
+      input.metric === "cardio_time" && input.cardio_type
+        ? CARDIO_TYPES.includes(input.cardio_type as any)
+          ? input.cardio_type
+          : null
+        : null,
   };
 
   if (input.id) {

@@ -43,7 +43,7 @@ export default function BottomNav() {
         </div>
 
         <NavItem href="/stats" label="Stats" active={isActive("/stats")} icon={StatsIcon} />
-        <NavItem href="/coach" label="Coach" active={isActive("/coach")} icon={CoachIcon} />
+        <NavItem href="/goals" label="Goals" active={isActive("/goals")} icon={GoalIcon} />
       </div>
     </nav>
   );
@@ -110,12 +110,12 @@ function StatsIcon() {
     </svg>
   );
 }
-function CoachIcon() {
+function GoalIcon() {
   return (
     <svg {...svg}>
-      <rect x="5" y="4" width="14" height="17" rx="2" />
-      <path d="M9 4V3.2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V4" />
-      <path d="M8.5 12.5l2 2 4.5-4.5" />
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1.4" />
     </svg>
   );
 }
