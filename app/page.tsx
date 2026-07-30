@@ -134,7 +134,7 @@ export default async function HomePage({
       </section>
 
       {/* Badges (streamed) */}
-      <PreviewSection icon="🏅" title="Goals & Badges" href="/goals">
+      <PreviewSection icon="🏅" title="Badges" href="/badges">
         <Suspense fallback={<BadgesSkeleton />}>
           <BadgesPreview />
         </Suspense>

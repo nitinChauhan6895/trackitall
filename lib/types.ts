@@ -37,9 +37,15 @@ export function isCardio(group: MuscleGroup): boolean {
 // ---- Cardio exercise types (per-exercise field sets) ----
 export const CARDIO_TYPES = [
   "running",
+  "walking",
+  "cycling",
+  "air_bike",
   "elliptical",
+  "stair_climber",
   "skierg",
   "rowing",
+  "swimming",
+  "jump_rope",
   "sledge_push",
   "sledge_pull",
   "farmer_walk",
@@ -49,13 +55,19 @@ export type CardioType = (typeof CARDIO_TYPES)[number];
 
 export const CARDIO_TYPE_LABELS: Record<CardioType, string> = {
   running: "Running",
+  walking: "Walking",
+  cycling: "Cycling / Bike",
+  air_bike: "Air / Assault bike",
   elliptical: "Elliptical",
+  stair_climber: "Stair climber",
   skierg: "SkiErg",
   rowing: "Rowing",
+  swimming: "Swimming",
+  jump_rope: "Jump rope",
   sledge_push: "Sledge push",
   sledge_pull: "Sledge pull",
   farmer_walk: "Farmer walk",
-  generic: "Other (distance + time)",
+  generic: "Other (time + distance)",
 };
 
 // Fields each cardio type collects, in display order.
@@ -68,15 +80,23 @@ export type CardioField =
   | "resistance"
   | "weight";
 
+// Time is always the primary (required) metric for cardio, so it leads every
+// list; distance comes second where it applies, then the remaining metrics.
 export const CARDIO_FIELDS: Record<CardioType, CardioField[]> = {
-  running: ["distance_km", "time", "calories", "incline"],
-  elliptical: ["distance_km", "time", "calories", "resistance"],
-  skierg: ["distance_m", "time", "calories"],
-  rowing: ["distance_m", "time", "calories"],
-  sledge_push: ["distance_m", "weight", "calories"],
-  sledge_pull: ["distance_m", "weight", "calories"],
-  farmer_walk: ["distance_m", "weight", "calories"],
-  generic: ["distance_km", "time", "calories"],
+  running: ["time", "distance_km", "incline", "calories"],
+  walking: ["time", "distance_km", "incline", "calories"],
+  cycling: ["time", "distance_km", "resistance", "calories"],
+  air_bike: ["time", "resistance", "calories"],
+  elliptical: ["time", "distance_km", "resistance", "calories"],
+  stair_climber: ["time", "resistance", "calories"],
+  skierg: ["time", "distance_m", "calories"],
+  rowing: ["time", "distance_m", "calories"],
+  swimming: ["time", "distance_m", "calories"],
+  jump_rope: ["time", "calories"],
+  sledge_push: ["time", "distance_m", "weight", "calories"],
+  sledge_pull: ["time", "distance_m", "weight", "calories"],
+  farmer_walk: ["time", "distance_m", "weight", "calories"],
+  generic: ["time", "distance_km", "calories"],
 };
 
 // Short field label + unit suffix shown to the right of the input.

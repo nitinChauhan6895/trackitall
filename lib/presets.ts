@@ -11,14 +11,15 @@ export type LibraryItem = { name: string; cardioType?: CardioType };
 const CARDIO_NAME_TO_TYPE: Record<string, CardioType> = {
   Running: "running",
   Treadmill: "running",
-  Cycling: "generic",
-  "Air Bike": "generic",
+  Cycling: "cycling",
+  "Air Bike": "air_bike",
   Rowing: "rowing",
   SkiErg: "skierg",
-  "Stair Stepper": "generic",
+  "Stair Stepper": "stair_climber",
   Elliptical: "elliptical",
-  Walking: "generic",
-  "Jump Rope": "generic",
+  Walking: "walking",
+  Swimming: "swimming",
+  "Jump Rope": "jump_rope",
 };
 
 const byName = (a: LibraryItem, b: LibraryItem) => a.name.localeCompare(b.name);

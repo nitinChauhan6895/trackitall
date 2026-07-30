@@ -27,8 +27,6 @@ import {
   MUSCLE_GROUPS,
   MUSCLE_GROUP_LABELS,
 } from "@/lib/types";
-import { Badge } from "@/components/Badge";
-import type { EvaluatedBadge } from "@/lib/badges";
 
 // Groups offered for a scoped goal — cardio/HIIT aren't "sets" work.
 const SCOPE_GROUPS = MUSCLE_GROUPS.filter((g) => g !== "cardio" && g !== "hiit");
@@ -43,11 +41,9 @@ export type GoalsData = { goals: Goal[]; exercises: GoalExercise[] };
 
 export default function GoalsClient({
   initial,
-  badges,
   todayKey,
 }: {
   initial: GoalsData;
-  badges: EvaluatedBadge[];
   /** The SERVER's date — seeding from it keeps SSR and first client render
    *  identical; the device's real date is applied on mount. */
   todayKey: string;
@@ -123,7 +119,7 @@ export default function GoalsClient({
     <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
       <header className="flex items-start justify-between gap-3 pb-3 pt-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Goals &amp; Badges</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Goals</h1>
           <p className="mt-0.5 text-sm text-muted">Track your progress. Stay consistent.</p>
         </div>
       </header>
@@ -148,7 +144,6 @@ export default function GoalsClient({
         <Overview
           goals={active}
           progressOf={progressOf}
-          badges={badges}
           onOpen={(id) => setView({ name: "detail", id })}
           onNew={() => setView({ name: "new" })}
         />
@@ -175,13 +170,11 @@ export default function GoalsClient({
 function Overview({
   goals,
   progressOf,
-  badges,
   onOpen,
   onNew,
 }: {
   goals: Goal[];
   progressOf: (g: Goal) => GoalProgress;
-  badges: EvaluatedBadge[];
   onOpen: (id: string) => void;
   onNew: () => void;
 }) {
@@ -191,8 +184,6 @@ function Overview({
     goals.length === 0
       ? 0
       : Math.round((goals.reduce((n, g) => n + progressOf(g).ratio, 0) / goals.length) * 100);
-  const earned = badges.filter((b) => b.earned).length;
-
   return (
     <>
       <section className="mt-4 rounded-2xl border border-white/10 bg-surface p-4">
@@ -253,16 +244,6 @@ function Overview({
         + Add New Goal
       </button>
 
-      {/* Badges live here now rather than on their own page. */}
-      <SectionLabel>Badges</SectionLabel>
-      <p className="mb-2 text-xs text-muted">
-        {earned} of {badges.length} earned
-      </p>
-      <div className="grid grid-cols-2 gap-2.5">
-        {badges.map((b) => (
-          <Badge key={b.id} badge={b} />
-        ))}
-      </div>
     </>
   );
 }

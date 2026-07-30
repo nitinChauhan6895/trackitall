@@ -87,6 +87,19 @@ export function weekDays(key: string): string[] {
   return Array.from({ length: 7 }, (_, i) => addDaysKey(start, i));
 }
 
+/**
+ * Is this habit due on `date`?
+ *
+ * Daily habits are due every day. A weekly habit is due only on its chosen
+ * weekday (reminder_dow, Monday = 0); a weekly habit with no day set has no
+ * fixed slot, so it's treated as always available to log.
+ */
+export function isDueOn(habit: Habit, date: string): boolean {
+  if (habit.cadence === "daily") return true;
+  if (habit.reminder_dow == null) return true;
+  return mondayIndex(date) === habit.reminder_dow;
+}
+
 // ---- progress ----
 
 /** Total logged for a habit on one day. */

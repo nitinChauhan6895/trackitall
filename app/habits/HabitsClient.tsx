@@ -30,6 +30,7 @@ import {
   stepSize,
   habitStreak,
   isComplete,
+  isDueOn,
   weekDays,
   weekOverview,
   weekProgress,
@@ -216,8 +217,10 @@ function TodayView({
     ...Array.from(new Set(habits.map((h) => h.category).filter(Boolean) as string[])),
   ];
   const shown = habits.filter((h) => cat === "All" || h.category === cat);
+  const dueToday = shown.filter((h) => isDueOn(h, date));
   const days = weekDays(date);
   const isPast = date !== today;
+  const dayLabel = date === today ? "today" : formatShortDate(date);
 
   return (
     <>
@@ -317,8 +320,72 @@ function TodayView({
       {habits.length === 0 ? (
         <EmptyState onNew={onNew} />
       ) : (
-        <ul className="mt-4 space-y-2.5">
-          {shown.map((h) => (
+        <>
+          {/* Due on the selected day: every daily habit, plus weekly habits
+              whose chosen weekday is this one. */}
+          <HabitSection
+            title={`Due ${dayLabel}`}
+            count={dueToday.length}
+            habits={dueToday}
+            logs={logs}
+            date={date}
+            onOpen={onOpen}
+            onToggle={onToggle}
+            empty="Nothing scheduled for this day."
+          />
+
+          {/* Everything, so weekly habits stay reachable on their off-days. */}
+          <HabitSection
+            title="All habits"
+            count={shown.length}
+            habits={shown}
+            logs={logs}
+            date={date}
+            onOpen={onOpen}
+            onToggle={onToggle}
+          />
+        </>
+      )}
+    </>
+  );
+}
+
+function HabitSection({
+  title,
+  count,
+  habits,
+  logs,
+  date,
+  onOpen,
+  onToggle,
+  empty,
+}: {
+  title: string;
+  count: number;
+  habits: Habit[];
+  logs: HabitsData["logs"];
+  date: string;
+  onOpen: (id: string) => void;
+  onToggle: (h: Habit, date: string) => void;
+  empty?: string;
+}) {
+  return (
+    <section className="mt-5">
+      <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-muted">
+        {title}
+        <span className="rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[11px] tabular-nums">
+          {count}
+        </span>
+      </h2>
+      {habits.length === 0 ? (
+        empty ? (
+          <p className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-muted">
+            {empty}
+          </p>
+        ) : null
+      ) : (
+        <ul className="space-y-2.5">
+          {habits.map((h) => (
             <li key={h.id}>
               <HabitCard
                 habit={h}
@@ -331,7 +398,7 @@ function TodayView({
           ))}
         </ul>
       )}
-    </>
+    </section>
   );
 }
 

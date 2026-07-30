@@ -317,6 +317,7 @@ export const EXERCISE_LIBRARY: LibraryCategory[] = [
       { name: "Stair Stepper", metric: ["floors", "time"] },
       { name: "Elliptical", metric: ["distance", "time"] },
       { name: "Walking", metric: ["distance", "time"] },
+      { name: "Swimming", metric: ["distance", "time"] },
       { name: "Jump Rope", metric: ["reps", "time"] },
     ],
   },
