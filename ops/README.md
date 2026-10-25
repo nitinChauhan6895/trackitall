@@ -26,3 +26,8 @@ Then add two repository secrets (Settings → Secrets and variables → Actions)
 
 Use *Run workflow* on the Actions tab to fire it once and confirm it returns
 `{"sent":0,...}` rather than a 401.
+
+The workflow also has a weekly `keepalive` job. GitHub disables scheduled
+workflows after 60 days with no repo activity; the job calls the
+"enable workflow" API, which resets that timer. It can't revive a workflow
+that is already disabled — re-enable that once by hand from the Actions tab.
