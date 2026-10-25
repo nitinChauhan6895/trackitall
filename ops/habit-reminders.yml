@@ -9,10 +9,12 @@ name: Habit reminders
 on:
   schedule:
     - cron: "0 * * * *" # every hour, on the hour (UTC)
+    - cron: "17 4 * * 1" # weekly keepalive, Mondays 04:17 UTC
   workflow_dispatch: {} # lets you fire one manually to test
 
 jobs:
   send:
+    if: github.event.schedule != '17 4 * * 1'
     runs-on: ubuntu-latest
     steps:
       - name: Trigger reminder send
@@ -25,3 +27,17 @@ jobs:
           # Fail the job on a non-2xx so a broken secret or deploy is visible
           # in the Actions tab instead of silently sending nothing forever.
           [ "$code" -ge 200 ] && [ "$code" -lt 300 ]
+
+  # GitHub disables scheduled workflows after 60 days without repo activity,
+  # which silently stopped reminders once already. Re-enabling the workflow
+  # through the API resets that timer, so no commits are needed.
+  keepalive:
+    if: github.event.schedule == '17 4 * * 1' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Reset the inactivity timer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/habit-reminders.yml/enable"
