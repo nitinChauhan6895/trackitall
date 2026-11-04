@@ -48,7 +48,6 @@ export function PrCard({ pr }: { pr: Pr }) {
 
 // Measurement card with a sparkline + month delta.
 export function MeasurementCard({
-  icon,
   label,
   value,
   unit,
@@ -56,7 +55,6 @@ export function MeasurementCard({
   series,
   colorClass,
 }: {
-  icon: string;
   label: string;
   value: string;
   unit: string;
@@ -68,14 +66,7 @@ export function MeasurementCard({
     <div className="rounded-2xl border border-white/10 bg-surface p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span aria-hidden className="text-base">
-              {icon}
-            </span>
-            <span className="truncate text-xs font-medium text-muted">
-              {label}
-            </span>
-          </div>
+          <p className="truncate text-xs font-medium text-muted">{label}</p>
           <div className="mt-1.5 flex items-baseline gap-1">
             <span className="text-xl font-bold text-ink">{value}</span>
             <span className="text-xs font-semibold text-muted">{unit}</span>

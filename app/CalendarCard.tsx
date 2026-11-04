@@ -118,11 +118,10 @@ export default function CalendarCard({
       </div>
 
       <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-sm">
-        <span className="flex items-center gap-1.5 font-medium text-ink">
-          <span aria-hidden>📊</span> {workouts} Workout{workouts === 1 ? "" : "s"} this month
+        <span className="font-medium text-ink">
+          {workouts} Workout{workouts === 1 ? "" : "s"} this month
         </span>
-        <span className="flex items-center gap-1.5 font-medium text-orange">
-          <span aria-hidden>🔥</span>
+        <span className="font-medium text-orange">
           {streak > 0
             ? `${streak} day streak`
             : "No streak yet"}

@@ -34,9 +34,7 @@ export default function ShareInbox({ shares }: { shares: IncomingShare[] }) {
 
   return (
     <section className="mt-4">
-      <h2 className="mb-2 flex items-center gap-1.5 text-base font-semibold">
-        <span aria-hidden>📥</span> Shared with you
-      </h2>
+      <h2 className="mb-2 text-base font-semibold">Shared with you</h2>
       <ul className="space-y-2.5">
         {shares.map((s) => {
           const busy = pending && busyId === s.id;
