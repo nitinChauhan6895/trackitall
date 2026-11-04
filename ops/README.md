@@ -21,7 +21,7 @@ Then add two repository secrets (Settings → Secrets and variables → Actions)
 
 | Secret             | Value                                          |
 | ------------------ | ---------------------------------------------- |
-| `APP_URL`          | `https://trackitall-ten.vercel.app` (no trailing slash) |
+| `APP_URL`          | `https://www.vesmo.in` (no trailing slash) |
 | `PUSH_CRON_SECRET` | the same value set in Vercel's env vars        |
 
 Use *Run workflow* on the Actions tab to fire it once and confirm it returns
