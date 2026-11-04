@@ -82,7 +82,7 @@ export default async function HomePage({
       {/* Header */}
       <header className="flex items-start justify-between gap-3 pb-3 pt-5">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">Hi, {firstName}! 👋</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Hi, {firstName}!</h1>
           <p className="mt-0.5 text-sm text-muted">{todayLabel}</p>
         </div>
         <Link
@@ -106,9 +106,7 @@ export default async function HomePage({
       {/* Last 7 days trained (streamed) */}
       <section className="mt-5">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="flex items-center gap-1.5 text-base font-semibold">
-            <span aria-hidden>💪</span> Last 7 days
-          </h2>
+          <h2 className="text-base font-semibold">Last 7 days</h2>
           <Link href="/stats" className="text-sm font-medium text-orange active:opacity-70">
             Stats ›
           </Link>
@@ -121,9 +119,7 @@ export default async function HomePage({
       {/* Nutrition (streamed) */}
       <section className="mt-5">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="flex items-center gap-1.5 text-base font-semibold">
-            <span aria-hidden>🍽️</span> Nutrition
-          </h2>
+          <h2 className="text-base font-semibold">Nutrition</h2>
           <Link href="/nutrition" className="text-sm font-medium text-orange active:opacity-70">
             Open diary ›
           </Link>
@@ -134,21 +130,21 @@ export default async function HomePage({
       </section>
 
       {/* Badges (streamed) */}
-      <PreviewSection icon="🏅" title="Badges" href="/badges">
+      <PreviewSection title="Badges" href="/badges">
         <Suspense fallback={<BadgesSkeleton />}>
           <BadgesPreview />
         </Suspense>
       </PreviewSection>
 
       {/* PR corner (streamed) */}
-      <PreviewSection icon="🏆" title="PR Corner" href="/prs">
+      <PreviewSection title="PR Corner" href="/prs">
         <Suspense fallback={<CardsSkeleton />}>
           <PrPreview />
         </Suspense>
       </PreviewSection>
 
       {/* Measurements (streamed) */}
-      <PreviewSection icon="📏" title="Measurements" href="/measurements">
+      <PreviewSection title="Measurements" href="/measurements">
         <Suspense fallback={<CardsSkeleton />}>
           <MeasurementsPreview />
         </Suspense>
@@ -212,11 +208,11 @@ async function MeasurementsPreview() {
   const cards: React.ReactNode[] = [];
   if (bw.latest != null)
     cards.push(
-      <MeasurementCard key="bw" icon="⚖️" label="Bodyweight" value={String(bw.latest)} unit="kg" delta={bw.delta} series={bw.values} colorClass="text-green" />,
+      <MeasurementCard key="bw" label="Bodyweight" value={String(bw.latest)} unit="kg" delta={bw.delta} series={bw.values} colorClass="text-green" />,
     );
   if (bf.latest != null)
     cards.push(
-      <MeasurementCard key="bf" icon="📊" label="Body fat" value={String(bf.latest)} unit="%" delta={bf.delta} series={bf.values} colorClass="text-[#7FB2F0]" />,
+      <MeasurementCard key="bf" label="Body fat" value={String(bf.latest)} unit="%" delta={bf.delta} series={bf.values} colorClass="text-[#7FB2F0]" />,
     );
   if (cards.length === 0)
     return <EmptyHint href="/measurements">Log your first measurement →</EmptyHint>;
@@ -376,12 +372,10 @@ function RecentTrainingSkeleton() {
 }
 
 function PreviewSection({
-  icon,
   title,
   href,
   children,
 }: {
-  icon: string;
   title: string;
   href: string;
   children: React.ReactNode;
@@ -389,9 +383,7 @@ function PreviewSection({
   return (
     <section className="mt-5">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="flex items-center gap-1.5 text-base font-semibold">
-          <span aria-hidden>{icon}</span> {title}
-        </h2>
+        <h2 className="text-base font-semibold">{title}</h2>
         <Link href={href} className="text-sm font-medium text-orange active:opacity-70">
           View all ›
         </Link>
