@@ -8,13 +8,9 @@ import { toDateKey } from "@/lib/date";
 import { formatDayMonth } from "@/lib/dateFormat";
 import { RANGE_KEYS, RANGE_LABELS, type RangeKey } from "@/lib/stats";
 import type { GroupLoad, HistorySession, SeriesPoint, StatsData, WeekStats } from "@/lib/stats";
-import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
 
 const GREEN = "#22C55E";
-const ORANGE = "#FFC95C";
-const TEAL_OLD = "#1F7D63";
-const TEAL_NEW = "#3FAE8E";
-const AMBER = "#E0A52A";
+const GOLD = "#FFC95C";
 
 // An empty window, used when a cache entry predates the current shape.
 const EMPTY_RANGE: WeekStats = {
@@ -68,152 +64,145 @@ export default function StatsView({
   // fills the gaps — reading week.load directly crashed the whole page.
   const week: WeekStats = { ...EMPTY_RANGE, ...(stats.ranges?.[range] ?? {}) };
   const rangeLabel = RANGE_LABELS[range].toLowerCase();
-  // Older cached StatsData has no month block — fall back rather than crash.
-  const month = stats.month ?? { sessions: 0, sets: 0, volumeKg: 0, groups: 0 };
   const [exercise, setExercise] = useState(stats.strengthExercises[0] ?? "");
   const series = stats.strengthSeries[exercise] ?? [];
   // Older releases cached a StatsData without history — tolerate its absence
   // rather than crashing on a stale IndexedDB entry.
   const history = stats.strengthHistory?.[exercise] ?? [];
 
-  const vol = week.totalVolumeKg;
-  const weightVal = vol >= 1000 ? (vol / 1000).toFixed(1) : String(Math.round(vol));
-  const weightUnit = vol >= 1000 ? "t" : "kg";
+  const hardSets = week.load.reduce((n, l) => n + l.hardSets, 0);
+  const musclesTrained = week.muscles.filter((m) => m.count > 0).length;
 
   return (
-    <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
-      <header className="pb-1 pt-5">
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <span aria-hidden>📊</span> Stats
-        </h1>
-        <p className="mt-0.5 text-sm text-muted">Your progress at a glance</p>
+    <main className="flex flex-1 flex-col gap-5 px-4 pb-36 safe-top">
+      <header className="flex items-center justify-between gap-3 px-1 pt-5">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-display text-[30px] font-bold leading-tight tracking-[-0.02em]">Stats</h1>
+          <p className="text-sm text-muted">Your progress at a glance</p>
+        </div>
+        {/* Glass pill; the native select sits on top of it (invisible) so the
+            platform picker still opens. */}
+        <label className="elevation-3 relative flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-white/[0.08] pl-4 pr-3.5 text-sm font-semibold text-ink">
+          {RANGE_LABELS[range]}
+          <ChevronDown className="text-ink" />
+          <select
+            aria-label="Time period"
+            value={range}
+            onChange={(e) => setRange(e.target.value as RangeKey)}
+            className="absolute inset-0 cursor-pointer appearance-none opacity-0"
+          >
+            {RANGE_KEYS.map((r) => (
+              <option key={r} value={r}>
+                {RANGE_LABELS[r]}
+              </option>
+            ))}
+          </select>
+        </label>
       </header>
 
-      {/* This calendar month — sits above the range filter and is unaffected
-          by it, so there is always a stable headline to glance at. */}
-      <SectionLabel>This month</SectionLabel>
-      <div className="grid grid-cols-2 gap-2">
-        <Card value={String(month.sessions)} unit="sessions" label="Workouts logged" />
-        <Card green value={String(month.sets)} unit="sets" label="Sets completed" />
-        <Card
-          value={month.volumeKg >= 1000 ? (month.volumeKg / 1000).toFixed(1) : String(month.volumeKg)}
-          unit={month.volumeKg >= 1000 ? "t" : "kg"}
-          label="Total weight lifted"
-        />
-        <Card green value={String(month.groups)} unit="groups" label="Muscle groups hit" />
+      {/* Hero: period summary */}
+      <section className="elevation-1 flex flex-col gap-[18px] rounded-[28px] px-5 pb-5 pt-[22px]">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">
+            Volume · {rangeLabel}
+          </span>
+          <span className="font-display text-[56px] font-bold leading-[1.05] tracking-[-0.03em]">
+            {fmtThousands(week.totalVolumeKg)} <span className="text-xl font-semibold text-green">kg</span>
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <MiniStat value={week.totalSets} label="Sets" />
+          <MiniStat value={musclesTrained} label="Muscles" />
+          <MiniStat value={hardSets} label={hardSets === 1 ? "Hard set" : "Hard sets"} gold />
+        </div>
+      </section>
+
+      {/* Streak bento */}
+      <div className="grid grid-cols-2 gap-3">
+        <StreakTile value={stats.currentStreak} label="Current streak" icon={<FlamePath />} />
+        <StreakTile value={stats.bestStreak} label="Best streak ever" icon={<TrophyPath />} />
       </div>
 
-      {/* Time range */}
-      <label className="mt-4 block">
-        <span className="sr-only">Time period</span>
-        <select
-          value={range}
-          onChange={(e) => setRange(e.target.value as RangeKey)}
-          className="w-full appearance-none rounded-xl border border-white/10 bg-surface px-4 py-2.5 text-sm font-semibold text-ink outline-none focus:border-green"
-        >
-          {RANGE_KEYS.map((r) => (
-            <option key={r} value={r}>
-              {RANGE_LABELS[r]}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      {/* Nutrition (last 7 days) */}
-      {nutrition && (
-        <>
-          <SectionLabel>Nutrition · last 7 days</SectionLabel>
-          <div className="grid grid-cols-2 gap-2">
-            <Card value={String(nutrition.avgCalories)} unit="kcal" label="Avg daily calories" />
-            <Card value={String(nutrition.avgProtein)} unit="g" label="Avg daily protein" />
-          </div>
-          <div className="mt-2">
-            <NutritionTrend series={nutrition.series} />
-          </div>
-        </>
-      )}
-
-      {/* Load stats — per muscle group, for the selected range. */}
-      <SectionLabel>Load stats · {rangeLabel}</SectionLabel>
-      <LoadStats load={week.load} />
-
-      {/* Streak */}
-      <SectionLabel>Streak</SectionLabel>
-      <div className="flex gap-2">
-        <div className="flex-1 rounded-xl bg-gold-soft p-3">
-          <div className="text-xl font-bold text-gold">{stats.currentStreak} 🔥</div>
-          <div className="mt-0.5 text-[10px] text-gold/80">Current streak</div>
-        </div>
-        <div className="flex-1 rounded-xl bg-green-tint p-3">
-          <div className="text-xl font-bold text-green">{stats.bestStreak}</div>
-          <div className="mt-0.5 text-[10px] text-green/80">Best streak ever</div>
-        </div>
-      </div>
+      {/* Load by muscle */}
+      <section className="elevation-1 flex flex-col gap-[18px] rounded-[28px] p-5">
+        <CardTitle title="Load by muscle" hint="by volume" />
+        <LoadStats load={week.load} />
+      </section>
 
       {/* Strength progress */}
-      <SectionLabel>Strength progress</SectionLabel>
-      <ChartBox
-        title={exercise ? `${exercise} — max weight` : "Strength progress"}
-        hint="kg over time"
-      >
+      <section className="elevation-1 flex flex-col gap-4 rounded-[28px] p-5">
+        <div className="flex flex-col gap-2.5">
+          <h2 className="font-display text-lg font-semibold">Strength progress</h2>
+          {stats.strengthExercises.length > 0 && (
+            <label className="elevation-2 relative flex h-11 items-center justify-between rounded-[14px] px-3.5 text-sm font-medium text-ink">
+              <span className="truncate">{exercise}</span>
+              <ChevronDown className="shrink-0 text-muted" />
+              <select
+                aria-label="Choose exercise"
+                value={exercise}
+                onChange={(e) => setExercise(e.target.value)}
+                className="absolute inset-0 cursor-pointer appearance-none opacity-0"
+              >
+                {stats.strengthExercises.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
         {stats.strengthExercises.length === 0 ? (
           <Empty>No weight-based exercises logged yet.</Empty>
         ) : (
           <>
-            <select
-              value={exercise}
-              onChange={(e) => setExercise(e.target.value)}
-              className="mb-3 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-gold"
-            >
-              {stats.strengthExercises.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-            {series.length < 2 ? (
-              <Empty>Log at least 2 sessions to see your trend.</Empty>
-            ) : (
-              <LineChart points={series} />
-            )}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted">Max weight · kg</span>
+              {series.length > 0 && <LineChart points={series} />}
+              {series.length < 2 && (
+                <span className="text-[13px] text-muted">Log at least 2 sessions to see your trend.</span>
+              )}
+            </div>
             <ExerciseHistory sessions={history} />
           </>
         )}
-      </ChartBox>
+      </section>
 
       {/* Cardio progress — time first (the primary cardio metric), then distance. */}
-      <SectionLabel>Cardio progress</SectionLabel>
-      <ChartBox
-        title={week.cardioBucketDays > 1 ? "Weekly time" : "Daily time"}
-        hint="min"
-      >
-        <CardioBars
-          values={week.cardioTimeSeries}
-          labels={week.cardioLabels}
-          format={fmtMin}
-          empty="No cardio time logged in this window."
-        />
-      </ChartBox>
-      <ChartBox
-        title={week.cardioBucketDays > 1 ? "Weekly distance" : "Daily distance"}
-        hint="km"
-      >
-        <CardioBars
-          values={week.cardioSeries}
-          labels={week.cardioLabels}
-          format={fmtKm}
-          empty="No cardio distance logged in this window."
-        />
-      </ChartBox>
-
-      {/* Muscle group breakdown */}
-      <SectionLabel>Muscle group frequency</SectionLabel>
-      {week.neglected.length > 0 && (
-        <div className="mb-2 inline-flex flex-wrap items-center gap-1 rounded-lg bg-gold-soft px-3 py-1.5 text-xs text-gold">
-          ⚠️ Neglected: <strong>{week.neglected.join(" · ")}</strong>
+      <section className="flex flex-col gap-3">
+        <h2 className="px-1 font-display text-xl font-semibold">Cardio progress</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <CardioTile
+            title={week.cardioBucketDays > 1 ? "Weekly time" : "Daily time"}
+            unit="min"
+            values={week.cardioTimeSeries}
+            total={`${fmtMin(sum(week.cardioTimeSeries))} min`}
+            empty="No cardio time logged in this window."
+          />
+          <CardioTile
+            title={week.cardioBucketDays > 1 ? "Weekly distance" : "Daily distance"}
+            unit="km"
+            values={week.cardioSeries}
+            total={`${fmtKm(sum(week.cardioSeries))} km`}
+            empty="No cardio distance logged in this window."
+          />
         </div>
-      )}
+      </section>
+
+      {/* Muscle group frequency */}
       <MuscleBreakdown week={week} />
+
+      {/* Nutrition (last 7 days) */}
+      {nutrition && (
+        <section className="elevation-1 flex flex-col gap-4 rounded-[28px] p-5">
+          <CardTitle title="Nutrition" hint="last 7 days" />
+          <div className="grid grid-cols-2 gap-2">
+            <MiniStat value={nutrition.avgCalories} label="Avg kcal / day" />
+            <MiniStat value={nutrition.avgProtein} label="Avg protein (g) / day" />
+          </div>
+          <NutritionTrend series={nutrition.series} />
+        </section>
+      )}
     </main>
   );
 }
@@ -222,130 +211,98 @@ function LoadStats({ load }: { load?: GroupLoad[] }) {
   if (!load || load.length === 0) {
     return <Empty>Nothing logged in this window.</Empty>;
   }
-  const maxSets = Math.max(...load.map((l) => l.sets), 1);
+  const byVolume = [...load].sort((a, b) => b.volumeKg - a.volumeKg || b.sets - a.sets);
+  const maxVol = Math.max(...byVolume.map((l) => l.volumeKg), 1);
   return (
-    <div className="space-y-2">
-      {load.map((l) => (
-        <div key={l.group} className="rounded-2xl elevation-1 p-3">
-          <div className="flex items-center gap-2">
-            <span className="h-5 w-5 shrink-0" style={{ color: MUSCLE_TONE[l.group] }}>
-              <MuscleIcon group={l.group} />
-            </span>
-            <span className="flex-1 truncate text-sm font-semibold text-ink">
-              {l.label}
-            </span>
-            <span className="text-xs text-muted">
-              {l.exercises} {l.exercises === 1 ? "exercise" : "exercises"}
-            </span>
+    <>
+      {byVolume.map((l) => (
+        <div key={l.group} className="flex flex-col gap-2">
+          <div className="flex items-baseline justify-between">
+            <span className="text-[15px] font-semibold">{l.label}</span>
+            <span className="font-display text-[17px] font-semibold">{fmtWeight(l.volumeKg)}</span>
           </div>
-
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${(l.sets / maxSets) * 100}%`,
-                background: MUSCLE_TONE[l.group],
-              }}
-            />
-          </div>
-
-          <div className="mt-2.5 grid grid-cols-3 gap-2 text-center">
-            <Metric value={String(l.sets)} label="sets" />
-            <Metric
-              value={String(l.hardSets)}
-              label="hard sets"
-              tone={l.hardSets > 0 ? "#FFC95C" : undefined}
-            />
-            <Metric
-              value={
-                l.volumeKg >= 1000
-                  ? `${(l.volumeKg / 1000).toFixed(1)}t`
-                  : `${l.volumeKg}kg`
-              }
-              label="volume"
-            />
-          </div>
+          <Bar frac={l.volumeKg / maxVol} />
+          <span className="text-xs text-muted">
+            {l.exercises} {l.exercises === 1 ? "exercise" : "exercises"} · {l.sets}{" "}
+            {l.sets === 1 ? "set" : "sets"} ·{" "}
+            <span className={l.hardSets > 0 ? "font-semibold text-gold" : ""}>{l.hardSets} hard</span>
+          </span>
         </div>
       ))}
+    </>
+  );
+}
+
+function Bar({ frac }: { frac: number }) {
+  return (
+    <div className="h-2 rounded-full bg-[#2C2C2C]">
+      {frac > 0 && (
+        <div className="h-2 rounded-full bg-green" style={{ width: `${Math.min(100, frac * 100)}%` }} />
+      )}
     </div>
   );
 }
 
-function Metric({
-  value,
-  label,
-  tone,
-}: {
-  value: string;
-  label: string;
-  tone?: string;
-}) {
+function MiniStat({ value, label, gold }: { value: number; label: string; gold?: boolean }) {
   return (
-    <div>
-      <p className="text-base font-bold tabular-nums" style={{ color: tone ?? "#F2F2F2" }}>
-        {value}
-      </p>
-      <p className="text-[10px] text-muted">{label}</p>
+    <div className="elevation-2 flex flex-col gap-0.5 rounded-2xl px-3.5 py-3">
+      <span className={`font-display text-[22px] font-semibold ${gold ? "text-gold" : ""}`}>
+        {fmtThousands(value)}
+      </span>
+      <span className="text-xs text-muted">{label}</span>
     </div>
   );
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function StreakTile({ value, label, icon }: { value: number; label: string; icon: React.ReactNode }) {
   return (
-    <p className="mb-2 mt-5 text-[11px] font-bold uppercase tracking-wider text-muted">
-      {children}
-    </p>
-  );
-}
-
-function Card({
-  value,
-  unit,
-  label,
-  green,
-}: {
-  value: string;
-  unit: string;
-  label: string;
-  green?: boolean;
-}) {
-  return (
-    <div className={`rounded-xl p-3 ${green ? "bg-green-tint" : "bg-beige"}`}>
-      <div className={`text-[22px] font-bold leading-none ${green ? "text-green" : "text-gold"}`}>
-        {value}{" "}
-        <span className={`text-[11px] font-normal ${green ? "text-green" : "text-gold"}`}>
-          {unit}
+    <div className="elevation-1 flex flex-col gap-3.5 rounded-3xl p-[18px]">
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold/[0.14] text-gold">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          {icon}
+        </svg>
+      </span>
+      <span className="flex flex-col gap-0.5">
+        <span className="font-display text-[28px] font-semibold">
+          {value} <span className="text-sm text-muted">{value === 1 ? "day" : "days"}</span>
         </span>
-      </div>
-      <div className={`mt-1.5 text-[11px] ${green ? "text-green" : "text-gold"}`}>
-        {label}
-      </div>
+        <span className="text-[13px] text-muted">{label}</span>
+      </span>
     </div>
   );
 }
 
-function ChartBox({
-  title,
-  hint,
-  children,
-}: {
-  title: string;
-  hint: string;
-  children: React.ReactNode;
-}) {
+function FlamePath() {
+  return <path d="M12 2c1 3.5 5 6 5 11a5 5 0 0 1-10 0c0-2.5 1.5-4 2.5-5 .5 2 1.5 3 2.5 3 0-3-1-6 0-9z" />;
+}
+function TrophyPath() {
   return (
-    <div className="rounded-xl elevation-1 p-3">
-      <div className="mb-2.5 flex items-center justify-between text-xs font-semibold text-ink">
-        <span className="truncate">{title}</span>
-        <span className="shrink-0 pl-2 font-normal text-muted">{hint}</span>
-      </div>
-      {children}
+    <>
+      <path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0z" />
+      <path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3" />
+    </>
+  );
+}
+
+function ChevronDown({ className }: { className?: string }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className={className}>
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+function CardTitle({ title, hint }: { title: string; hint: string }) {
+  return (
+    <div className="flex items-baseline justify-between">
+      <h2 className="font-display text-lg font-semibold">{title}</h2>
+      <span className="text-xs text-muted">{hint}</span>
     </div>
   );
 }
 
 function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="py-6 text-center text-xs text-muted">{children}</p>;
+  return <p className="py-4 text-center text-[13px] text-muted">{children}</p>;
 }
 
 // 7-day bar chart with a Calories/Protein toggle.
@@ -358,19 +315,19 @@ function NutritionTrend({
   const values = series.map((d) => (metric === "calories" ? d.calories : d.protein));
   const max = Math.max(...values, 0);
   const unit = metric === "calories" ? "kcal" : "g";
-  const barColor = metric === "calories" ? GREEN : ORANGE;
+  const barColor = metric === "calories" ? GREEN : GOLD;
 
   return (
-    <ChartBox title="Intake trend" hint="last 7 days">
-      <div className="mb-3 flex rounded-lg bg-white/[0.06] p-0.5">
+    <div className="flex flex-col gap-3">
+      <div className="flex rounded-full bg-white/[0.06] p-0.5">
         {(["calories", "protein"] as const).map((m) => (
           <button
             key={m}
             type="button"
             onClick={() => setMetric(m)}
             className={[
-              "flex-1 rounded-md py-1.5 text-xs font-semibold capitalize transition",
-              metric === m ? "elevation-2 text-green" : "text-muted",
+              "flex-1 rounded-full py-1.5 text-xs font-semibold capitalize transition",
+              metric === m ? "elevation-2 text-green" : "border border-transparent text-muted",
             ].join(" ")}
           >
             {m}
@@ -380,7 +337,7 @@ function NutritionTrend({
       {max === 0 ? (
         <Empty>Nothing logged in the last 7 days.</Empty>
       ) : (
-        <div className="flex h-[140px] items-end gap-1.5">
+        <div className="flex h-[120px] items-end gap-1.5">
           {series.map((d, i) => {
             const v = values[i];
             return (
@@ -390,7 +347,7 @@ function NutritionTrend({
                   className="w-full rounded-t"
                   style={{
                     height: v > 0 ? `${Math.max(6, (v / max) * 100)}%` : "2%",
-                    background: v > 0 ? barColor : "#262626",
+                    background: v > 0 ? barColor : "#2C2C2C",
                   }}
                 />
                 <span className="text-[9px] text-muted">{d.label}</span>
@@ -399,8 +356,8 @@ function NutritionTrend({
           })}
         </div>
       )}
-      <p className="mt-2 text-center text-[10px] text-muted">Daily {metric} ({unit})</p>
-    </ChartBox>
+      <p className="text-center text-[11px] text-muted">Daily {metric} ({unit})</p>
+    </div>
   );
 }
 
@@ -408,38 +365,51 @@ function fmtKm(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
 
-/** One bar per bucket. Shared by the cardio time and distance charts — the
- *  two differ only in their values and how a value is written out. */
-function CardioBars({
+/** Half-width cardio tile: a compact bar per bucket, or a dashed baseline
+ *  when nothing was logged. Shared by the time and distance tiles. */
+function CardioTile({
+  title,
+  unit,
   values,
-  labels,
-  format,
+  total,
   empty,
 }: {
+  title: string;
+  unit: string;
   values: number[];
-  labels: string[];
-  format: (n: number) => string;
+  total: string;
   empty: string;
 }) {
   const max = Math.max(...values, 0);
-  if (max === 0) return <Empty>{empty}</Empty>;
   return (
-    <div className="flex h-[140px] items-end gap-1.5">
-      {values.map((v, i) => (
-        <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-          <span className="text-[9px] font-semibold text-ink/70">
-            {v > 0 ? format(v) : ""}
+    <div className="elevation-1 flex flex-col gap-3 rounded-3xl p-[18px]">
+      <span className="flex items-baseline justify-between">
+        <span className="text-sm font-semibold">{title}</span>
+        <span className="text-xs text-subtle">{unit}</span>
+      </span>
+      {max === 0 ? (
+        <>
+          <svg width="100%" height="36" viewBox="0 0 140 36" preserveAspectRatio="none" aria-hidden>
+            <line x1="0" y1="34" x2="140" y2="34" stroke="#3A3A3A" strokeWidth="1" strokeDasharray="3 4" />
+          </svg>
+          <span className="text-xs leading-[1.4] text-muted">{empty}</span>
+        </>
+      ) : (
+        <>
+          <div className="flex h-9 items-end gap-[3px]" aria-hidden>
+            {values.map((v, i) => (
+              <div
+                key={i}
+                className={`flex-1 rounded-t-sm ${v > 0 ? "bg-green" : "bg-[#2C2C2C]"}`}
+                style={{ height: v > 0 ? `${Math.max(10, (v / max) * 100)}%` : "6%" }}
+              />
+            ))}
+          </div>
+          <span className="text-xs leading-[1.4] text-muted">
+            <span className="font-semibold text-ink">{total}</span> in this window
           </span>
-          <div
-            className="w-full rounded-t"
-            style={{
-              height: v > 0 ? `${Math.max(6, (v / max) * 100)}%` : "2%",
-              background: v > 0 ? (i >= values.length - 2 ? TEAL_NEW : TEAL_OLD) : "#262626",
-            }}
-          />
-          <span className="text-[9px] text-muted">{labels[i]}</span>
-        </div>
-      ))}
+        </>
+      )}
     </div>
   );
 }
@@ -452,80 +422,147 @@ function fmtMin(n: number): string {
   return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, "0")}`;
 }
 
+// Max-weight chart: three gridlines with value labels, one point per session
+// (dashed to the right edge when there's only one), first/last dates below.
 function LineChart({ points }: { points: SeriesPoint[] }) {
-  const W = 300;
-  const H = 70;
-  const pad = 8;
+  const W = 316;
+  const X0 = 60; // leaves room for the value labels
+  const X1 = 300;
+  const TOP = 14;
+  const BOTTOM = 100;
   const values = points.map((p) => p.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
+  const ticks = gridTicks(Math.min(...values), Math.max(...values));
+  const y = (v: number) => BOTTOM - ((v - ticks[0]) / (ticks[2] - ticks[0])) * (BOTTOM - TOP);
   const coords = points.map((p, i) => {
-    const x = points.length === 1 ? W : (i / (points.length - 1)) * W;
-    const y = H - pad - ((p.value - min) / range) * (H - pad * 2);
-    return [x, y] as const;
+    const x = points.length === 1 ? X0 : X0 + (i / (points.length - 1)) * (X1 - X0);
+    return [x, y(p.value)] as const;
   });
-  const line = coords.map((c) => c.join(",")).join(" ");
-  const area = `0,${H} ${line} ${W},${H}`;
-  const last = coords[coords.length - 1];
-
-  const todayKey = toDateKey(new Date());
-  const firstMs = new Date(points[0].date).getTime();
-  const weeksAgo = Math.max(1, Math.round((Date.now() - firstMs) / (7 * 86400000)));
-  const lastIsToday = points[points.length - 1].date === todayKey;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const label = (p: SeriesPoint) => (p.date === toDateKey(new Date()) ? "Today" : shortDate(p.date));
 
   return (
-    <>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-[70px] w-full">
-        <defs>
-          <linearGradient id="strengthFade" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={ORANGE} stopOpacity="0.16" />
-            <stop offset="1" stopColor={ORANGE} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polyline points={area} fill="url(#strengthFade)" stroke="none" />
-        <polyline
-          points={line}
-          fill="none"
-          stroke={ORANGE}
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-        <circle cx={last[0]} cy={last[1]} r="3.5" fill={ORANGE} />
-      </svg>
-      <div className="mt-1 flex justify-between text-[9px] text-muted">
-        <span>{weeksAgo}w ago</span>
-        <span className="font-semibold text-gold">{max} kg</span>
-        <span>{lastIsToday ? "today" : shortDate(points[points.length - 1].date)}</span>
-      </div>
-    </>
+    <svg
+      viewBox={`0 0 ${W} 130`}
+      className="h-auto w-full"
+      role="img"
+      aria-label={`Max weight: ${points.map((p) => `${fmtKg(p.value)} kg on ${shortDate(p.date)}`).join(", ")}`}
+    >
+      {ticks.map((t, i) => (
+        <g key={t}>
+          <line x1="28" y1={y(t)} x2={W} y2={y(t)} stroke={i === 0 ? "#3A3A3A" : "#2C2C2C"} strokeWidth="1" />
+          <text x="0" y={y(t) + 4} fill="#8C8C8C" fontSize="11">
+            {fmtKg(t)}
+          </text>
+        </g>
+      ))}
+      {coords.length === 1 ? (
+        <line x1={X0} y1={coords[0][1]} x2={X1} y2={coords[0][1]} stroke={GREEN} strokeWidth="2" strokeDasharray="3 6" strokeLinecap="round" opacity="0.5" />
+      ) : (
+        <polyline points={coords.map((c) => c.join(",")).join(" ")} fill="none" stroke={GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      )}
+      {coords.map(([cx, cy], i) => (
+        <circle key={i} cx={cx} cy={cy} r={i === coords.length - 1 ? 5 : 3.5} fill={GREEN} />
+      ))}
+      <circle cx={coords[coords.length - 1][0]} cy={coords[coords.length - 1][1]} r="9" fill={GREEN} opacity="0.18" />
+      <text x={coords[0][0]} y="124" textAnchor="middle" fill="#A6A6A6" fontSize="11">
+        {label(first)}
+      </text>
+      {points.length > 1 && (
+        <text x={X1} y="124" textAnchor="end" fill="#A6A6A6" fontSize="11">
+          {label(last)}
+        </text>
+      )}
+    </svg>
   );
 }
 
+/** Three evenly spaced, round gridline values that bracket [lo, hi]. */
+function gridTicks(lo: number, hi: number): [number, number, number] {
+  if (lo === hi) {
+    const step = niceStep(Math.max(lo * 0.5, 1));
+    return [lo - step, lo, lo + step];
+  }
+  let step = niceStep((hi - lo) / 2);
+  let base = Math.floor(lo / step) * step;
+  while (base + 2 * step < hi) {
+    step = niceStep(step * 1.5);
+    base = Math.floor(lo / step) * step;
+  }
+  return [base, base + step, base + 2 * step];
+}
+
+function niceStep(x: number): number {
+  const p = 10 ** Math.floor(Math.log10(x));
+  const m = x / p;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
+}
+
 function MuscleBreakdown({ week }: { week: WeekStats }) {
-  const max = Math.max(...week.muscles.map((m) => m.count), 1);
+  const trained = week.muscles.filter((m) => m.count > 0);
+  const neglected = week.muscles.filter((m) => m.count === 0);
   return (
-    <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-      {week.muscles.map((m) => {
-        // One colour for every group: the bar length already encodes the
-        // ranking, so tinting by rank only made it harder to compare.
-        const color = m.count === 0 ? "#2C2C2C" : GREEN;
-        return (
-          <div key={m.group} className="flex flex-col gap-1">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className={`font-medium ${m.count === 0 ? "text-muted" : "text-ink"}`}>
-                {m.label}
-              </span>
-              <span className="text-muted">{m.count}×</span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
-              <div className="h-full rounded-full" style={{ width: `${(m.count / max) * 100}%`, background: color }} />
-            </div>
-          </div>
-        );
-      })}
+    <section className="elevation-1 flex flex-col gap-4 rounded-[28px] p-5">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-display text-lg font-semibold">Muscle group frequency</h2>
+          <span className="text-[13px] text-muted">
+            <span className="font-display text-[15px] font-semibold text-ink">{trained.length}</span> /{" "}
+            {week.muscles.length} trained
+          </span>
+        </div>
+        <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${week.muscles.length || 1}, 1fr)` }} aria-hidden>
+          {[...trained, ...neglected].map((m) => (
+            <span key={m.group} className={`h-1.5 rounded-full ${m.count > 0 ? "bg-green" : "bg-gold/[0.55]"}`} />
+          ))}
+        </div>
+      </div>
+
+      {trained.length > 0 && (
+        <FrequencyGroup title="Trained" note="sessions" tone="text-green">
+          {trained.map((m) => (
+            <span key={m.group} className="elevation-2 flex h-11 items-center justify-between rounded-[14px] px-3.5 text-sm">
+              {m.label}
+              <span className="font-display font-semibold text-green">{m.count}×</span>
+            </span>
+          ))}
+        </FrequencyGroup>
+      )}
+
+      {trained.length > 0 && neglected.length > 0 && <div className="h-px bg-[#2C2C2C]" />}
+
+      {neglected.length > 0 && (
+        <FrequencyGroup title="Neglected" note="not trained this period" tone="text-gold">
+          {neglected.map((m) => (
+            <span key={m.group} className="flex h-11 items-center justify-between rounded-[14px] border border-gold/20 bg-gold/[0.07] px-3.5 text-sm">
+              {m.label}
+              <span className="font-display font-semibold text-gold">0×</span>
+            </span>
+          ))}
+        </FrequencyGroup>
+      )}
+    </section>
+  );
+}
+
+function FrequencyGroup({
+  title,
+  note,
+  tone,
+  children,
+}: {
+  title: string;
+  note: string;
+  tone: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-baseline justify-between">
+        <span className={`text-xs font-semibold uppercase tracking-[0.08em] ${tone}`}>{title}</span>
+        <span className="text-xs text-muted">{note}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">{children}</div>
     </div>
   );
 }
@@ -545,60 +582,60 @@ function ExerciseHistory({ sessions }: { sessions: HistorySession[] }) {
   if (sessions.length === 0) return null;
 
   return (
-    <div className="mt-4 border-t border-white/10 pt-3">
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-        Previous sessions
-      </p>
-      <ul className="space-y-2">
+    <>
+      <div className="h-px bg-[#2C2C2C]" />
+      <div className="flex flex-col gap-2.5">
+        <span className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">Previous sessions</span>
         {sessions.map((s, i) => {
           // sessions are newest-first, so the next item is the older one.
           const prev = sessions[i + 1];
           const delta = prev ? s.topWeightKg - prev.topWeightKg : 0;
-          const up = delta > 0;
-          const down = delta < 0;
           return (
-            <li key={s.date} className="rounded-xl bg-white/[0.04] px-3 py-2.5">
+            <div key={s.date} className="elevation-2 flex flex-col gap-2.5 rounded-[18px] p-3.5">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-sm font-semibold text-ink">
-                  {shortDate(s.date)}
-                </span>
-                <span className="flex items-baseline gap-1.5">
-                  <span className="text-sm font-semibold text-ink">
-                    {fmtKg(s.topWeightKg)}
-                    <span className="text-xs font-normal text-muted"> kg top</span>
-                  </span>
-                  {prev && (
-                    <span
-                      className={[
-                        "text-[11px] font-semibold",
-                        up ? "text-green" : down ? "text-gold" : "text-muted",
-                      ].join(" ")}
-                    >
-                      {up ? `▲ +${fmtKg(delta)}` : down ? `▼ ${fmtKg(delta)}` : "="}
+                <span className="text-[15px] font-semibold">{shortDate(s.date)}</span>
+                <span className="text-right text-[13px] text-muted">
+                  Top <span className="font-semibold text-ink">{fmtKg(s.topWeightKg)} kg</span>
+                  {delta !== 0 && (
+                    <span className={`font-semibold ${delta > 0 ? "text-green" : "text-gold"}`}>
+                      {" "}
+                      {delta > 0 ? `▲${fmtKg(delta)}` : `▼${fmtKg(-delta)}`}
                     </span>
+                  )}
+                  {s.volumeKg > 0 && (
+                    <>
+                      {" "}· Volume <span className="font-semibold text-ink">{fmtKg(s.volumeKg)} kg</span>
+                    </>
                   )}
                 </span>
               </div>
-              <div className="mt-1.5 flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1.5">
                 {s.sets.map((set, j) => (
-                  <span
-                    key={j}
-                    className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[11px] text-muted"
-                  >
+                  <span key={j} className="flex items-center gap-1.5 rounded-xl bg-surface px-2.5 py-[7px] text-[13px]">
+                    <span className="text-[11px] font-semibold text-green">{j + 1}</span>
                     {set.reps ?? "–"}
-                    {set.weightKg != null ? ` × ${fmtKg(set.weightKg)}kg` : ""}
+                    {set.weightKg != null ? ` × ${fmtKg(set.weightKg)} kg` : ""}
                   </span>
                 ))}
               </div>
-              {s.volumeKg > 0 && (
-                <p className="mt-1 text-[10px] text-muted">
-                  Volume {fmtKg(s.volumeKg)} kg
-                </p>
-              )}
-            </li>
+            </div>
           );
         })}
-      </ul>
-    </div>
+      </div>
+    </>
   );
+}
+
+function sum(values: number[]): number {
+  return values.reduce((n, v) => n + v, 0);
+}
+
+/** Locale-free thousands grouping (SSR and client must match). */
+function fmtThousands(n: number): string {
+  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+/** "920 kg" under a tonne, "1.1 t" from there. */
+function fmtWeight(kg: number): string {
+  return kg >= 1000 ? `${(kg / 1000).toFixed(1)} t` : `${Math.round(kg)} kg`;
 }
