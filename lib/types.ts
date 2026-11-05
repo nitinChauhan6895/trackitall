@@ -267,6 +267,16 @@ export function prIcon(pr: Pick<Pr, "unit_type">): string {
   return "🏋️";
 }
 
+/** A PR's number and its unit, for layouts that style them apart
+ *  ("60" + "kg"). Times have no separate unit ("28:40"). */
+export function splitPrValue(
+  pr: Pick<Pr, "unit_type" | "value" | "distance_unit">,
+): { value: string; unit: string } {
+  if (pr.unit_type === "kg") return { value: trimNum(pr.value), unit: "kg" };
+  if (pr.unit_type === "distance") return { value: trimNum(pr.value), unit: pr.distance_unit ?? "m" };
+  return { value: formatSeconds(pr.value), unit: "" };
+}
+
 export function formatPrValue(pr: Pick<Pr, "unit_type" | "value" | "distance_unit">): string {
   if (pr.unit_type === "kg") return `${trimNum(pr.value)} kg`;
   if (pr.unit_type === "distance")
