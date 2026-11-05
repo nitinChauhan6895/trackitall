@@ -1,5 +1,6 @@
 import type { EvaluatedBadge } from "@/lib/badges";
 import { formatShortDate } from "@/lib/dateFormat";
+import BadgeIcon from "@/components/BadgeIcon";
 
 function fmtNum(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
@@ -10,7 +11,7 @@ function fmtNum(n: number): string {
 // mismatch on hydration (see lib/dateFormat.ts).
 const fmtDate = formatShortDate;
 
-// Orange progress ring shown only while a badge is in progress.
+// Gold progress ring shown only while a badge is in progress.
 function Ring({ frac }: { frac: number }) {
   const r = 29;
   const c = 2 * Math.PI * r;
@@ -34,27 +35,28 @@ export function Badge({
   const ring = size === "sm" ? "h-14 w-14" : "h-16 w-16";
 
   return (
-    <div className="flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-surface p-3">
+    <div className="flex flex-col items-center gap-2 rounded-3xl bg-surface p-3">
       <div className={`relative ${ring}`}>
         {!badge.earned && <Ring frac={frac} />}
         <div
           className={[
-            "absolute inset-[6px] flex items-center justify-center rounded-full text-2xl",
+            "absolute inset-[6px] flex items-center justify-center rounded-full",
             badge.earned
-              ? "bg-gold-soft shadow-[0_0_16px_rgba(242,106,44,0.5)] ring-2 ring-gold/60"
-              : "bg-white/10",
+              ? "border-[1.5px] border-gold bg-gold/[0.14] text-gold"
+              : "bg-surface-2 text-muted",
           ].join(" ")}
         >
-          <span aria-hidden className={badge.earned ? "" : "opacity-40 grayscale"}>
-            {badge.icon}
-          </span>
+          <BadgeIcon id={badge.id} size={size === "sm" ? 20 : 24} />
         </div>
         {!badge.earned && (
           <span
             aria-hidden
-            className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-[11px] text-white shadow"
+            className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-page text-muted shadow"
           >
-            🔒
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="5" y="11" width="14" height="10" rx="2" />
+              <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+            </svg>
           </span>
         )}
       </div>
