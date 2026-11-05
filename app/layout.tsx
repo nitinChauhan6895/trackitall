@@ -25,8 +25,13 @@ export const metadata: Metadata = {
   description: "A mobile-first workout tracker.",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/icons/icon-192.png",
-    apple: "/icons/apple-touch-icon.png",
+    // Versioned file names: the service worker caches /icons/ cache-first,
+    // so a new logo needs new URLs to reach installed copies.
+    icon: [
+      { url: "/icons/favicon-v2-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-v2-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon-v2.png",
   },
   appleWebApp: {
     capable: true,
