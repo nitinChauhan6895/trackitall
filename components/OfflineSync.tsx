@@ -59,7 +59,7 @@ export default function OfflineSync() {
       <div
         className={[
           "mx-auto flex items-center justify-center gap-2 rounded-full px-4 py-1.5 text-xs font-semibold shadow-lg",
-          offline ? "bg-orange text-white" : "bg-green text-ink-inverse",
+          offline ? "bg-gold text-ink-inverse" : "bg-green text-ink-inverse",
         ].join(" ")}
       >
         <span

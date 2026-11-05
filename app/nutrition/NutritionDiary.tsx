@@ -24,8 +24,8 @@ import { fetchNutritionDiary, qk } from "@/lib/browserData";
 import type { NutritionDiary as Diary } from "@/lib/data";
 
 const MACRO_META = [
-  { key: "protein", label: "Protein", color: "#FF6233", targetKey: "daily_protein_g" },
-  { key: "carbs", label: "Carbs", color: "#E0A52A", targetKey: "daily_carbs_g" },
+  { key: "protein", label: "Protein", color: "#FFC95C", targetKey: "daily_protein_g" },
+  { key: "carbs", label: "Carbs", color: "#7FB2F0", targetKey: "daily_carbs_g" },
   { key: "fat", label: "Fat", color: "#3FAE8E", targetKey: "daily_fat_g" },
   { key: "fiber", label: "Fibre", color: "#5EA0EF", targetKey: "daily_fiber_g" },
 ] as const;
@@ -310,8 +310,8 @@ function MealBreakdownSheet({
 }) {
   const totals = sumMacros(entries);
   const rows: { label: string; value: string; color: string }[] = [
-    { label: "Protein", value: `${Math.round(totals.protein)} g`, color: "#FF6233" },
-    { label: "Carbs", value: `${Math.round(totals.carbs)} g`, color: "#E0A52A" },
+    { label: "Protein", value: `${Math.round(totals.protein)} g`, color: "#FFC95C" },
+    { label: "Carbs", value: `${Math.round(totals.carbs)} g`, color: "#7FB2F0" },
     { label: "Fat", value: `${Math.round(totals.fat)} g`, color: "#3FAE8E" },
     { label: "Fibre", value: `${Math.round(totals.fiber)} g`, color: "#5EA0EF" },
   ];
@@ -447,7 +447,7 @@ function CalorieRing({
   const frac = fraction(consumed, target);
   const dash = c * frac;
   const remaining = Math.max(0, target - consumed);
-  const color = over ? "#FF6233" : "#A8E830";
+  const color = over ? "#FFC95C" : "#22C55E";
 
   return (
     <div className="relative h-28 w-28 shrink-0">
@@ -612,7 +612,7 @@ function EditEntrySheet({
             type="button"
             onClick={remove}
             disabled={busy}
-            className="flex-1 rounded-xl border border-orange/40 px-4 py-3 text-sm font-semibold text-orange active:bg-orange-soft disabled:opacity-50"
+            className="flex-1 rounded-xl border border-gold/40 px-4 py-3 text-sm font-semibold text-gold active:bg-gold-soft disabled:opacity-50"
           >
             Remove
           </button>

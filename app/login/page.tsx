@@ -10,7 +10,7 @@ import { isValidEmail, isValidUsername, normalizeUsername } from "@/lib/auth";
 type Mode = "signin" | "signup";
 
 const inputClass =
-  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
+  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-gold";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -214,13 +214,13 @@ export default function LoginPage() {
               : "Create account"}
         </button>
 
-        {error && <p className="text-center text-sm text-orange">{error}</p>}
+        {error && <p className="text-center text-sm text-gold">{error}</p>}
       </form>
 
       {mode === "signin" && (
         <Link
           href="/forgot"
-          className="mt-4 text-center text-sm font-medium text-orange active:opacity-70"
+          className="mt-4 text-center text-sm font-medium text-gold active:opacity-70"
         >
           Forgot password?
         </Link>

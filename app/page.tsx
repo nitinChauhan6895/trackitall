@@ -12,6 +12,8 @@ import {
   getIncomingShares,
 } from "@/lib/data";
 import CalendarCard from "./CalendarCard";
+import HeroCard, { FlameIcon } from "./HeroCard";
+import type { MonthSummary } from "@/lib/browserData";
 import { fraction } from "@/lib/nutrition";
 import {
   MEASUREMENT_FIELDS,
@@ -25,7 +27,7 @@ import {
 import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
 import { evaluateBadges, sortedByEarned } from "@/lib/badges";
 import { groupPrs } from "@/lib/prGroups";
-import { parseMonthParam, toDateKey } from "@/lib/date";
+import { parseMonthParam, prevMonth, toDateKey } from "@/lib/date";
 import { Badge } from "@/components/Badge";
 import { MeasurementCard, PrCard } from "@/components/HomeCards";
 import ShareInbox from "@/components/ShareInbox";
@@ -59,71 +61,108 @@ export default async function HomePage({
   searchParams: { m?: string };
 }) {
   const { year, month } = parseMonthParam(searchParams.m);
+  const now = new Date();
+  const todayKey = toDateKey(now);
+  const cur = { year: now.getFullYear(), month: now.getMonth() + 1 };
+
+  // The hero needs this whole month plus the current Monday-first week, which
+  // can start in the previous month.
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const weekStartsLastMonth = monday.getMonth() !== now.getMonth();
+  const viewingCurrent = year === cur.year && month === cur.month;
 
   // Above-the-fold shell only — keeps first paint off the heavy badge scan.
   // The calendar's summary seeds the client CalendarCard (instant month nav).
-  const [profile, workoutSummary, streak] = await Promise.all([
-    getProfile(),
-    getMonthWorkoutSummary(year, month),
-    getCurrentStreak(),
-  ]);
+  const [profile, viewedSummary, currentSummary, lastMonthSummary, streak] =
+    await Promise.all([
+      getProfile(),
+      getMonthWorkoutSummary(year, month),
+      viewingCurrent ? null : getMonthWorkoutSummary(cur.year, cur.month),
+      weekStartsLastMonth
+        ? getMonthWorkoutSummary(prevMonth(cur.year, cur.month).year, prevMonth(cur.year, cur.month).month)
+        : null,
+      getCurrentStreak(),
+    ]);
+  const heroSummary = {
+    ...Object.fromEntries(lastMonthSummary ?? []),
+    ...Object.fromEntries(currentSummary ?? viewedSummary),
+  };
 
-  const todayKey = toDateKey(new Date());
   const firstName = profile.first_name || displayName(profile);
-  const todayLabel = new Date().toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    weekday: "long",
-  });
+  // "Thursday, 5 November"
+  const todayLabel = `${now.toLocaleDateString("en-GB", { weekday: "long" })}, ${now.toLocaleDateString("en-GB", { day: "numeric", month: "long" })}`;
 
   return (
-    <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
+    <main className="flex flex-1 flex-col gap-5 px-4 pb-36 safe-top">
       {/* Header */}
-      <header className="flex items-start justify-between gap-3 pb-3 pt-5">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight">Hi, {firstName}!</h1>
-          <p className="mt-0.5 text-sm text-muted">{todayLabel}</p>
+      <header className="flex items-center justify-between gap-3 px-1 pt-5">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="truncate font-display text-[30px] font-bold leading-tight tracking-[-0.02em]">
+            Hi, {firstName}
+          </h1>
+          <p className="text-sm text-muted">{todayLabel}</p>
         </div>
         <Link
           href="/profile"
           aria-label="Profile"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-beige text-lg font-bold text-ink active:scale-95"
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.08] font-display text-[17px] font-semibold text-ink backdrop-blur-xl active:scale-95"
         >
           {profileInitial(profile)}
         </Link>
       </header>
 
+      <HeroCard summary={heroSummary} todayKey={todayKey} streak={streak} />
+
+      {/* Bento tiles */}
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/stats" className="flex flex-col gap-3.5 rounded-3xl bg-surface p-[18px] text-ink active:bg-white/[0.04]">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold/[0.14] text-gold">
+            <FlameIcon size={20} />
+          </span>
+          <span className="flex flex-col gap-0.5">
+            <span className="font-display text-[26px] font-semibold">
+              {streak} <span className="text-sm text-muted">day{streak === 1 ? "" : "s"}</span>
+            </span>
+            <span className="text-[13px] text-muted">
+              Streak · {streak > 0 ? "keep it going" : "start one today"}
+            </span>
+          </span>
+        </Link>
+        <Link href="/habits" className="flex flex-col gap-3.5 rounded-3xl bg-surface p-[18px] text-ink active:bg-white/[0.04]">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green/[0.14] text-green">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14z" />
+              <path d="M5 19l7-7" />
+            </svg>
+          </span>
+          <span className="flex flex-col gap-0.5">
+            <span className="font-display text-xl font-semibold">Habits</span>
+            <span className="text-[13px] text-muted">Check in for today</span>
+          </span>
+        </Link>
+      </div>
+
       {/* Calendar — client component with instant, cache-backed month nav */}
       <CalendarCard
         initialYear={year}
         initialMonth={month}
-        initialSummary={Object.fromEntries(workoutSummary)}
+        initialSummary={Object.fromEntries(viewedSummary)}
         todayKey={todayKey}
-        streak={streak}
+        streakDays={streakDayKeys(streak, todayKey, heroSummary)}
       />
 
       {/* Last 7 days trained (streamed) */}
-      <section className="mt-5">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-base font-semibold">Last 7 days</h2>
-          <Link href="/stats" className="text-sm font-medium text-orange active:opacity-70">
-            Stats ›
-          </Link>
-        </div>
+      <section className="flex flex-col gap-3">
+        <SectionHeader title="Last 7 days" href="/stats" action="Stats ›" />
         <Suspense fallback={<RecentTrainingSkeleton />}>
           <RecentTraining />
         </Suspense>
       </section>
 
       {/* Nutrition (streamed) */}
-      <section className="mt-5">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-base font-semibold">Nutrition</h2>
-          <Link href="/nutrition" className="text-sm font-medium text-orange active:opacity-70">
-            Open diary ›
-          </Link>
-        </div>
+      <section className="flex flex-col gap-3">
+        <SectionHeader title="Nutrition" href="/nutrition" action="Open diary ›" />
         <Suspense fallback={<NutritionSkeleton />}>
           <NutritionPreview date={todayKey} />
         </Suspense>
@@ -237,15 +276,15 @@ async function NutritionPreview({ date }: { date: string }) {
   const r = 26;
   const c = 2 * Math.PI * r;
   const macros: { label: string; v: number; t: number; color: string }[] = [
-    { label: "P", v: totals.protein, t: targets.daily_protein_g, color: "#FF6233" },
-    { label: "C", v: totals.carbs, t: targets.daily_carbs_g, color: "#E0A52A" },
+    { label: "P", v: totals.protein, t: targets.daily_protein_g, color: "#FFC95C" },
+    { label: "C", v: totals.carbs, t: targets.daily_carbs_g, color: "#7FB2F0" },
     { label: "F", v: totals.fat, t: targets.daily_fat_g, color: "#3FAE8E" },
   ];
 
   return (
     <Link
       href="/nutrition"
-      className="flex items-center gap-4 rounded-2xl border border-white/10 bg-surface p-4 active:bg-white/[0.04]"
+      className="flex items-center gap-4 rounded-3xl bg-surface p-[18px] active:bg-white/[0.04]"
     >
       <div className="relative h-16 w-16 shrink-0">
         <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90">
@@ -255,7 +294,7 @@ async function NutritionPreview({ date }: { date: string }) {
             cy="32"
             r={r}
             fill="none"
-            stroke={over ? "#FF6233" : "#A8E830"}
+            stroke={over ? "#FFC95C" : "#22C55E"}
             strokeWidth="7"
             strokeLinecap="round"
             strokeDasharray={`${c * frac} ${c}`}
@@ -294,7 +333,7 @@ async function NutritionPreview({ date }: { date: string }) {
 }
 
 function NutritionSkeleton() {
-  return <div className="h-[104px] animate-pulse rounded-2xl bg-white/10" />;
+  return <div className="h-[104px] animate-pulse rounded-3xl bg-white/10" />;
 }
 
 // Weekday label for a date key, relative for today/yesterday.
@@ -312,7 +351,7 @@ function dayLabels(key: string, isToday: boolean): { top: string; sub: string } 
 async function RecentTraining() {
   const days = await getRecentTraining(7);
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/10 bg-surface">
+    <div className="flex flex-col overflow-hidden rounded-3xl bg-surface">
       {days.map((day) => {
         const { top, sub } = dayLabels(day.key, day.isToday);
         const href = day.groups.length ? `/day/${day.key}` : `/log/${day.key}`;
@@ -320,22 +359,22 @@ async function RecentTraining() {
           <Link
             key={day.key}
             href={href}
-            className="flex items-center gap-3 border-b border-white/5 px-4 py-2.5 last:border-0 active:bg-white/[0.04]"
+            className="flex items-center gap-3 border-b border-surface-2 px-[18px] py-3.5 text-ink last:border-0 active:bg-white/[0.04]"
           >
-            <div className="w-16 shrink-0">
-              <p className="text-sm font-semibold text-ink">{top}</p>
-              <p className="text-[11px] text-muted">{sub}</p>
+            <div className="flex w-20 shrink-0 flex-col">
+              <span className="text-base font-semibold">{top}</span>
+              <span className="text-[13px] text-muted">{sub}</span>
             </div>
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5">
               {day.groups.length === 0 ? (
-                <span className="text-xs italic text-muted">Rest day</span>
+                <span className="rounded-full bg-surface-2 px-2.5 py-1.5 text-[13px] text-muted">Rest day</span>
               ) : (
                 day.groups.map((g) => <MuscleChip key={g} group={g} />)
               )}
             </div>
-            <span aria-hidden className="shrink-0 text-muted">
-              ›
-            </span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="shrink-0 text-subtle">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
           </Link>
         );
       })}
@@ -360,9 +399,9 @@ function MuscleChip({ group }: { group: MuscleGroup }) {
 
 function RecentTrainingSkeleton() {
   return (
-    <div className="space-y-px overflow-hidden rounded-2xl border border-white/10 bg-surface">
+    <div className="space-y-px overflow-hidden rounded-3xl bg-surface">
       {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-        <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+        <div key={i} className="flex items-center gap-3 px-[18px] py-3.5">
           <div className="h-8 w-16 shrink-0 animate-pulse rounded bg-white/10" />
           <div className="h-6 flex-1 animate-pulse rounded-full bg-white/10" />
         </div>
@@ -381,23 +420,43 @@ function PreviewSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-5">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-base font-semibold">{title}</h2>
-        <Link href={href} className="text-sm font-medium text-orange active:opacity-70">
-          View all ›
-        </Link>
-      </div>
+    <section className="flex flex-col gap-3">
+      <SectionHeader title={title} href={href} action="View all ›" />
       {children}
     </section>
   );
+}
+
+function SectionHeader({ title, href, action }: { title: string; href: string; action: string }) {
+  return (
+    <div className="flex items-center justify-between px-1">
+      <h2 className="font-display text-xl font-semibold">{title}</h2>
+      <Link href={href} className="text-[15px] font-semibold text-green active:opacity-70">
+        {action}
+      </Link>
+    </div>
+  );
+}
+
+// The current streak's date keys, ending today when today is trained and
+// yesterday otherwise (matching how currentStreak counts).
+function streakDayKeys(streak: number, todayKey: string, summary: MonthSummary): string[] {
+  const [y, m, d] = todayKey.split("-").map(Number);
+  const cursor = new Date(y, m - 1, d);
+  if (!(summary[todayKey]?.length > 0)) cursor.setDate(cursor.getDate() - 1);
+  const keys: string[] = [];
+  for (let i = 0; i < streak; i++) {
+    keys.push(toDateKey(cursor));
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return keys;
 }
 
 function EmptyHint({ href, children }: { href: string; children: React.ReactNode }) {
   return (
     <Link
       href={href}
-      className="flex items-center justify-center rounded-2xl border border-dashed border-white/15 px-4 py-6 text-center text-sm text-muted active:bg-white/10"
+      className="flex items-center justify-center rounded-3xl border border-dashed border-white/15 px-4 py-6 text-center text-sm text-muted active:bg-white/10"
     >
       {children}
     </Link>

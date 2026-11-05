@@ -6,7 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 const inputClass =
-  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
+  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-gold";
 
 type Status = "checking" | "ready" | "invalid" | "done";
 
@@ -87,7 +87,7 @@ export default function ResetPasswordPage() {
           </p>
           <Link
             href="/forgot"
-            className="mt-3 inline-block text-sm font-medium text-orange"
+            className="mt-3 inline-block text-sm font-medium text-gold"
           >
             Request a new link
           </Link>
@@ -121,7 +121,7 @@ export default function ResetPasswordPage() {
           >
             {pending ? "Saving…" : "Update password"}
           </button>
-          {error && <p className="text-center text-sm text-orange">{error}</p>}
+          {error && <p className="text-center text-sm text-gold">{error}</p>}
         </form>
       )}
 

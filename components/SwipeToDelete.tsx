@@ -65,7 +65,7 @@ export default function SwipeToDelete({
         transition: `max-height ${ANIM}ms ease, opacity ${ANIM}ms ease`,
       }}
     >
-      <div className="absolute inset-0 flex items-center justify-end bg-orange pr-4 text-sm font-semibold text-white">
+      <div className="absolute inset-0 flex items-center justify-end bg-gold pr-4 text-sm font-semibold text-ink-inverse">
         {label}
       </div>
       <div

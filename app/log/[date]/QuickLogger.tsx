@@ -497,13 +497,13 @@ export default function QuickLogger({
 
       <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md border-t border-white/10 bg-page px-4 pb-5 pt-3 safe-bottom">
         {finishError && (
-          <p className="mb-2 text-center text-sm font-medium text-orange">{finishError}</p>
+          <p className="mb-2 text-center text-sm font-medium text-gold">{finishError}</p>
         )}
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setSheetOpen(true)}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl border border-orange/60 px-4 py-4 text-base font-semibold text-orange transition active:scale-[0.98]"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl border border-gold/60 px-4 py-4 text-base font-semibold text-gold transition active:scale-[0.98]"
           >
             + Add
           </button>
@@ -545,9 +545,9 @@ function StatusChip({ status }: { status: SyncStatus }) {
   if (status === "saved")
     return <span className="text-xs font-semibold text-green">✓ Saved</span>;
   if (status === "queued")
-    return <span className="text-xs font-semibold text-orange">◷ Offline</span>;
+    return <span className="text-xs font-semibold text-gold">◷ Offline</span>;
   if (status === "error")
-    return <span className="text-xs font-semibold text-orange">! Retry</span>;
+    return <span className="text-xs font-semibold text-gold">! Retry</span>;
   return null;
 }
 
@@ -572,7 +572,7 @@ function ExerciseCard({
     <div
       className={[
         "overflow-hidden rounded-2xl border bg-surface",
-        ex.status === "error" ? "border-orange/60" : "border-white/10",
+        ex.status === "error" ? "border-gold/60" : "border-white/10",
       ].join(" ")}
     >
       <button
@@ -602,7 +602,7 @@ function ExerciseCard({
             <button
               type="button"
               onClick={onRemove}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-orange/40 px-3 py-2.5 text-sm font-semibold text-orange active:bg-orange-soft"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-gold/40 px-3 py-2.5 text-sm font-semibold text-gold active:bg-gold-soft"
             >
               🗑 Delete
             </button>
@@ -863,7 +863,7 @@ function StrengthSets({
               className={[
                 "shrink-0 rounded-lg border px-2 py-1.5 text-xs font-bold transition active:scale-95",
                 s.isHard
-                  ? "border-orange bg-orange-soft text-orange"
+                  ? "border-gold bg-gold-soft text-gold"
                   : "border-white/10 text-muted",
               ].join(" ")}
             >
@@ -873,7 +873,7 @@ function StrengthSets({
               type="button"
               onClick={() => onChange(sets.filter((x) => x.id !== s.id))}
               aria-label="Remove set"
-              className="shrink-0 px-1 text-muted active:text-orange"
+              className="shrink-0 px-1 text-muted active:text-gold"
             >
               ✕
             </button>

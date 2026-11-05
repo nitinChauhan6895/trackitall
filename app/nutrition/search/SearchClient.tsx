@@ -183,7 +183,7 @@ export default function SearchClient({
         <button
           type="button"
           onClick={() => setCreating(true)}
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-orange/50 px-3 py-3 text-sm font-semibold text-orange active:bg-orange-soft"
+          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-gold/50 px-3 py-3 text-sm font-semibold text-gold active:bg-gold-soft"
         >
           + Custom food
         </button>
@@ -232,7 +232,7 @@ export default function SearchClient({
                     <span className="flex items-center gap-2">
                       <span className="truncate font-medium text-ink">{f.name}</span>
                       {f.source === "custom" && (
-                        <span className="shrink-0 rounded bg-orange-soft px-1.5 py-0.5 text-[10px] font-bold uppercase text-orange">
+                        <span className="shrink-0 rounded bg-gold-soft px-1.5 py-0.5 text-[10px] font-bold uppercase text-gold">
                           Custom
                         </span>
                       )}
@@ -381,7 +381,7 @@ function SavedMealLogSheet({
             inputMode="decimal"
             min={0}
             step="0.5"
-            className="min-w-0 flex-1 rounded-2xl border border-orange/50 bg-surface-2 px-4 py-3 text-center text-2xl font-bold text-ink outline-none focus:border-green"
+            className="min-w-0 flex-1 rounded-2xl border border-gold/50 bg-surface-2 px-4 py-3 text-center text-2xl font-bold text-ink outline-none focus:border-green"
           />
           <button
             type="button"
@@ -416,7 +416,7 @@ function SavedMealLogSheet({
               className={[
                 "rounded-xl border px-1 py-2.5 text-sm font-semibold transition",
                 m === selMeal
-                  ? "border-orange bg-orange-soft text-orange"
+                  ? "border-gold bg-gold-soft text-gold"
                   : "border-white/10 bg-surface text-muted",
               ].join(" ")}
             >
@@ -555,7 +555,7 @@ function MealBuilder({
                 type="button"
                 onClick={() => setItems((prev) => prev.filter((_, j) => j !== i))}
                 aria-label="Remove"
-                className="shrink-0 px-1 text-lg text-muted active:text-orange"
+                className="shrink-0 px-1 text-lg text-muted active:text-gold"
               >
                 ✕
               </button>
@@ -595,7 +595,7 @@ function MealBuilder({
           )}
         </ul>
 
-        {error && <p className="mt-2 shrink-0 text-sm text-orange">{error}</p>}
+        {error && <p className="mt-2 shrink-0 text-sm text-gold">{error}</p>}
 
         <button
           type="button"
@@ -720,7 +720,7 @@ function PortionSheet({
             inputMode="decimal"
             min={0}
             autoFocus
-            className="min-w-0 flex-[1.6] rounded-2xl border border-orange/50 bg-surface-2 px-4 py-3.5 text-center text-2xl font-bold text-ink outline-none focus:border-green"
+            className="min-w-0 flex-[1.6] rounded-2xl border border-gold/50 bg-surface-2 px-4 py-3.5 text-center text-2xl font-bold text-ink outline-none focus:border-green"
           />
           <select
             value={unit}
@@ -788,7 +788,7 @@ function PortionSheet({
                 className={[
                   "rounded-xl border px-1 py-2.5 text-sm font-semibold transition",
                   m === selMeal
-                    ? "border-orange bg-orange-soft text-orange"
+                    ? "border-gold bg-gold-soft text-gold"
                     : "border-white/10 bg-surface text-muted",
                 ].join(" ")}
               >
@@ -943,7 +943,7 @@ function QuickAddSheet({
               className={[
                 "rounded-xl border px-1 py-2.5 text-sm font-semibold transition",
                 m === selMeal
-                  ? "border-orange bg-orange-soft text-orange"
+                  ? "border-gold bg-gold-soft text-gold"
                   : "border-white/10 bg-surface text-muted",
               ].join(" ")}
             >
@@ -1177,7 +1177,7 @@ function CustomFoodForm({
           </div>
         </div>
 
-        {error && <p className="text-sm text-orange">{error}</p>}
+        {error && <p className="text-sm text-gold">{error}</p>}
 
         <button
           type="button"

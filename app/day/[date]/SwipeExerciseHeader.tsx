@@ -32,7 +32,7 @@ export default function SwipeExerciseHeader({
             type="button"
             onClick={requestDelete}
             aria-label="Delete exercise"
-            className="text-muted active:text-orange"
+            className="text-muted active:text-gold"
           >
             ✕
           </button>

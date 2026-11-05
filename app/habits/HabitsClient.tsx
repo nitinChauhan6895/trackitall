@@ -16,6 +16,7 @@ import {
   CADENCES,
   DOW_LABELS,
   HABIT_COLORS,
+  habitColor,
   HABIT_CATEGORIES,
   HABIT_ICONS,
   KINDS,
@@ -230,7 +231,7 @@ function TodayView({
           onClick={() => onDate(today)}
           className={[
             "rounded-full px-3 py-1.5 text-xs font-bold transition",
-            isPast ? "bg-orange text-white" : "bg-green/15 text-green",
+            isPast ? "bg-gold text-ink-inverse" : "bg-green/15 text-green",
           ].join(" ")}
         >
           {isPast ? "Back to today" : "Today"}
@@ -272,7 +273,7 @@ function TodayView({
                   <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
                   {!future && pct > 0 && (
                     <circle
-                      cx="18" cy="18" r="16" fill="none" stroke="#A8E830" strokeWidth="2"
+                      cx="18" cy="18" r="16" fill="none" stroke="#22C55E" strokeWidth="2"
                       strokeLinecap="round"
                       strokeDasharray={2 * Math.PI * 16}
                       strokeDashoffset={2 * Math.PI * 16 * (1 - pct)}
@@ -290,7 +291,7 @@ function TodayView({
                 {sel && (
                   <span
                     aria-hidden
-                    className="absolute -inset-1 rounded-full border-2 border-orange"
+                    className="absolute -inset-1 rounded-full border-2 border-gold"
                   />
                 )}
               </span>
@@ -416,7 +417,7 @@ function HabitCard({
   onOpen: () => void;
   onToggle: () => void;
 }) {
-  const tone = habit.color ?? "#A8E830";
+  const tone = habitColor(habit.color);
   const ratio = progressRatio(habit, logs, date);
   const done = isComplete(habit, logs, date);
 
@@ -443,7 +444,7 @@ function HabitCard({
           <span className="min-w-0">
             <span
               className="block truncate font-semibold"
-              style={{ color: done ? "#141807" : undefined }}
+              style={{ color: done ? "#111111" : undefined }}
             >
               {habit.name}
             </span>
@@ -461,7 +462,7 @@ function HabitCard({
           aria-pressed={done}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm transition active:scale-90"
           style={{
-            backgroundColor: done ? "#141807" : "rgba(255,255,255,0.07)",
+            backgroundColor: done ? "#111111" : "rgba(255,255,255,0.07)",
             color: done ? tone : "rgba(255,255,255,0.35)",
           }}
         >
@@ -518,7 +519,7 @@ function LoggerView({
   onDelete: () => void;
   onShare: () => void;
 }) {
-  const tone = habit.color ?? "#A8E830";
+  const tone = habitColor(habit.color);
   const cur = countOn(logs, habit.id, date);
   const target = habit.target_per_period;
   const ratio = Math.min(1, target > 0 ? cur / target : 0);
@@ -597,7 +598,7 @@ function LoggerView({
       </header>
 
       {date !== today && (
-        <p className="rounded-xl bg-orange-soft px-3 py-1.5 text-center text-xs font-medium text-orange">
+        <p className="rounded-xl bg-gold-soft px-3 py-1.5 text-center text-xs font-medium text-gold">
           Logging for {formatShortDate(date)}
         </p>
       )}
@@ -693,7 +694,7 @@ function LoggerView({
           className="flex h-12 w-12 items-center justify-center rounded-full text-lg active:scale-95"
           style={{
             backgroundColor: done ? tone : "rgba(255,255,255,0.06)",
-            color: done ? "#141807" : "rgba(255,255,255,0.4)",
+            color: done ? "#111111" : "rgba(255,255,255,0.4)",
           }}
         >
           ✓
@@ -718,7 +719,7 @@ function MenuItem({
       onClick={onClick}
       className={[
         "block w-full px-4 py-2.5 text-left text-sm font-medium active:bg-white/10",
-        danger ? "text-orange" : "text-ink",
+        danger ? "text-gold" : "text-ink",
       ].join(" ")}
     >
       {label}
@@ -748,7 +749,7 @@ function DetailView({
   onToggleDay: (date: string) => void;
   onDeleted: () => void;
 }) {
-  const tone = habit.color ?? "#A8E830";
+  const tone = habitColor(habit.color);
   const streak = habitStreak(habit, logs, today);
   const days = weekDays(today);
   const doneThisWeek = days.filter((d) => d <= today && isComplete(habit, logs, d)).length;
@@ -836,7 +837,7 @@ function DetailView({
                   style={{
                     backgroundColor: ok ? tone : "transparent",
                     border: ok ? "none" : "1px solid rgba(255,255,255,0.15)",
-                    color: ok ? "#141807" : "transparent",
+                    color: ok ? "#111111" : "transparent",
                     outline: picked === d ? `2px solid ${tone}` : "none",
                     outlineOffset: "2px",
                   }}
@@ -900,7 +901,7 @@ function DetailView({
                   className="flex h-7 w-7 items-center justify-center rounded-full text-xs active:scale-90"
                   style={{
                     backgroundColor: ok ? tone : "transparent",
-                    color: ok ? "#141807" : future ? "#5A6052" : "#F1F3EA",
+                    color: ok ? "#111111" : future ? "#5C5C5C" : "#F2F2F2",
                     border: isToday && !ok ? `1.5px solid ${tone}` : "none",
                     outline: picked === key ? `2px solid ${tone}` : "none",
                     outlineOffset: "1px",
@@ -944,7 +945,7 @@ function DetailView({
                 await deleteHabit(habit.id);
                 onDeleted();
               }}
-              className="flex-1 rounded-2xl bg-orange px-4 py-3 text-sm font-bold text-white active:scale-95"
+              className="flex-1 rounded-2xl bg-gold px-4 py-3 text-sm font-bold text-ink-inverse active:scale-95"
             >
               Delete habit
             </button>
@@ -984,7 +985,7 @@ function EditView({
   const [name, setName] = useState(habit?.name ?? "");
   const [description, setDescription] = useState(habit?.description ?? "");
   const [icon, setIcon] = useState(habit?.icon ?? HABIT_ICONS[0]);
-  const [color, setColor] = useState(habit?.color ?? HABIT_COLORS[0]);
+  const [color, setColor] = useState(habitColor(habit?.color));
   const [cadence, setCadence] = useState<Cadence>(habit?.cadence ?? "daily");
   const [kind, setKind] = useState<HabitKind>(habit?.kind ?? "count");
   const [category, setCategory] = useState(habit?.category ?? "");
@@ -1093,9 +1094,9 @@ function EditView({
                 className="flex h-9 w-9 items-center justify-center rounded-full text-sm"
                 style={{
                   backgroundColor: c,
-                  outline: color === c ? "2px solid #F1F3EA" : "none",
+                  outline: color === c ? "2px solid #F2F2F2" : "none",
                   outlineOffset: "2px",
-                  color: "#141807",
+                  color: "#111111",
                 }}
               >
                 {color === c ? "✓" : ""}
@@ -1233,7 +1234,7 @@ function EditView({
           />
         </div>
 
-        {error && <p className="text-sm text-orange">{error}</p>}
+        {error && <p className="text-sm text-gold">{error}</p>}
 
         <button
           type="button"

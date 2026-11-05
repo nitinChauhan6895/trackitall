@@ -27,24 +27,24 @@ export default function BottomNav() {
     href === "/" ? path === "/" : path.startsWith(href);
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md px-4 pb-3 safe-bottom">
-      <div className="grid grid-cols-5 items-center rounded-[28px] border border-white/10 bg-surface px-2 py-2 shadow-[0_10px_30px_rgba(0,0,0,0.55)]">
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-0 bottom-0 z-30 mx-auto flex w-full max-w-md items-center gap-2.5 px-4 pb-7 safe-bottom"
+    >
+      {/* Floating "liquid glass" tab bar with the log action beside it. */}
+      <div className="grid h-16 flex-1 grid-cols-4 rounded-full border border-white/[0.12] bg-[rgba(44,44,44,0.62)] p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl backdrop-saturate-[1.6]">
         <NavItem href="/" label="Home" active={isActive("/")} icon={HomeIcon} />
         <NavItem href="/habits" label="Habits" active={isActive("/habits")} icon={LeafIcon} />
-
-        <div className="flex justify-center">
-          <Link
-            href={today ? `/log/${today}` : "/"}
-            aria-label="Log workout"
-            className="-mt-8 flex h-14 w-14 items-center justify-center rounded-full bg-green text-ink-inverse shadow-lg ring-4 ring-surface transition active:scale-95"
-          >
-            <PlusIcon />
-          </Link>
-        </div>
-
         <NavItem href="/stats" label="Stats" active={isActive("/stats")} icon={StatsIcon} />
         <NavItem href="/goals" label="Goals" active={isActive("/goals")} icon={GoalIcon} />
       </div>
+      <Link
+        href={today ? `/log/${today}` : "/"}
+        aria-label="Log workout"
+        className="flex h-16 w-16 flex-none items-center justify-center rounded-full border border-white/25 bg-green/[0.92] text-ink-inverse shadow-[0_10px_30px_rgba(34,197,94,0.30),inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-xl transition active:scale-95"
+      >
+        <PlusIcon />
+      </Link>
     </nav>
   );
 }
@@ -64,11 +64,11 @@ function NavItem({
     <Link
       href={href}
       className={[
-        "flex flex-col items-center gap-1 py-1 text-[11px] font-medium transition",
-        active ? "text-orange" : "text-muted",
+        "flex flex-col items-center justify-center gap-0.5 rounded-full text-[10px] transition",
+        active ? "bg-white/10 font-semibold text-green" : "font-medium text-[#D4D4D4]",
       ].join(" ")}
     >
-      <span className="h-6 w-6">
+      <span className="h-5 w-5">
         <Icon />
       </span>
       {label}
@@ -79,7 +79,7 @@ function NavItem({
 const svg = {
   fill: "none",
   stroke: "currentColor",
-  strokeWidth: 1.8,
+  strokeWidth: 2,
   strokeLinecap: "round" as const,
   strokeLinejoin: "round" as const,
   viewBox: "0 0 24 24",

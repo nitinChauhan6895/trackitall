@@ -166,7 +166,7 @@ export default function CircuitBuilder({ initial }: { initial?: Circuit }) {
                   type="button"
                   onClick={() => patchEx(ex.key, { expanded: !ex.expanded })}
                   aria-label="Edit targets"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-orange active:bg-white/10"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-gold active:bg-white/10"
                 >
                   ✎
                 </button>
@@ -230,7 +230,7 @@ export default function CircuitBuilder({ initial }: { initial?: Circuit }) {
                   setSetTimes((prev) => prev.filter((_, j) => j !== i))
                 }
                 aria-label="Remove set"
-                className="shrink-0 px-1 text-muted active:text-orange"
+                className="shrink-0 px-1 text-muted active:text-gold"
               >
                 ✕
               </button>
@@ -246,7 +246,7 @@ export default function CircuitBuilder({ initial }: { initial?: Circuit }) {
         </button>
       </Section>
 
-      {error && <p className="mt-3 text-sm text-orange">{error}</p>}
+      {error && <p className="mt-3 text-sm text-gold">{error}</p>}
 
       <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md px-4 pb-5 pt-2 safe-bottom">
         <button

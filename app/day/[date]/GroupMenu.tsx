@@ -92,7 +92,7 @@ function MenuItem({
       onClick={onClick}
       className={[
         "block w-full px-4 py-2.5 text-left text-sm font-medium active:bg-white/10",
-        danger ? "text-orange" : "text-ink",
+        danger ? "text-gold" : "text-ink",
       ].join(" ")}
     >
       {label}

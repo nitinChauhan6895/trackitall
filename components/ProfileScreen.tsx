@@ -21,7 +21,7 @@ import { displayName, profileInitial, type Profile } from "@/lib/types";
 import { APP_VERSION } from "@/lib/version";
 
 const inputClass =
-  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
+  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-gold";
 
 type View = "menu" | "edit" | "password" | "export";
 
@@ -103,7 +103,7 @@ function Menu({
       <form action={signOut} className="mt-6">
         <button
           type="submit"
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-orange/40 px-4 py-3.5 text-base font-semibold text-orange active:bg-orange-soft"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gold/40 px-4 py-3.5 text-base font-semibold text-gold active:bg-gold-soft"
         >
           <span aria-hidden>⎋</span> Sign out
         </button>
@@ -182,7 +182,7 @@ function PushRow() {
       {!support.supported && support.reason && (
         <p className="mt-2 text-xs text-muted">{support.reason}</p>
       )}
-      {error && <p className="mt-2 text-xs text-orange">{error}</p>}
+      {error && <p className="mt-2 text-xs text-gold">{error}</p>}
     </div>
   );
 }
@@ -315,7 +315,7 @@ function ExportData() {
       </button>
 
       {done && <p className="text-sm text-green">{done}</p>}
-      {error && <p className="text-sm text-orange">{error}</p>}
+      {error && <p className="text-sm text-gold">{error}</p>}
       <p className="text-xs text-muted">
         Needs a connection — exports are read fresh from the server.
       </p>
@@ -381,7 +381,7 @@ function EditProfile({ profile, onDone }: { profile: Profile; onDone: () => void
       <input value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First name" className={inputClass} />
       <label className="block text-sm text-muted">Last name</label>
       <input value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last name" className={inputClass} />
-      {error && <p className="text-sm text-orange">{error}</p>}
+      {error && <p className="text-sm text-gold">{error}</p>}
       <button type="submit" disabled={busy} className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60">
         {busy ? "Saving…" : "Save changes"}
       </button>
@@ -418,7 +418,7 @@ function ChangePassword({ onDone }: { onDone: () => void }) {
     <form onSubmit={save} className="space-y-3 pt-2">
       <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="New password" className={inputClass} />
       <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm new password" className={inputClass} />
-      {error && <p className="text-sm text-orange">{error}</p>}
+      {error && <p className="text-sm text-gold">{error}</p>}
       {done && <p className="text-sm text-green">Password updated.</p>}
       <button type="submit" disabled={busy || done} className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60">
         {busy ? "Saving…" : "Update password"}

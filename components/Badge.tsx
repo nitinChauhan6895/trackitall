@@ -18,7 +18,7 @@ function Ring({ frac }: { frac: number }) {
   return (
     <svg viewBox="0 0 64 64" className="absolute inset-0 h-full w-full -rotate-90">
       <circle cx="32" cy="32" r={r} fill="none" stroke="currentColor" className="text-white/15" strokeWidth="4" />
-      <circle cx="32" cy="32" r={r} fill="none" stroke="currentColor" className="text-orange" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${dash} ${c}`} />
+      <circle cx="32" cy="32" r={r} fill="none" stroke="currentColor" className="text-gold" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${dash} ${c}`} />
     </svg>
   );
 }
@@ -41,7 +41,7 @@ export function Badge({
           className={[
             "absolute inset-[6px] flex items-center justify-center rounded-full text-2xl",
             badge.earned
-              ? "bg-orange-soft shadow-[0_0_16px_rgba(242,106,44,0.5)] ring-2 ring-orange/60"
+              ? "bg-gold-soft shadow-[0_0_16px_rgba(242,106,44,0.5)] ring-2 ring-gold/60"
               : "bg-white/10",
           ].join(" ")}
         >
@@ -68,7 +68,7 @@ export function Badge({
         </p>
       ) : (
         <p className="text-[11px] font-medium text-muted">
-          <span className="text-orange">{fmtNum(badge.current)}</span> /{" "}
+          <span className="text-gold">{fmtNum(badge.current)}</span> /{" "}
           {badge.target} {badge.unit}
         </p>
       )}

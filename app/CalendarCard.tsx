@@ -23,13 +23,14 @@ export default function CalendarCard({
   initialMonth,
   initialSummary,
   todayKey,
-  streak,
+  streakDays,
 }: {
   initialYear: number;
   initialMonth: number;
   initialSummary: MonthSummary;
   todayKey: string;
-  streak: number;
+  /** Date keys in the current streak, drawn gold instead of green. */
+  streakDays: string[];
 }) {
   const [{ year, month }, setYM] = useState({ year: initialYear, month: initialMonth });
   const isInitial = year === initialYear && month === initialMonth;
@@ -49,41 +50,24 @@ export default function CalendarCard({
   });
 
   const grid = buildCalendarGrid(year, month);
-  const workouts = Object.keys(summary).length;
+  const streakSet = new Set(streakDays);
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-surface p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-base font-semibold">{monthLabel(year, month)}</h2>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            aria-label="Previous month"
-            onClick={() => setYM(prevMonth(year, month))}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-white/10"
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            aria-label="Next month"
-            onClick={() => setYM(nextMonth(year, month))}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-white/10"
-          >
-            ›
-          </button>
+    <section className="flex flex-col gap-3.5 rounded-[28px] bg-surface p-5">
+      <div className="flex items-center justify-between">
+        <h2 className="font-display text-lg font-semibold">{monthLabel(year, month)}</h2>
+        <div className="flex gap-2">
+          <MonthButton label="Previous month" onClick={() => setYM(prevMonth(year, month))} d="M15 18l-6-6 6-6" />
+          <MonthButton label="Next month" onClick={() => setYM(nextMonth(year, month))} d="M9 18l6-6-6-6" />
         </div>
       </div>
 
-      <div className="grid grid-cols-7 text-center text-xs font-medium text-muted">
+      <div className="grid grid-cols-7 gap-y-1.5 text-center text-sm">
         {WEEKDAYS.map((w, i) => (
-          <div key={i} className="py-1">
+          <div key={i} className="pb-1 text-[11px] text-subtle">
             {w}
           </div>
         ))}
-      </div>
-
-      <div className="grid grid-cols-7 gap-y-1">
         {grid.map((d) => {
           const key = toDateKey(d);
           const inMonth = d.getMonth() === month - 1;
@@ -91,8 +75,9 @@ export default function CalendarCard({
           const groups = summary[key] ?? [];
           const hasWorkout = groups.length > 0;
           const isToday = key === today;
+          const inStreak = hasWorkout && streakSet.has(key);
           return (
-            <div key={key} className="flex flex-col items-center py-0.5">
+            <div key={key} className="flex justify-center">
               <Link
                 href={hasWorkout ? `/day/${key}` : `/log/${key}`}
                 aria-label={
@@ -101,13 +86,22 @@ export default function CalendarCard({
                     : String(d.getDate())
                 }
                 className={[
-                  "flex h-9 w-9 items-center justify-center rounded-full text-sm transition active:scale-95",
-                  // A trained day is filled; today is just outlined, so the two
-                  // read independently and a trained today shows both.
-                  hasWorkout
-                    ? "bg-green font-semibold text-ink-inverse"
-                    : "bg-white/[0.05] text-ink",
-                  isToday ? "ring-2 ring-orange ring-offset-2 ring-offset-page" : "",
+                  "box-border flex h-9 w-9 items-center justify-center rounded-full transition active:scale-95",
+                  // A trained day is filled (gold while it's part of the
+                  // current streak); today is ringed, so a trained today
+                  // shows both.
+                  inStreak
+                    ? "bg-gold font-semibold text-ink-inverse"
+                    : hasWorkout
+                      ? "bg-green font-semibold text-ink-inverse"
+                      : key < today
+                        ? "text-muted"
+                        : "text-ink",
+                  isToday
+                    ? hasWorkout
+                      ? "ring-2 ring-green ring-offset-2 ring-offset-surface"
+                      : "border-2 border-green font-semibold"
+                    : "",
                 ].join(" ")}
               >
                 {d.getDate()}
@@ -117,16 +111,35 @@ export default function CalendarCard({
         })}
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-sm">
-        <span className="font-medium text-ink">
-          {workouts} Workout{workouts === 1 ? "" : "s"} this month
-        </span>
-        <span className="font-medium text-orange">
-          {streak > 0
-            ? `${streak} day streak`
-            : "No streak yet"}
-        </span>
+      <div className="flex gap-4 border-t border-[#2C2C2C] pt-3 text-xs text-muted">
+        <LegendDot className="bg-green">Workout</LegendDot>
+        <LegendDot className="bg-gold">Streak</LegendDot>
+        <LegendDot className="border-[1.5px] border-green">Today</LegendDot>
       </div>
     </section>
+  );
+}
+
+function MonthButton({ label, onClick, d }: { label: string; onClick: () => void; d: string }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-ink active:bg-white/10"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d={d} />
+      </svg>
+    </button>
+  );
+}
+
+function LegendDot({ className, children }: { className: string; children: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={`box-border h-2 w-2 rounded-full ${className}`} />
+      {children}
+    </span>
   );
 }

@@ -99,7 +99,7 @@ export default function SharePicker({
                     className={[
                       "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left",
                       on
-                        ? "border-orange bg-orange-soft"
+                        ? "border-gold bg-gold-soft"
                         : "border-white/10 bg-surface active:bg-white/10",
                     ].join(" ")}
                   >
@@ -115,7 +115,7 @@ export default function SharePicker({
                       className={[
                         "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs",
                         on
-                          ? "bg-orange text-white"
+                          ? "bg-gold text-ink-inverse"
                           : "border border-white/20 text-transparent",
                       ].join(" ")}
                       aria-hidden
@@ -131,12 +131,12 @@ export default function SharePicker({
 
         {sharedCount === 0 && users && users.length > 0 && (
           <div className="border-t border-white/10 px-4 pb-5 pt-3">
-            {error && <p className="mb-2 text-center text-sm text-orange">{error}</p>}
+            {error && <p className="mb-2 text-center text-sm text-gold">{error}</p>}
             <button
               type="button"
               disabled={selected.size === 0 || busy}
               onClick={submit}
-              className="w-full rounded-2xl bg-orange px-4 py-3.5 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-40"
+              className="w-full rounded-2xl bg-gold px-4 py-3.5 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-40"
             >
               {busy
                 ? "Sharing…"
