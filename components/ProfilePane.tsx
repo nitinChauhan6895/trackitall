@@ -51,7 +51,7 @@ export default function ProfilePane({ profile }: { profile: Profile }) {
         role="dialog"
         aria-label="Profile"
         className={[
-          "fixed inset-y-0 right-0 z-50 flex w-[84%] max-w-sm flex-col bg-page shadow-xl transition-transform duration-300 ease-out safe-top safe-bottom",
+          "fixed inset-y-0 right-0 z-50 flex w-[84%] max-w-sm elevation-3 flex-col bg-page transition-transform duration-300 ease-out safe-top safe-bottom",
           open ? "translate-x-0" : "translate-x-full",
         ].join(" ")}
       >
@@ -170,7 +170,7 @@ function ShareToggle({ initial }: { initial: boolean }) {
         >
           <span
             className={[
-              "absolute top-0.5 h-5 w-5 rounded-full bg-surface shadow transition-transform",
+              "absolute top-0.5 h-5 w-5 rounded-full bg-surface transition-transform",
               on ? "translate-x-[22px]" : "translate-x-0.5",
             ].join(" ")}
           />

@@ -59,7 +59,7 @@ export default function CoachClient({
             onClick={() => setTab(t)}
             className={[
               "flex-1 rounded-lg py-2 text-sm font-semibold capitalize transition",
-              tab === t ? "bg-surface text-green shadow-sm" : "text-muted",
+              tab === t ? "elevation-2 text-green" : "text-muted",
             ].join(" ")}
           >
             {t}
@@ -401,7 +401,7 @@ function Generator({
           </button>
 
           {/* AI refine */}
-          <div className="mt-4 rounded-2xl border border-white/10 bg-surface p-3">
+          <div className="mt-4 rounded-2xl elevation-1 p-3">
             <p className="mb-2 text-xs font-semibold text-ink">✨ Refine with a note</p>
             <div className="flex gap-2">
               <input
@@ -467,7 +467,7 @@ function ItemCard({
       ? `${item.sets} × to failure`
       : `${item.sets} × ${item.repMin}–${item.repMax}`;
   return (
-    <div className="rounded-2xl border border-white/10 bg-surface p-3.5">
+    <div className="rounded-2xl elevation-1 p-3.5">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-semibold text-ink">{item.name}</p>
@@ -509,7 +509,7 @@ function AddSheet({
   return (
     <>
       <div onClick={onClose} aria-hidden className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" />
-      <div className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[70dvh] w-full max-w-md flex-col rounded-t-3xl bg-page shadow-xl safe-bottom">
+      <div className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[70dvh] w-full max-w-md flex-col elevation-3 rounded-t-3xl bg-page safe-bottom">
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
           <h3 className="text-base font-semibold text-ink">Add exercise</h3>
           <button type="button" onClick={onClose} aria-label="Close" className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-white/10">
@@ -525,7 +525,7 @@ function AddSheet({
                 <button
                   type="button"
                   onClick={() => onPick(it)}
-                  className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-surface px-4 py-3 text-left active:bg-white/10"
+                  className="flex w-full items-center justify-between rounded-xl elevation-1 pressable px-4 py-3 text-left active:bg-white/10"
                 >
                   <span className="font-medium text-ink">{it.name}</span>
                   <span className="text-xs text-muted">{it.category}</span>
@@ -620,7 +620,7 @@ function ManageExercises({
                   return (
                     <li
                       key={ex.id}
-                      className="flex items-center justify-between rounded-xl border border-white/10 bg-surface px-3 py-2"
+                      className="flex items-center justify-between rounded-xl elevation-2 px-3 py-2"
                     >
                       <span className={`text-sm ${ban ? "text-muted line-through" : "text-ink"}`}>
                         {ex.name}
@@ -666,7 +666,7 @@ function ManageExercises({
 function DietTab() {
   return (
     <div className="mt-5 space-y-5">
-      <section className="rounded-2xl border border-white/10 bg-surface p-5">
+      <section className="rounded-2xl elevation-1 p-5">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-tint text-2xl">🥗</div>
         <h2 className="mt-3 flex items-center gap-2 text-base font-bold text-ink">
           Personalised diet plans{" "}

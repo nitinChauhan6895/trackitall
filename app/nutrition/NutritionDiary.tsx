@@ -87,14 +87,14 @@ export default function NutritionDiary({
         <button
           type="button"
           onClick={() => setShowTargets(true)}
-          className="flex items-center gap-1.5 rounded-full border border-white/10 bg-surface px-3 py-1.5 text-sm font-medium text-muted active:bg-white/10"
+          className="flex items-center gap-1.5 rounded-full elevation-1 pressable px-3 py-1.5 text-sm font-medium text-muted active:bg-white/10"
         >
           ⚙︎ Targets
         </button>
       </header>
 
       {/* Date navigator */}
-      <div className="mb-4 flex items-center justify-between rounded-2xl border border-white/10 bg-surface px-2 py-2">
+      <div className="mb-4 flex items-center justify-between rounded-2xl elevation-1 px-2 py-2">
         <Link
           href={`/nutrition?d=${shiftKey(date, -1)}`}
           aria-label="Previous day"
@@ -120,7 +120,7 @@ export default function NutritionDiary({
       </div>
 
       {/* Calorie ring + macro bars */}
-      <section className="mb-4 rounded-2xl border border-white/10 bg-surface p-4">
+      <section className="mb-4 rounded-2xl elevation-1 p-4">
         <div className="flex items-center gap-4">
           <CalorieRing
             consumed={totals.calories}
@@ -162,7 +162,7 @@ export default function NutritionDiary({
           return (
             <section
               key={meal}
-              className="overflow-hidden rounded-2xl border border-white/10 bg-surface"
+              className="overflow-hidden rounded-2xl elevation-1"
             >
               <button
                 type="button"
@@ -739,7 +739,7 @@ function Sheet({
       <div
         role="dialog"
         aria-label={title}
-        className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md rounded-t-3xl bg-page shadow-xl safe-bottom"
+        className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md elevation-3 rounded-t-3xl bg-page safe-bottom"
       >
         <div className="flex items-center justify-between px-4 pb-1 pt-4">
           <h3 className="truncate pr-3 text-base font-semibold text-ink">{title}</h3>

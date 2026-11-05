@@ -32,7 +32,7 @@ export default function BottomNav() {
       className="fixed inset-x-0 bottom-0 z-30 mx-auto flex w-full max-w-md items-center gap-2.5 px-4 pb-7 safe-bottom"
     >
       {/* Floating "liquid glass" tab bar with the log action beside it. */}
-      <div className="grid h-16 flex-1 grid-cols-4 rounded-full border border-white/[0.12] bg-[rgba(44,44,44,0.62)] p-1.5 shadow-[0_10px_30px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.10)] backdrop-blur-xl backdrop-saturate-[1.6]">
+      <div className="grid h-16 flex-1 grid-cols-4 elevation-3 rounded-full bg-[rgba(44,44,44,0.62)] p-1.5 backdrop-saturate-[1.6]">
         <NavItem href="/" label="Home" active={isActive("/")} icon={HomeIcon} />
         <NavItem href="/habits" label="Habits" active={isActive("/habits")} icon={LeafIcon} />
         <NavItem href="/stats" label="Stats" active={isActive("/stats")} icon={StatsIcon} />
@@ -41,7 +41,7 @@ export default function BottomNav() {
       <Link
         href={today ? `/log/${today}` : "/"}
         aria-label="Log workout"
-        className="flex h-16 w-16 flex-none items-center justify-center rounded-full border border-white/25 bg-green/[0.92] text-ink-inverse shadow-[0_10px_30px_rgba(34,197,94,0.30),inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-xl transition active:scale-95"
+        className="flex h-16 w-16 flex-none items-center justify-center elevation-3 rounded-full bg-green/[0.92] text-ink-inverse transition active:scale-95"
       >
         <PlusIcon />
       </Link>

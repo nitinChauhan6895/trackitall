@@ -21,7 +21,7 @@ export default async function BadgesPage() {
         <Link
           href="/"
           aria-label="Back"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.08] text-ink backdrop-blur-xl active:bg-white/15"
+          className="elevation-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-ink active:bg-white/15"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             <path d="M19 12H5M12 19l-7-7 7-7" />
@@ -31,7 +31,7 @@ export default async function BadgesPage() {
       </div>
 
       {/* Hero */}
-      <section className="flex flex-col gap-4 rounded-[28px] bg-surface px-5 pb-5 pt-[22px]">
+      <section className="elevation-1 flex flex-col gap-4 rounded-[28px] px-5 pb-5 pt-[22px]">
         <div className="flex items-end justify-between">
           <div className="flex flex-col gap-0.5">
             <span className="text-xs font-semibold tracking-[0.08em] text-muted">COLLECTION</span>
@@ -47,7 +47,7 @@ export default async function BadgesPage() {
         </div>
         <ProgressBar frac={earned.length / badges.length} height="h-2" />
         {nextUp && (
-          <div className="flex items-center gap-3 rounded-2xl bg-surface-2 px-3.5 py-3">
+          <div className="elevation-2 flex items-center gap-3 rounded-2xl px-3.5 py-3">
             <span className="shrink-0 rounded-lg bg-green px-2 py-1 text-[11px] font-bold tracking-[0.06em] text-ink-inverse">
               NEXT UP
             </span>
@@ -63,7 +63,7 @@ export default async function BadgesPage() {
           <SectionHeader title="Earned" count={earned.length} />
           <div className="grid grid-cols-2 gap-3">
             {earned.map((b) => (
-              <div key={b.id} className="flex flex-col gap-3 rounded-3xl bg-surface p-[18px]">
+              <div key={b.id} className="elevation-1 flex flex-col gap-3 rounded-3xl p-[18px]">
                 <span className="flex h-[52px] w-[52px] items-center justify-center rounded-full border-[1.5px] border-gold bg-gold/[0.14] text-gold">
                   <BadgeIcon id={b.id} size={24} />
                 </span>
@@ -83,10 +83,10 @@ export default async function BadgesPage() {
       {inProgress.length > 0 && (
         <section className="flex flex-col gap-3">
           <SectionHeader title="In progress" count={inProgress.length} />
-          <div className="flex flex-col rounded-3xl bg-surface">
+          <div className="elevation-1 flex flex-col rounded-3xl">
             {inProgress.map((b) => (
               <div key={b.id} className="flex gap-3.5 border-b border-surface-2 px-[18px] py-4 last:border-0">
-                <span className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-surface-2 text-muted">
+                <span className="elevation-2 flex h-11 w-11 flex-none items-center justify-center rounded-full text-muted">
                   <BadgeIcon id={b.id} size={20} />
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col gap-2">

@@ -155,7 +155,7 @@ function PrGroupCard({
   const showNew = g.isNewPr && isRecent(g.latest.achieved_date);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/10 bg-surface">
+    <div className="overflow-hidden rounded-2xl elevation-1">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

@@ -88,7 +88,7 @@ function Menu({
         <p className="text-sm text-muted">@{profile.username}</p>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-surface">
+      <div className="overflow-hidden rounded-2xl elevation-1">
         <ShareRow initial={profile.share_to_community} />
         <Row icon="👤" label="Edit profile" onClick={onEdit} />
         <Row icon="✉️" label={profile.email ?? "No email on file"} muted />
@@ -96,7 +96,7 @@ function Menu({
         <Row icon="⬇️" label="Export data" onClick={onExport} />
       </div>
 
-      <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-surface">
+      <div className="mt-3 overflow-hidden rounded-2xl elevation-1">
         <PushRow />
       </div>
 
@@ -173,7 +173,7 @@ function PushRow() {
         >
           <span
             className={[
-              "absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-surface shadow transition-transform",
+              "absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-surface transition-transform",
               on ? "translate-x-5" : "translate-x-0",
             ].join(" ")}
           />
@@ -223,7 +223,7 @@ function ShareRow({ initial }: { initial: boolean }) {
         >
           <span
             className={[
-              "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-surface shadow transition-transform",
+              "absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-surface transition-transform",
               on ? "translate-x-5" : "translate-x-0",
             ].join(" ")}
           />
@@ -288,7 +288,7 @@ function ExportData() {
         type="button"
         disabled={busy !== null}
         onClick={() => run("workouts")}
-        className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-surface px-4 py-3.5 text-left active:bg-white/[0.06] disabled:opacity-50"
+        className="flex w-full items-center justify-between rounded-2xl elevation-1 pressable px-4 py-3.5 text-left active:bg-white/[0.06] disabled:opacity-50"
       >
         <span>
           <span className="block text-base font-semibold text-ink">Workouts</span>
@@ -303,7 +303,7 @@ function ExportData() {
         type="button"
         disabled={busy !== null}
         onClick={() => run("nutrition")}
-        className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-surface px-4 py-3.5 text-left active:bg-white/[0.06] disabled:opacity-50"
+        className="flex w-full items-center justify-between rounded-2xl elevation-1 pressable px-4 py-3.5 text-left active:bg-white/[0.06] disabled:opacity-50"
       >
         <span>
           <span className="block text-base font-semibold text-ink">Nutrition</span>

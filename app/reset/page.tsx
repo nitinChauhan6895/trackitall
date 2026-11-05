@@ -81,7 +81,7 @@ export default function ResetPasswordPage() {
       )}
 
       {status === "invalid" && (
-        <div className="rounded-2xl border border-white/10 bg-surface p-5 text-center">
+        <div className="rounded-2xl elevation-1 p-5 text-center">
           <p className="text-sm text-ink">
             This reset link is invalid or has expired.
           </p>
@@ -126,7 +126,7 @@ export default function ResetPasswordPage() {
       )}
 
       {status === "done" && (
-        <div className="rounded-2xl border border-white/10 bg-surface p-5 text-center">
+        <div className="rounded-2xl elevation-1 p-5 text-center">
           <p className="text-sm text-ink">Your password has been updated.</p>
           <button
             type="button"

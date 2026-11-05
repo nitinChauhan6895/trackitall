@@ -422,7 +422,7 @@ function HabitCard({
   const done = isComplete(habit, logs, date);
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-surface">
+    <div className="elevation-1 relative overflow-hidden rounded-2xl">
       {/* Progress fill behind the content. */}
       <div
         aria-hidden
@@ -587,7 +587,7 @@ function LoggerView({
         {menu && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setMenu(false)} aria-hidden />
-            <div className="absolute right-0 top-12 z-50 w-44 overflow-hidden rounded-xl border border-white/10 bg-surface py-1 shadow-lg">
+            <div className="absolute right-0 top-12 z-50 w-44 overflow-hidden elevation-3 rounded-xl bg-surface py-1">
               <MenuItem label="Edit" onClick={() => { setMenu(false); onEdit(); }} />
               <MenuItem label="Share progress" onClick={() => { setMenu(false); onShare(); }} />
               <MenuItem label="Archive" onClick={() => { setMenu(false); onArchive(); }} />
@@ -772,7 +772,7 @@ function DetailView({
           type="button"
           onClick={onBack}
           aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-surface text-xl active:bg-white/10"
+          className="elevation-3 flex h-9 w-9 items-center justify-center rounded-full bg-surface text-xl active:bg-white/10"
         >
           ←
         </button>
@@ -798,7 +798,7 @@ function DetailView({
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-2.5">
-        <div className="rounded-2xl border border-white/10 bg-surface p-4 text-center">
+        <div className="rounded-2xl elevation-1 p-4 text-center">
           <p className="text-xl font-bold text-ink">
             {streak} <span aria-hidden>🔥</span>
           </p>
@@ -806,13 +806,13 @@ function DetailView({
             {habit.cadence === "daily" ? "Day" : "Week"} streak
           </p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-surface p-4 text-center">
+        <div className="rounded-2xl elevation-1 p-4 text-center">
           <p className="text-xl font-bold text-ink">{pct}%</p>
           <p className="mt-0.5 text-xs text-muted">This week</p>
         </div>
       </div>
 
-      <section className="mt-3 rounded-2xl border border-white/10 bg-surface p-4">
+      <section className="mt-3 rounded-2xl elevation-1 p-4">
         <p className="text-center text-sm font-semibold text-ink">This Week</p>
         <div className="mt-3 flex justify-between">
           {days.map((d, i) => {
@@ -855,13 +855,13 @@ function DetailView({
         <section className="mt-3 space-y-2">
           <h2 className="text-sm font-semibold text-muted">About this habit</h2>
           {habit.description && (
-            <div className="rounded-2xl border border-white/10 bg-surface p-4">
+            <div className="rounded-2xl elevation-1 p-4">
               <p className="text-xs text-muted">Description</p>
               <p className="mt-1 text-sm text-ink">{habit.description}</p>
             </div>
           )}
           {habit.reminder_time && (
-            <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-surface p-4">
+            <div className="flex items-center justify-between rounded-2xl elevation-1 p-4">
               <span className="flex items-center gap-2 text-sm text-ink">
                 <span aria-hidden>🔔</span> Reminder
               </span>
@@ -872,7 +872,7 @@ function DetailView({
       )}
 
       <h2 className="mb-2 mt-5 text-sm font-semibold text-muted">History</h2>
-      <section className="rounded-2xl border border-white/10 bg-surface p-4">
+      <section className="rounded-2xl elevation-1 p-4">
         <div className="grid grid-cols-7 gap-y-2 text-center">
           {DOW.map((d, i) => (
             <span key={i} className="text-[11px] text-muted">
@@ -1039,7 +1039,7 @@ function EditView({
           type="button"
           onClick={onCancel}
           aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-surface text-xl active:bg-white/10"
+          className="elevation-3 flex h-9 w-9 items-center justify-center rounded-full bg-surface text-xl active:bg-white/10"
         >
           ←
         </button>

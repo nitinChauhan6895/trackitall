@@ -117,7 +117,7 @@ export default function SearchClient({
         <Link
           href={`/nutrition?d=${date}`}
           aria-label="Back to diary"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-surface text-xl active:bg-white/10"
+          className="elevation-3 flex h-9 w-9 items-center justify-center rounded-full bg-surface text-xl active:bg-white/10"
         >
           ←
         </Link>
@@ -226,7 +226,7 @@ export default function SearchClient({
                 <button
                   type="button"
                   onClick={() => setSelected(f)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-surface px-4 py-3 text-left active:bg-white/10"
+                  className="flex w-full items-center gap-3 rounded-xl elevation-1 pressable px-4 py-3 text-left active:bg-white/10"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-2">
@@ -370,7 +370,7 @@ function SavedMealLogSheet({
           <button
             type="button"
             onClick={() => setAmount(String(Math.max(0.5, Math.round((servings - 0.5) * 2) / 2)))}
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-surface-2 text-2xl text-ink active:bg-white/10"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl elevation-2 text-2xl text-ink active:bg-white/10"
           >
             −
           </button>
@@ -386,7 +386,7 @@ function SavedMealLogSheet({
           <button
             type="button"
             onClick={() => setAmount(String(Math.round((servings + 0.5) * 2) / 2))}
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-surface-2 text-2xl text-ink active:bg-white/10"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl elevation-2 text-2xl text-ink active:bg-white/10"
           >
             +
           </button>
@@ -544,7 +544,7 @@ function MealBuilder({
         </p>
         <ul className="mb-2 max-h-28 shrink-0 space-y-1 overflow-y-auto">
           {items.map((it, i) => (
-            <li key={i} className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2">
+            <li key={i} className="elevation-1 flex items-center gap-2 rounded-lg px-3 py-2">
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium text-ink">{it.food_name}</span>
                 <span className="block truncate text-xs text-muted">
@@ -584,7 +584,7 @@ function MealBuilder({
                 <button
                   type="button"
                   onClick={() => setPicking(f)}
-                  className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-surface px-3 py-2.5 text-left active:bg-white/10"
+                  className="flex w-full items-center gap-3 rounded-xl elevation-1 pressable px-3 py-2.5 text-left active:bg-white/10"
                 >
                   <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{f.name}</span>
                   <span className="shrink-0 text-xs text-muted">{Math.round(f.calories_per_100g)} kcal/100g</span>
@@ -836,7 +836,7 @@ function PortionChip({
 
 function MacroCard({ value, label, accent }: { value: string; label: string; accent?: boolean }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-surface-2 py-3 text-center">
+    <div className="rounded-2xl elevation-2 py-3 text-center">
       <div className={`text-lg font-bold tabular-nums ${accent ? "text-green" : "text-ink"}`}>
         {value}
       </div>
@@ -1210,7 +1210,7 @@ function SavedMealList({
       {meals.map((m) => (
         <li
           key={m.id}
-          className="flex items-center gap-3 rounded-xl border border-white/10 bg-surface px-4 py-3"
+          className="flex items-center gap-3 rounded-xl elevation-1 px-4 py-3"
         >
           <span className="min-w-0 flex-1">
             <span className="block truncate font-medium text-ink">{m.name}</span>
@@ -1272,7 +1272,7 @@ function Sheet({
         role="dialog"
         aria-label={title}
         className={[
-          "fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-md flex-col rounded-t-3xl bg-page shadow-xl safe-bottom",
+          "fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-md flex-col elevation-3 rounded-t-3xl bg-page safe-bottom",
           tall ? "max-h-[90dvh]" : "max-h-[85dvh]",
         ].join(" ")}
       >

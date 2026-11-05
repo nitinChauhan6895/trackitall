@@ -53,7 +53,7 @@ export default function CalendarCard({
   const streakSet = new Set(streakDays);
 
   return (
-    <section className="flex flex-col gap-3.5 rounded-[28px] bg-surface p-5">
+    <section className="elevation-1 flex flex-col gap-3.5 rounded-[28px] p-5">
       <div className="flex items-center justify-between">
         <h2 className="font-display text-lg font-semibold">{monthLabel(year, month)}</h2>
         <div className="flex gap-2">
@@ -126,7 +126,7 @@ function MonthButton({ label, onClick, d }: { label: string; onClick: () => void
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-ink active:bg-white/10"
+      className="elevation-2 flex h-11 w-11 items-center justify-center rounded-full text-ink active:bg-white/10"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d={d} />

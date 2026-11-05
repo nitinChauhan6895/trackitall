@@ -19,7 +19,7 @@ export default async function StatsPage() {
           </h1>
           <p className="mt-0.5 text-sm text-muted">Your progress at a glance</p>
         </header>
-        <div className="mt-6 rounded-2xl border border-white/10 bg-surface p-6 text-center">
+        <div className="mt-6 rounded-2xl elevation-1 p-6 text-center">
           <span aria-hidden className="text-4xl">📈</span>
           <p className="mt-3 text-base font-semibold text-ink">
             No workouts logged yet

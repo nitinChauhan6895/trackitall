@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
       </div>
 
       {sent ? (
-        <div className="rounded-2xl border border-white/10 bg-surface p-5 text-center">
+        <div className="rounded-2xl elevation-1 p-5 text-center">
           <p className="text-sm text-ink">
             If an account matches that, a reset link is on its way. Check your
             inbox (and spam).
