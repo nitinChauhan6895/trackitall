@@ -21,7 +21,6 @@ import {
   type WorkoutSet,
 } from "@/lib/types";
 import { resolveHiitMetrics, type ResolvedMetric } from "@/lib/hiit";
-import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
 import SharePicker from "@/components/SharePicker";
 import { shareWholeDay } from "@/app/actions";
 import DayExercise from "./DayExercise";
@@ -106,164 +105,164 @@ export default function DayView({ date }: { date: string }) {
   const nextKey = shiftKey(date, 1);
   // Deterministic (locale-free) so the SSR and client renders match exactly.
   const dt = new Date(y, m - 1, dd);
-  const heading = `${WEEKDAYS_FULL[dt.getDay()]}, ${MONTHS_FULL[m - 1]} ${dd}, ${y}`;
+  const heading = `${WEEKDAYS_FULL[dt.getDay()]}, ${dd} ${MONTHS_FULL[m - 1].slice(0, 3)}`;
 
   return (
-    <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
-      <header className="flex items-center justify-between gap-2 py-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            href={backHref}
-            aria-label="Back to calendar"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface text-xl shadow-sm active:bg-white/10"
-          >
-            ←
+    <main className="flex flex-1 flex-col gap-5 px-4 pb-36 safe-top">
+      {/* Top controls (glass) */}
+      <div className="flex items-center gap-2 pt-4">
+        <Link href={backHref} aria-label="Back to calendar" className={GLASS_BUTTON}>
+          <Chevron d="M19 12H5M12 19l-7-7 7-7" size={18} />
+        </Link>
+        <div className="flex-1" />
+        <div className="flex h-11 rounded-full border border-white/[0.12] bg-white/[0.08] backdrop-blur-xl">
+          <Link href={`/day/${prevKey}`} aria-label="Previous day" className="flex h-11 w-11 items-center justify-center rounded-l-full active:bg-white/10">
+            <Chevron d="M15 18l-6-6 6-6" size={16} />
           </Link>
-          <div className="min-w-0">
-            {/* Locale date formatting differs server↔client; suppress the mismatch. */}
-            <h1 suppressHydrationWarning className="truncate text-lg font-bold leading-tight">
-              {heading}
-            </h1>
-            <p className="text-sm text-muted">
-              {exercises.length} exercises · {totalSets} sets
-            </p>
-          </div>
+          <span aria-hidden className="my-3 w-px bg-white/[0.14]" />
+          <Link href={`/day/${nextKey}`} aria-label="Next day" className="flex h-11 w-11 items-center justify-center rounded-r-full active:bg-white/10">
+            <Chevron d="M9 18l6-6-6-6" size={16} />
+          </Link>
         </div>
         <button
           type="button"
           onClick={() => setShareOpen(true)}
           disabled={exercises.length === 0}
           aria-label="Share this workout"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-green/30 bg-green/5 text-green active:scale-95 disabled:opacity-40"
+          className={`${GLASS_BUTTON} disabled:opacity-40`}
         >
           <ShareIcon />
         </button>
-      </header>
-
-      {/* Day summary stats, with prev/next-day arrows flush in the banner */}
-      <div className="mb-4 flex items-stretch overflow-hidden rounded-2xl border border-white/10 bg-surface">
-        <DayArrow href={`/day/${prevKey}`} label="Previous day" glyph="‹" side="left" />
-        <div className="grid flex-1 grid-cols-4 divide-x divide-white/10 py-3">
-          <Stat icon="📋" tone="text-green" value={String(totalSets)} label="Sets" />
-          <Stat icon="🏋️" tone="text-gold" value={String(exercises.length)} label="Exercises" />
-          <Stat icon="💪" tone="text-[#C79BE8]" value={String(byGroup.size)} label="Muscles" />
-          <Stat icon={<KettlebellIcon className="h-5 w-5" />} tone="text-green" value={fmtVolume(totalVolume)} label="Volume" unit="kg" />
-        </div>
-        <DayArrow href={`/day/${nextKey}`} label="Next day" glyph="›" side="right" />
       </div>
 
+      {/* Title */}
+      <header className="flex flex-col gap-1 px-1">
+        <span className="text-xs font-semibold tracking-[0.08em] text-muted">WORKOUT</span>
+        <h1 suppressHydrationWarning className="font-display text-[30px] font-bold leading-tight tracking-[-0.02em]">
+          {heading}
+        </h1>
+        <p className="text-sm text-muted">
+          {plural(exercises.length, "exercise")} · {plural(totalSets, "set")}
+        </p>
+      </header>
+
+      {/* Hero stats */}
+      <section className="flex flex-col gap-[18px] rounded-[28px] bg-surface px-5 pb-5 pt-[22px]">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs font-semibold tracking-[0.08em] text-muted">TOTAL VOLUME</span>
+          <span suppressHydrationWarning className="font-display text-[56px] font-bold leading-[1.05] tracking-[-0.03em]">
+            {fmtNumber(totalVolume, 0)} <span className="text-xl font-semibold text-green">kg</span>
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <Stat value={totalSets} label="Sets" />
+          <Stat value={exercises.length} label="Exercises" />
+          <Stat value={byGroup.size} label="Muscles" />
+        </div>
+      </section>
+
       {exercises.length === 0 ? (
-        <p className="mb-6 rounded-2xl border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted">
+        <p className="rounded-[28px] border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted">
           No workout saved for this day yet.
         </p>
       ) : (
-        <div className="space-y-4">
-          {MUSCLE_GROUPS.filter((g) => byGroup.has(g)).map((group) => {
-            const list = byGroup.get(group)!;
-            const kind = kindOf(group);
-            return (
-              // No overflow-hidden on the card: the ⋮ menu renders absolutely
-              // inside it, and a one-exercise card is shorter than the menu —
-              // clipping cropped it. Nothing needs the clip (the accent is a
-              // border, children are padded off the corners).
-              <section
-                key={group}
-                className="relative rounded-2xl border border-white/10 bg-surface"
-                style={{ borderLeft: `4px solid ${MUSCLE_TONE[group]}` }}
-              >
-                <div className="flex items-center gap-2 px-4 pt-4">
-                  <span className="h-6 w-6" style={{ color: MUSCLE_TONE[group] }}>
-                    <MuscleIcon group={group} />
-                  </span>
-                  <h2 className="text-sm font-bold uppercase tracking-wide text-ink">
-                    {MUSCLE_GROUP_LABELS[group]}
-                  </h2>
-                  <span
-                    className="rounded-full px-2 py-0.5 text-xs font-semibold"
-                    style={{ backgroundColor: `${MUSCLE_TONE[group]}1F`, color: MUSCLE_TONE[group] }}
-                  >
-                    {list.length} {list.length === 1 ? "Exercise" : "Exercises"} ·{" "}
-                    {list.reduce((n, e) => n + e.sets.length, 0)} sets
-                  </span>
-                  <div className="ml-auto">
-                    <GroupMenu
-                      date={date}
-                      group={group}
-                      groupLabel={MUSCLE_GROUP_LABELS[group]}
-                      onDeleteGroup={() =>
-                        mutate("deleteGroup", { date, group }, (prev) =>
-                          prev.filter((e) => e.muscle_group !== group),
-                        )
-                      }
-                    />
-                  </div>
+        MUSCLE_GROUPS.filter((g) => byGroup.has(g)).map((group) => {
+          const list = byGroup.get(group)!;
+          const kind = kindOf(group);
+          const groupSets = list.reduce((n, e) => n + e.sets.length, 0);
+          return (
+            // No overflow-hidden on the card: the ⋮ menu renders absolutely
+            // inside it, and a one-exercise card is shorter than the menu —
+            // clipping would crop it.
+            <section
+              key={group}
+              className="relative flex flex-col gap-3.5 rounded-[28px] bg-surface px-[18px] pb-5 pt-[18px]"
+            >
+              <div className="flex items-center gap-2.5">
+                <h2 className="font-display text-lg font-semibold">{MUSCLE_GROUP_LABELS[group]}</h2>
+                <span className="rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium text-muted">
+                  {plural(list.length, "exercise")} · {plural(groupSets, "set")}
+                </span>
+                <div className="-my-2 -mr-2.5 ml-auto">
+                  <GroupMenu
+                    date={date}
+                    group={group}
+                    groupLabel={MUSCLE_GROUP_LABELS[group]}
+                    onDeleteGroup={() =>
+                      mutate("deleteGroup", { date, group }, (prev) =>
+                        prev.filter((e) => e.muscle_group !== group),
+                      )
+                    }
+                  />
                 </div>
-                <div className="px-4">
-                  {list.map((ex, i) => (
-                    <DayExercise
-                      key={ex.id}
-                      exerciseId={ex.id}
-                      date={date}
-                      name={ex.name}
-                      index={i + 1}
-                      tone={MUSCLE_TONE[group]}
-                      sets={ex.sets.map((s) => ({
-                        id: s.id,
-                        label: formatSavedSet(ex, kind, s),
-                        isHard: s.is_hard === true,
-                      }))}
-                      inputs={inputsFor(ex, kind)}
-                      timeUnitSelectable={kind === "cardio"}
-                      onAddSet={(fields) =>
-                        mutate(
-                          "addSet",
-                          {
-                            ...fields,
-                            exercise_id: ex.id,
-                            date,
-                            // Cardio durations are minutes; the server parses
-                            // "time" with this so a bare "30" isn't 30 seconds.
-                            time_unit: kind === "cardio" ? "minutes" : "seconds",
-                          },
-                          (prev) =>
-                            prev.map((e) =>
-                              e.id === ex.id
-                                ? { ...e, sets: [...e.sets, synthSet(fields, kind)] }
-                                : e,
-                            ),
-                        )
-                      }
-                      onDeleteSet={(setId) =>
-                        mutate("deleteSet", { id: setId, date }, (prev) =>
+              </div>
+              <div className="flex flex-col divide-y divide-[#2C2C2C]">
+                {list.map((ex, i) => (
+                  <DayExercise
+                    key={ex.id}
+                    exerciseId={ex.id}
+                    date={date}
+                    name={ex.name}
+                    index={i + 1}
+                    volume={fmtNumber(exerciseVolume(ex))}
+                    sets={ex.sets.map((s) => ({
+                      id: s.id,
+                      label: formatSavedSet(ex, kind, s),
+                      isHard: s.is_hard === true,
+                    }))}
+                    inputs={inputsFor(ex, kind)}
+                    timeUnitSelectable={kind === "cardio"}
+                    onAddSet={(fields) =>
+                      mutate(
+                        "addSet",
+                        {
+                          ...fields,
+                          exercise_id: ex.id,
+                          date,
+                          // Cardio durations are minutes; the server parses
+                          // "time" with this so a bare "30" isn't 30 seconds.
+                          time_unit: kind === "cardio" ? "minutes" : "seconds",
+                        },
+                        (prev) =>
                           prev.map((e) =>
                             e.id === ex.id
-                              ? { ...e, sets: e.sets.filter((s) => s.id !== setId) }
+                              ? { ...e, sets: [...e.sets, synthSet(fields, kind)] }
                               : e,
                           ),
-                        )
-                      }
-                      onDeleteExercise={() =>
-                        mutate("deleteExercise", { id: ex.id, date }, (prev) =>
-                          prev.filter((e) => e.id !== ex.id),
-                        )
-                      }
-                    />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+                      )
+                    }
+                    onDeleteSet={(setId) =>
+                      mutate("deleteSet", { id: setId, date }, (prev) =>
+                        prev.map((e) =>
+                          e.id === ex.id
+                            ? { ...e, sets: e.sets.filter((s) => s.id !== setId) }
+                            : e,
+                        ),
+                      )
+                    }
+                    onDeleteExercise={() =>
+                      mutate("deleteExercise", { id: ex.id, date }, (prev) =>
+                        prev.filter((e) => e.id !== ex.id),
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })
       )}
 
-      {/* Floating add button, bottom-right (replaces the full-width bar). */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto w-full max-w-md safe-bottom">
+      {/* Floating glass action, bottom-right. */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto flex w-full max-w-md justify-end px-4 pb-7 safe-bottom">
         <Link
           href={`/log/${date}`}
-          aria-label="Add to this day"
-          className="pointer-events-auto absolute bottom-5 right-4 flex h-14 w-14 items-center justify-center rounded-full bg-green text-3xl font-light text-ink-inverse shadow-[0_8px_24px_rgba(0,0,0,0.5)] transition active:scale-95"
+          className="pointer-events-auto flex h-[60px] items-center gap-2 rounded-full border border-white/25 bg-green/[0.92] pl-5 pr-6 text-base font-semibold text-ink-inverse shadow-[0_10px_30px_rgba(34,197,94,0.30),inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-xl transition active:scale-95"
         >
-          +
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Add exercise
         </Link>
       </div>
 
@@ -274,14 +273,34 @@ export default function DayView({ date }: { date: string }) {
   );
 }
 
+const GLASS_BUTTON =
+  "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.08] text-ink backdrop-blur-xl active:bg-white/15";
+
+function Chevron({ d, size }: { d: string; size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d={d} />
+    </svg>
+  );
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
+// Weight moved by an exercise's strength sets (reps × kg); 0 for cardio.
+function exerciseVolume(ex: Exercise): number {
+  let v = 0;
+  for (const s of ex.sets) if (s.reps != null && s.weight_kg != null) v += s.reps * s.weight_kg;
+  return v;
+}
+
 function ShareIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor"
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="18" cy="5" r="3" />
-      <circle cx="6" cy="12" r="3" />
-      <circle cx="18" cy="19" r="3" />
-      <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+      <path d="M12 3v12M7 8l5-5 5 5" />
+      <path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
     </svg>
   );
 }
@@ -297,29 +316,13 @@ function ShareDayModal({ date, onClose }: { date: string; onClose: () => void })
   );
 }
 
-function Stat({
-  icon,
-  tone,
-  value,
-  label,
-  unit,
-}: {
-  icon: React.ReactNode;
-  tone: string;
-  value: string;
-  label: string;
-  unit?: string;
-}) {
+function Stat({ value, label }: { value: number; label: string }) {
   return (
-    <div className="flex flex-col items-center px-1 text-center">
-      <span aria-hidden className={`flex h-5 items-center justify-center text-lg ${tone}`}>
-        {icon}
-      </span>
-      <span suppressHydrationWarning className="mt-1 text-lg font-bold leading-none text-ink">
+    <div className="flex flex-col gap-0.5 rounded-2xl bg-surface-2 px-3.5 py-3">
+      <span suppressHydrationWarning className="font-display text-[22px] font-semibold">
         {value}
-        {unit && <span className="text-xs font-semibold text-muted"> {unit}</span>}
       </span>
-      <span className="mt-1 text-[11px] leading-tight text-muted">{label}</span>
+      <span className="text-xs text-muted">{label}</span>
     </div>
   );
 }
@@ -348,9 +351,12 @@ const MONTHS_FULL = [
   "December",
 ];
 
-// Locale-free thousands grouping so SSR and client match.
-function fmtVolume(v: number): string {
-  return String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+// Locale-free thousands grouping (so SSR and client match), with at most
+// `decimals` places and no trailing zeros.
+function fmtNumber(v: number, decimals = 2): string {
+  const [int, frac] = String(Number(v.toFixed(decimals))).split(".");
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return frac ? `${grouped}.${frac}` : grouped;
 }
 
 // Builds the row the server would have created, so a set added offline renders
@@ -393,49 +399,6 @@ function shiftKey(key: string, n: number): string {
   const mm = String(dt.getMonth() + 1).padStart(2, "0");
   const dd = String(dt.getDate()).padStart(2, "0");
   return `${dt.getFullYear()}-${mm}-${dd}`;
-}
-
-function DayArrow({
-  href,
-  label,
-  glyph,
-  side,
-}: {
-  href: string;
-  label: string;
-  glyph: string;
-  side: "left" | "right";
-}) {
-  return (
-    <Link
-      href={href}
-      aria-label={label}
-      className={[
-        "flex w-10 shrink-0 items-center justify-center text-2xl text-muted active:bg-white/10",
-        side === "left" ? "border-r border-white/10" : "border-l border-white/10",
-      ].join(" ")}
-    >
-      {glyph}
-    </Link>
-  );
-}
-
-function KettlebellIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className={className}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M9.5 8.5V7a2.5 2.5 0 0 1 5 0v1.5" />
-      <path d="M8 8.5h8c.7 1.4 2 3.1 2 5.5a6 6 0 0 1-12 0c0-2.4 1.3-4.1 2-5.5z" />
-    </svg>
-  );
 }
 
 const HIIT_INPUTS: Record<ResolvedMetric["draftKey"], InputSpec> = {

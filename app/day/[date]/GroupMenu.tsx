@@ -27,16 +27,20 @@ export default function GroupMenu({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Group options"
-        className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-white/10"
+        aria-label={`${groupLabel} options`}
+        className="flex h-11 w-11 items-center justify-center rounded-full text-muted active:bg-white/10"
       >
-        ⋮
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+          <circle cx="12" cy="5" r="1.8" />
+          <circle cx="12" cy="12" r="1.8" />
+          <circle cx="12" cy="19" r="1.8" />
+        </svg>
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute right-3 top-12 z-50 w-40 overflow-hidden rounded-xl border border-white/10 bg-surface py-1 shadow-lg">
+          <div className="absolute right-3 top-14 z-50 w-40 overflow-hidden rounded-2xl border border-white/10 bg-surface-2 py-1 shadow-lg">
             <MenuItem
               label="Edit"
               onClick={() => {
