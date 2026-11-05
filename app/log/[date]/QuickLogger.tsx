@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CARDIO_FIELDS,
   CARDIO_FIELD_META,
@@ -28,7 +28,8 @@ import {
 import { libraryFor, type LibraryItem } from "@/lib/presets";
 import { HIIT_EXERCISES, resolveHiitMetrics } from "@/lib/hiit";
 import { enqueue, isOffline, removeQueuedOps } from "@/lib/offlineQueue";
-import { qk, type MonthSummary } from "@/lib/browserData";
+import { fetchLogContext, qk, type MonthSummary } from "@/lib/browserData";
+import { toDateKey } from "@/lib/date";
 import { formatWeekdayDayMonth } from "@/lib/dateFormat";
 import { fuzzySearch } from "@/lib/fuzzy";
 import MuscleBadge from "@/components/MuscleBadge";
@@ -268,7 +269,6 @@ export default function QuickLogger({
   const router = useRouter();
   const queryClient = useQueryClient();
   const [items, setItems] = useState<DraftExercise[]>([]);
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [finishError, setFinishError] = useState("");
 
@@ -287,7 +287,22 @@ export default function QuickLogger({
       ...prev,
       ...inits.map((init) => newExercise(group, { collapsed, ...init })),
     ]);
-    setSheetOpen(false);
+  }
+
+  // Last-trained dates and the previous session. Offline or signed out this
+  // simply stays empty: tiles read "Not trained yet" and Quick start hides.
+  const { data: context } = useQuery({
+    queryKey: qk.logContext(date),
+    queryFn: () => fetchLogContext(date),
+    retry: false,
+  });
+
+  // Quick start: the previous session's exercises and sets become drafts the
+  // user edits; nothing is saved until they save a card or tap Done.
+  function repeatPrevious() {
+    const prev = context?.previous;
+    if (!prev) return;
+    setItems((cur) => [...cur, ...prev.exercises.map(draftFromSaved)]);
   }
 
   // Load a saved circuit's exercises as HIIT draft cards.
@@ -432,104 +447,352 @@ export default function QuickLogger({
 
   // Group cards into sections following the canonical muscle-group order.
   const groupsInUse = MUSCLE_GROUPS.filter((g) => items.some((e) => e.group === g));
+  const isToday = date === toDateKey(new Date());
+  const previous = context?.previous ?? null;
 
   return (
-    <main className="flex flex-1 flex-col px-4 pb-32 safe-top">
-      <header className="flex items-center gap-3 py-4">
+    <main className="flex flex-1 flex-col gap-5 px-4 pb-12 safe-top">
+      {/* Top bar */}
+      <div className="flex items-center gap-3 pt-4">
+        <button type="button" onClick={() => router.back()} aria-label="Back" className={GLASS_BUTTON + " w-11 shrink-0 text-ink"}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div className="flex min-w-0 flex-1 flex-col gap-px">
+          <span className="text-[15px] font-semibold">Log workout</span>
+          <span className="text-[13px] text-muted">{shortDate(date)}</span>
+        </div>
         <button
           type="button"
-          onClick={() => router.back()}
-          aria-label="Back"
-          className="elevation-3 flex h-9 w-9 items-center justify-center rounded-full bg-surface text-xl active:bg-white/10"
+          onClick={finish}
+          disabled={finishing}
+          className={GLASS_BUTTON + " px-[18px] text-[15px] font-semibold text-green disabled:opacity-60"}
         >
-          ←
+          {finishing ? "Saving…" : "Done"}
         </button>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-bold leading-tight">Log workout</h1>
-          <p className="text-sm text-muted">{shortDate(date)}</p>
-        </div>
-        {items.length > 0 && (
-          <span className="rounded-full bg-green-tint px-3 py-1 text-sm font-semibold text-green">
-            {items.length} {items.length === 1 ? "exercise" : "exercises"}
-          </span>
-        )}
+      </div>
+      {finishError && <p className="-mt-2 text-center text-sm font-medium text-gold">{finishError}</p>}
+
+      {/* Headline */}
+      <header className="flex flex-col gap-1.5 px-1 pt-1">
+        <h1 className="font-display text-[34px] font-bold leading-[1.05] tracking-[-0.03em]">
+          What did you
+          <br />
+          <span className="text-green">{isToday ? "train today?" : "train that day?"}</span>
+        </h1>
+        <p className="text-sm text-muted">Pick a muscle group or search the library.</p>
       </header>
 
-      {items.length === 0 ? (
-        <button
-          type="button"
-          onClick={() => setSheetOpen(true)}
-          className="mt-6 flex flex-col items-center gap-3 rounded-3xl border border-dashed border-green/40 bg-surface px-6 py-14 text-center active:bg-green-tint"
-        >
-          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-green text-3xl font-bold text-ink-inverse">
-            +
-          </span>
-          <span className="text-lg font-bold text-ink">Add your first exercise</span>
-          <span className="text-sm text-muted">
-            Pick a muscle group, choose from the library or type your own
-          </span>
-        </button>
-      ) : (
-        <div className="space-y-5">
+      <ExerciseSearch onAdd={(g, init) => addExercises(g, [init])} />
+
+      {/* Today's log */}
+      {items.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between px-1">
+            <h2 className="font-display text-xl font-semibold">{isToday ? "Today's log" : "This day's log"}</h2>
+            <span className="text-xs text-muted">
+              {items.length} {items.length === 1 ? "exercise" : "exercises"}
+            </span>
+          </div>
           {groupsInUse.map((g) => (
-            <section key={g}>
-              <h2 className="mb-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-ink">
-                <MuscleBadge group={g} className="h-5 w-5" />
-                {MUSCLE_GROUP_LABELS[g]}
-              </h2>
-              <div className="space-y-3">
-                {items
-                  .filter((e) => e.group === g)
-                  .map((ex) => (
-                    <ExerciseCard
-                      key={ex.id}
-                      ex={ex}
-                      onChange={(patch) => update(ex.id, patch)}
-                      onSave={() => saveExercise(ex.id)}
-                      onRemove={() => removeExercise(ex)}
-                    />
-                  ))}
-              </div>
-            </section>
+            <div key={g} className="flex flex-col gap-2.5">
+              <h3 className="px-1 text-sm font-semibold text-muted">{MUSCLE_GROUP_LABELS[g]}</h3>
+              {items
+                .filter((e) => e.group === g)
+                .map((ex) => (
+                  <ExerciseCard
+                    key={ex.id}
+                    ex={ex}
+                    onChange={(patch) => update(ex.id, patch)}
+                    onSave={() => saveExercise(ex.id)}
+                    onRemove={() => removeExercise(ex)}
+                  />
+                ))}
+            </div>
           ))}
-        </div>
+        </section>
       )}
 
-      <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md border-t border-white/10 bg-page px-4 pb-5 pt-3 safe-bottom">
-        {finishError && (
-          <p className="mb-2 text-center text-sm font-medium text-gold">{finishError}</p>
-        )}
-        <div className="flex items-center gap-3">
+      {/* Quick start: repeat the previous session. Hidden once the log has
+          exercises (it's a starting point) or when there's nothing to repeat. */}
+      {previous && items.length === 0 && (
+        <section className="elevation-1 flex items-center gap-3.5 rounded-3xl py-4 pl-[18px] pr-4">
+          <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+            <span className="text-xs font-semibold tracking-[0.08em] text-muted">QUICK START</span>
+            <span className="text-base font-semibold">Repeat {shortDate(previous.date)}</span>
+            <span className="text-[13px] text-muted">{sessionSummary(previous.exercises)}</span>
+          </span>
           <button
             type="button"
-            onClick={() => setSheetOpen(true)}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-2xl border border-gold/60 px-4 py-4 text-base font-semibold text-gold transition active:scale-[0.98]"
+            onClick={repeatPrevious}
+            className="h-11 shrink-0 rounded-full bg-green px-[18px] text-sm font-semibold text-ink-inverse transition active:scale-95"
           >
-            + Add
+            Repeat
           </button>
-          <button
-            type="button"
-            disabled={finishing || items.length === 0}
-            onClick={finish}
-            className="flex flex-[1.6] items-center justify-center gap-2 rounded-2xl bg-green px-4 py-4 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-40"
-          >
-            {finishing ? "Finishing…" : "✓ Done"}
-          </button>
-        </div>
-        <p className="mt-1.5 text-center text-xs text-muted">
-          Exercises save automatically in the background
-        </p>
-      </div>
-
-      {sheetOpen && (
-        <AddSheet
-          circuits={circuits}
-          onAdd={addExercises}
-          onLoadCircuit={loadCircuit}
-          onClose={() => setSheetOpen(false)}
-        />
+        </section>
       )}
+
+      <MuscleGroups
+        date={date}
+        lastTrained={context?.lastTrained ?? {}}
+        circuits={circuits}
+        onAdd={(g, init) => addExercises(g, [init])}
+        onLoadCircuit={loadCircuit}
+      />
+
+      <p className="text-center text-xs text-subtle">Exercises save automatically</p>
     </main>
+  );
+}
+
+const GLASS_BUTTON =
+  "elevation-3 flex h-11 items-center justify-center rounded-full bg-white/[0.08] active:bg-white/15";
+
+// "6 exercises · 16 sets · 5 muscles"
+function sessionSummary(exercises: Exercise[]): string {
+  const sets = exercises.reduce((n, e) => n + e.sets.length, 0);
+  const muscles = new Set(exercises.map((e) => e.muscle_group)).size;
+  const p = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  return `${p(exercises.length, "exercise")} · ${p(sets, "set")} · ${p(muscles, "muscle")}`;
+}
+
+// A saved exercise as an unsaved draft card, for Repeat. Every stored metric
+// carries over; times come back in seconds so nothing is reinterpreted.
+function draftFromSaved(e: Exercise): DraftExercise {
+  const str = (v: number | null | undefined) => (v == null ? "" : String(v));
+  const sets = e.sets.map((s) => ({
+    ...emptySet(),
+    reps: str(s.reps),
+    weight: str(s.weight_kg),
+    distance_km: str(s.distance_km),
+    distance_m: str(s.distance_m),
+    time: str(s.time_seconds),
+    timeUnit: "seconds" as const,
+    calories: str(s.calories),
+    incline: str(s.incline),
+    resistance: str(s.resistance),
+    sets_count: str(s.sets_count),
+    height: str(s.height),
+    floors: str(s.floors),
+  }));
+  return newExercise(e.muscle_group, {
+    name: e.name,
+    cardioType: e.cardio_type ?? defaultCardioType(),
+    sets: sets.length ? sets : [emptySet()],
+    collapsed: true,
+  });
+}
+
+// "Today", "Yesterday", "3 days ago"; a week or more is "Not this week".
+function lastTrainedLabel(last: string | undefined, date: string): { text: string; stale: boolean } {
+  if (!last) return { text: "Not trained yet", stale: true };
+  const days = Math.round((Date.parse(date) - Date.parse(last)) / 86400000);
+  if (days <= 0) return { text: "Today", stale: false };
+  if (days === 1) return { text: "Yesterday", stale: false };
+  if (days < 7) return { text: `${days} days ago`, stale: false };
+  return { text: "Not this week", stale: true };
+}
+
+const SEARCH_CLASS =
+  "elevation-1 flex h-14 items-center gap-3 rounded-[18px] px-[18px] focus-within:border-green/60";
+
+// Library search across every group. A miss offers to add the text as a
+// custom exercise under a chosen muscle group.
+function ExerciseSearch({
+  onAdd,
+}: {
+  onAdd: (group: MuscleGroup, init: Partial<DraftExercise>) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [pickingGroup, setPickingGroup] = useState(false);
+  const q = query.trim();
+  // Typo-tolerant: "benchpres", "sqaut" and "rdl" all find their exercise.
+  const results = q ? fuzzySearch(SEARCH_INDEX, q, (e) => e.item.name, 30).map((r) => r.item) : [];
+
+  function add(group: MuscleGroup, init: Partial<DraftExercise>) {
+    onAdd(group, init);
+    setQuery("");
+    setPickingGroup(false);
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <label className={SEARCH_CLASS}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden className="shrink-0 text-muted">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M20 20l-3.5-3.5" />
+        </svg>
+        <span className="sr-only">Search all exercises</span>
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPickingGroup(false);
+          }}
+          placeholder="Search all exercises…"
+          className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-muted"
+        />
+      </label>
+
+      {q && (
+        <ul className="flex flex-col gap-2">
+          {results.map(({ group: g, item }) => (
+            <li key={`${g}:${item.name}`}>
+              <button
+                type="button"
+                onClick={() => add(g, item.cardioType ? { name: item.name, cardioType: item.cardioType } : { name: item.name })}
+                className="elevation-1 pressable flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left"
+              >
+                <MuscleBadge group={g} className="h-8 w-8 shrink-0" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-ink">{item.name}</span>
+                  <span className="block text-xs text-muted">{MUSCLE_GROUP_LABELS[g]}</span>
+                </span>
+                <PlusMark />
+              </button>
+            </li>
+          ))}
+          {results.length === 0 && (
+            <li className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => setPickingGroup((v) => !v)}
+                aria-expanded={pickingGroup}
+                className="elevation-1 pressable flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left"
+              >
+                <span className="min-w-0 flex-1 text-[15px] text-ink">
+                  Add <span className="font-semibold">“{q}”</span> as a custom exercise
+                </span>
+                <PlusMark />
+              </button>
+              {pickingGroup && (
+                <div className="flex flex-col gap-2 px-1">
+                  <span className="text-xs text-muted">Which muscle group?</span>
+                  <div className="flex flex-wrap gap-2">
+                    {MUSCLE_GROUPS.filter((g) => modeFor(g) === "strength").map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => add(g, { name: q })}
+                        className="elevation-2 rounded-full px-3.5 py-2 text-sm text-ink active:bg-white/10"
+                      >
+                        {MUSCLE_GROUP_LABELS[g]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </li>
+          )}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function PlusMark() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden className="shrink-0 text-green">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
+// Muscle-group tiles with how long ago each was trained. Tapping one shows
+// its exercise library in place; each exercise adds with one tap.
+function MuscleGroups({
+  date,
+  lastTrained,
+  circuits,
+  onAdd,
+  onLoadCircuit,
+}: {
+  date: string;
+  lastTrained: Partial<Record<MuscleGroup, string>>;
+  circuits: Circuit[];
+  onAdd: (group: MuscleGroup, init: Partial<DraftExercise>) => void;
+  onLoadCircuit: (c: Circuit) => void;
+}) {
+  const [group, setGroup] = useState<MuscleGroup | null>(null);
+  const [added, setAdded] = useState<Set<string>>(new Set());
+
+  if (group) {
+    const mode = modeFor(group);
+    return (
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center gap-3 px-1">
+          <button
+            type="button"
+            onClick={() => {
+              setGroup(null);
+              setAdded(new Set());
+            }}
+            className="flex items-center gap-1 text-sm font-semibold text-green active:opacity-70"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            All groups
+          </button>
+        </div>
+        <div className="flex items-baseline justify-between px-1">
+          <h2 className="font-display text-xl font-semibold">{MUSCLE_GROUP_LABELS[group]}</h2>
+          <span className="text-xs text-muted">tap to add</span>
+        </div>
+        {mode === "hiit" && <CircuitPanel circuits={circuits} onLoadCircuit={onLoadCircuit} />}
+        <ul className="elevation-1 flex flex-col rounded-3xl">
+          {libraryFor(group).map((item) => {
+            const on = added.has(item.name);
+            return (
+              <li key={item.name} className="border-b border-surface-2 last:border-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onAdd(group, item.cardioType ? { name: item.name, cardioType: item.cardioType } : { name: item.name });
+                    setAdded((prev) => new Set(prev).add(item.name));
+                  }}
+                  className="flex w-full items-center justify-between gap-3 px-[18px] py-3.5 text-left active:bg-white/[0.04]"
+                >
+                  <span className="font-medium text-ink">{item.name}</span>
+                  {on ? <span className="shrink-0 text-xs font-semibold text-green">Added</span> : <PlusMark />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    );
+  }
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between px-1">
+        <h2 className="font-display text-xl font-semibold">Muscle groups</h2>
+        <span className="text-xs text-muted">last trained</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2.5">
+        {MUSCLE_GROUPS.map((g) => {
+          const { text, stale } = lastTrainedLabel(lastTrained[g], date);
+          return (
+            <button
+              key={g}
+              type="button"
+              onClick={() => setGroup(g)}
+              className={[
+                "elevation-1 pressable flex min-h-[92px] flex-col items-start justify-between gap-2 rounded-[22px] p-4 text-left",
+                // Not trained this week: gold border + faint gold tint.
+                stale ? "!border-gold/40 !bg-gold-faint" : "",
+              ].join(" ")}
+            >
+              <span className="font-display text-xl font-semibold leading-tight">{MUSCLE_GROUP_LABELS[g]}</span>
+              <span className="text-xs text-muted">{text}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -899,249 +1162,6 @@ function StrengthSets({
         </div>
       </div>
     </Field>
-  );
-}
-
-// ---------- Add-exercise sheet (group → library/custom in one flow) ----------
-
-function AddSheet({
-  circuits,
-  onAdd,
-  onLoadCircuit,
-  onClose,
-}: {
-  circuits: Circuit[];
-  onAdd: (group: MuscleGroup, inits: Partial<DraftExercise>[]) => void;
-  onLoadCircuit: (c: Circuit) => void;
-  onClose: () => void;
-}) {
-  const [group, setGroup] = useState<MuscleGroup | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [custom, setCustom] = useState("");
-  const [query, setQuery] = useState("");
-
-  const mode = group ? modeFor(group) : "strength";
-  const items = group ? libraryFor(group) : [];
-  // The custom input doubles as a live filter over the presets; it only
-  // becomes a custom name if nothing was matched and added.
-  const filter = custom.trim();
-  const visibleItems =
-    mode === "strength" && filter
-      ? fuzzySearch(items, filter, (i) => i.name, 40).map((r) => r.item)
-      : items;
-
-  const q = query.trim();
-  // Typo-tolerant: "benchpres", "sqaut" and "rdl" all find their exercise.
-  const results = q
-    ? fuzzySearch(SEARCH_INDEX, q, (e) => e.item.name, 30).map((r) => r.item)
-    : [];
-
-  function toggle(name: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(name) ? next.delete(name) : next.add(name);
-      return next;
-    });
-    // The text found what they were looking for — clear it so it isn't also
-    // added as a custom exercise.
-    if (filter) setCustom("");
-  }
-
-  function confirm() {
-    if (!group) return;
-    const inits: Partial<DraftExercise>[] = items
-      .filter((i) => selected.has(i.name))
-      .map((i) =>
-        i.cardioType ? { name: i.name, cardioType: i.cardioType } : { name: i.name },
-      );
-    const customName = custom.trim();
-    if (customName && mode === "strength") inits.push({ name: customName });
-    if (inits.length === 0) return;
-    onAdd(group, inits);
-  }
-
-  const count =
-    selected.size + (custom.trim() && mode === "strength" ? 1 : 0);
-
-  return (
-    <>
-      <div
-        onClick={onClose}
-        aria-hidden
-        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
-      />
-      <div
-        role="dialog"
-        aria-label="Add exercise"
-        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex h-[80dvh] w-full max-w-md flex-col elevation-3 rounded-t-3xl bg-page safe-bottom"
-      >
-        <div className="flex items-center gap-3 px-4 pb-2 pt-4">
-          {group && (
-            <button
-              type="button"
-              onClick={() => {
-                setGroup(null);
-                setSelected(new Set());
-                setCustom("");
-              }}
-              aria-label="Back to muscle groups"
-              className="flex h-8 w-8 items-center justify-center rounded-full text-lg text-muted active:bg-white/10"
-            >
-              ←
-            </button>
-          )}
-          <div className="min-w-0 flex-1">
-            <h3 className="text-base font-semibold text-ink">
-              {group ? `${MUSCLE_GROUP_LABELS[group]}` : "What did you train?"}
-            </h3>
-            <p className="text-xs text-muted">
-              {group ? "Tap to select one or more" : "Pick a muscle group"}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-white/10"
-          >
-            ✕
-          </button>
-        </div>
-
-        {!group ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="px-4 pb-2">
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search all exercises…"
-                aria-label="Search all exercises"
-                className={INPUT_CLASS}
-              />
-            </div>
-            {q ? (
-              <ul className="space-y-2 overflow-y-auto px-4 pb-6 pt-1">
-                {results.length === 0 && (
-                  <li className="py-6 text-center text-sm text-muted">
-                    No exercise matches “{query.trim()}”. Pick a muscle group to
-                    add it as a custom exercise.
-                  </li>
-                )}
-                {results.map(({ group: g, item }) => (
-                  <li key={`${g}:${item.name}`}>
-                    <button
-                      type="button"
-                      // One tap adds it under its own group and closes the sheet.
-                      onClick={() =>
-                        onAdd(g, [
-                          item.cardioType
-                            ? { name: item.name, cardioType: item.cardioType }
-                            : { name: item.name },
-                        ])
-                      }
-                      className="flex w-full items-center gap-3 rounded-xl elevation-1 pressable px-4 py-3 text-left active:bg-white/10"
-                    >
-                      <MuscleBadge group={g} className="h-8 w-8 shrink-0" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium text-ink">
-                          {item.name}
-                        </span>
-                        <span className="block text-xs text-muted">
-                          {MUSCLE_GROUP_LABELS[g]}
-                        </span>
-                      </span>
-                      <span className="text-lg text-green" aria-hidden>
-                        +
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="grid grid-cols-3 gap-2.5 overflow-y-auto px-4 pb-6 pt-1">
-                {MUSCLE_GROUPS.map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => setGroup(g)}
-                    className="flex flex-col items-center gap-2 rounded-2xl elevation-1 pressable px-2 py-4"
-                  >
-                    <MuscleBadge group={g} className="h-10 w-10" />
-                    <span className="text-sm font-semibold text-ink">
-                      {MUSCLE_GROUP_LABELS[g]}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="flex-1 space-y-2 overflow-y-auto px-4 py-1">
-              {mode === "hiit" && (
-                <CircuitPanel circuits={circuits} onLoadCircuit={onLoadCircuit} />
-              )}
-
-              {mode === "strength" && (
-                <input
-                  value={custom}
-                  onChange={(e) => setCustom(e.target.value)}
-                  placeholder="Search, or type a custom exercise…"
-                  className={INPUT_CLASS}
-                />
-              )}
-
-              <ul className="space-y-2 pb-2">
-                {visibleItems.map((item) => {
-                  const on = selected.has(item.name);
-                  return (
-                    <li key={item.name}>
-                      <button
-                        type="button"
-                        onClick={() => toggle(item.name)}
-                        aria-pressed={on}
-                        className={[
-                          "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left",
-                          on
-                            ? "border-green bg-green-tint text-ink"
-                            : "border-white/10 bg-surface text-ink active:bg-white/10",
-                        ].join(" ")}
-                      >
-                        <span className="font-medium">{item.name}</span>
-                        <span
-                          className={[
-                            "flex h-5 w-5 items-center justify-center rounded-full text-xs",
-                            on
-                              ? "bg-green text-ink-inverse"
-                              : "border border-white/20 text-transparent",
-                          ].join(" ")}
-                          aria-hidden
-                        >
-                          ✓
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-
-            <div className="border-t border-white/10 px-4 pb-5 pt-3">
-              <button
-                type="button"
-                disabled={count === 0}
-                onClick={confirm}
-                className="w-full rounded-2xl bg-green px-4 py-3.5 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-40"
-              >
-                {count === 0
-                  ? "Select exercises"
-                  : `Add ${count} ${count === 1 ? "exercise" : "exercises"}`}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </>
   );
 }
 

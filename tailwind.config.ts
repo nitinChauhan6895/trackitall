@@ -18,6 +18,7 @@ const config: Config = {
         gold: {
           DEFAULT: "#FFC95C",
           soft: "#322B1C", // dark gold-cast chip surface
+          faint: "#2C2820", // 7% gold over a card: "needs attention" tiles
         },
         // Neutral chips (avatar, PR cards)
         beige: {

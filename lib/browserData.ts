@@ -32,6 +32,7 @@ export const qk = {
   circuits: () => ["circuits"] as const,
   habits: () => ["habits"] as const,
   goals: () => ["goals"] as const,
+  logContext: (date: string) => ["logContext", date] as const,
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -102,6 +103,47 @@ export async function fetchDayExercises(date: string): Promise<Exercise[]> {
     ...e,
     sets: (e.sets ?? []).sort((a: any, b: any) => a.position - b.position),
   })) as Exercise[];
+}
+
+// ---------- log screen context ----------
+
+export type LogContext = {
+  /** Most recent workout date per muscle group, on or before the log date. */
+  lastTrained: Partial<Record<MuscleGroup, string>>;
+  /** The latest workout strictly before the log date, for Quick start. */
+  previous: { date: string; exercises: Exercise[] } | null;
+};
+
+// What the logger needs beyond the day itself: when each muscle group was
+// last trained (the same exercise rows Stats counts from) and the previous
+// session to offer as a Repeat.
+export async function fetchLogContext(date: string): Promise<LogContext> {
+  const supabase = await authedClient();
+  // Newest first, so the first row seen per group is its latest date. A
+  // year back is plenty for "last trained"; older groups read as untrained.
+  const since = new Date(date);
+  since.setFullYear(since.getFullYear() - 1);
+  const { data, error } = await supabase
+    .from("exercises")
+    .select("workout_date, muscle_group")
+    .lte("workout_date", date)
+    .gte("workout_date", since.toISOString().slice(0, 10))
+    .order("workout_date", { ascending: false })
+    .limit(5000);
+  if (error) throw error;
+
+  const lastTrained: LogContext["lastTrained"] = {};
+  let previousDate: string | null = null;
+  for (const row of data ?? []) {
+    const g = row.muscle_group as MuscleGroup;
+    const d = row.workout_date as string;
+    if (!lastTrained[g]) lastTrained[g] = d;
+    if (!previousDate && d < date) previousDate = d;
+  }
+  const previous = previousDate
+    ? { date: previousDate, exercises: await fetchDayExercises(previousDate) }
+    : null;
+  return { lastTrained, previous };
 }
 
 // ---------- circuits (HIIT templates used by the logger) ----------
