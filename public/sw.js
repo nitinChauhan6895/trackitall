@@ -396,8 +396,8 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(title, {
       body: data.body || "",
       // Same icon as the launcher so the notification is recognisably the app.
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
+      icon: "/icons/icon-v2-192.png",
+      badge: "/icons/icon-v2-192.png",
       // Replaces an earlier copy of the same reminder rather than stacking.
       tag: data.tag || "trackitall",
       renotify: false,
