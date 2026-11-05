@@ -32,6 +32,19 @@ const config: Config = {
         muted: "#A6A6A6",
         subtle: "#8C8C8C", // tertiary text (weekday labels, chevrons)
       },
+      // Elevation (see the .elevation-* classes in app/globals.css). Cards use
+      // the existing `surface` (#1C1C1C) and elements inside them `surface-2`
+      // (#262626). Shadows are neutral black only.
+      borderColor: {
+        hairline: "rgba(255,255,255,0.06)",
+        "hairline-subtle": "rgba(255,255,255,0.04)",
+      },
+      boxShadow: {
+        "elevation-1":
+          "inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 6px rgba(0,0,0,0.35), 0 12px 32px rgba(0,0,0,0.45)",
+        "elevation-1-pressed": "inset 0 1px 0 rgba(255,255,255,0.05), 0 1px 3px rgba(0,0,0,0.35)",
+        "elevation-3": "inset 0 1px 0 rgba(255,255,255,0.10), 0 10px 30px rgba(0,0,0,0.45)",
+      },
       fontFamily: {
         sans: ["var(--font-inter)", "ui-sans-serif", "system-ui", "sans-serif"],
         display: ["var(--font-space-grotesk)", "var(--font-inter)", "ui-sans-serif", "sans-serif"],

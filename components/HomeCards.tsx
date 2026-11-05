@@ -14,7 +14,7 @@ export function PrCard({ pr }: { pr: Pr }) {
   const recent = isRecent(pr.achieved_date);
   const tag = pr.unit_type === "kg" ? "NEW PR" : "NEW BEST";
   return (
-    <div className="relative flex min-h-[120px] flex-col justify-between overflow-hidden rounded-3xl border border-green/20 bg-surface-2 p-4 text-ink">
+    <div className="relative flex min-h-[120px] flex-col justify-between overflow-hidden elevation-1 rounded-3xl p-4 text-ink">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-gradient-to-br from-green/10 to-transparent"
@@ -63,7 +63,7 @@ export function MeasurementCard({
   colorClass: string;
 }) {
   return (
-    <div className="rounded-3xl bg-surface p-3.5">
+    <div className="elevation-1 rounded-3xl p-3.5">
       <p className="truncate text-xs font-medium text-muted">{label}</p>
       <div className="mt-1.5 flex items-end justify-between gap-2">
         <div className="flex items-baseline gap-1">

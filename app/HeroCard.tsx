@@ -47,7 +47,7 @@ export default function HeroCard({
   });
 
   return (
-    <section className="flex flex-col gap-[18px] rounded-[28px] bg-surface px-5 pb-5 pt-[22px]">
+    <section className="elevation-1 flex flex-col gap-[18px] rounded-[28px] px-5 pb-5 pt-[22px]">
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-0.5">
           <span className="text-xs font-semibold tracking-[0.08em] text-muted">
@@ -94,7 +94,7 @@ export default function HeroCard({
                       ? "border-2 border-green font-semibold text-ink"
                       : isFuture
                         ? "border border-dashed border-[#3A3A3A] text-subtle"
-                        : "bg-surface-2 text-muted",
+                        : "elevation-2 text-muted",
                   isToday && trained ? "ring-2 ring-green ring-offset-2 ring-offset-surface" : "",
                 ].join(" ")}
               >

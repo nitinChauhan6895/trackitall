@@ -58,7 +58,7 @@ export default function SharePicker({
       <div
         role="dialog"
         aria-label={title}
-        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[75dvh] w-full max-w-md flex-col rounded-t-3xl bg-page shadow-xl safe-bottom"
+        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[75dvh] w-full max-w-md flex-col elevation-3 rounded-t-3xl bg-page safe-bottom"
       >
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
           <div className="min-w-0">

@@ -40,7 +40,7 @@ export default function GroupMenu({
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute right-3 top-14 z-50 w-40 overflow-hidden rounded-2xl border border-white/10 bg-surface-2 py-1 shadow-lg">
+          <div className="absolute right-3 top-14 z-50 w-40 overflow-hidden elevation-3 rounded-2xl bg-surface-2 py-1">
             <MenuItem
               label="Edit"
               onClick={() => {

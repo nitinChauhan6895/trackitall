@@ -440,7 +440,7 @@ export default function QuickLogger({
           type="button"
           onClick={() => router.back()}
           aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-surface text-xl active:bg-white/10"
+          className="elevation-3 flex h-9 w-9 items-center justify-center rounded-full bg-surface text-xl active:bg-white/10"
         >
           ←
         </button>
@@ -571,8 +571,8 @@ function ExerciseCard({
   return (
     <div
       className={[
-        "overflow-hidden rounded-2xl border bg-surface",
-        ex.status === "error" ? "border-gold/60" : "border-white/10",
+        "elevation-1 overflow-hidden rounded-2xl",
+        ex.status === "error" ? "!border-gold/60" : "",
       ].join(" ")}
     >
       <button
@@ -973,7 +973,7 @@ function AddSheet({
       <div
         role="dialog"
         aria-label="Add exercise"
-        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex h-[80dvh] w-full max-w-md flex-col rounded-t-3xl bg-page shadow-xl safe-bottom"
+        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex h-[80dvh] w-full max-w-md flex-col elevation-3 rounded-t-3xl bg-page safe-bottom"
       >
         <div className="flex items-center gap-3 px-4 pb-2 pt-4">
           {group && (
@@ -1039,7 +1039,7 @@ function AddSheet({
                             : { name: item.name },
                         ])
                       }
-                      className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-surface px-4 py-3 text-left active:bg-white/10"
+                      className="flex w-full items-center gap-3 rounded-xl elevation-1 pressable px-4 py-3 text-left active:bg-white/10"
                     >
                       <MuscleBadge group={g} className="h-8 w-8 shrink-0" />
                       <span className="min-w-0 flex-1">
@@ -1064,7 +1064,7 @@ function AddSheet({
                     key={g}
                     type="button"
                     onClick={() => setGroup(g)}
-                    className="flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-surface px-2 py-4 transition active:scale-[0.97] active:border-green"
+                    className="flex flex-col items-center gap-2 rounded-2xl elevation-1 pressable px-2 py-4"
                   >
                     <MuscleBadge group={g} className="h-10 w-10" />
                     <span className="text-sm font-semibold text-ink">
@@ -1153,7 +1153,7 @@ function CircuitPanel({
   onLoadCircuit: (c: Circuit) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-surface p-3">
+    <div className="rounded-2xl elevation-1 p-3">
       <Link
         href="/circuits/new"
         className="flex flex-col items-center gap-1 rounded-xl border border-dashed border-green/50 px-4 py-3 text-center active:bg-green-tint"

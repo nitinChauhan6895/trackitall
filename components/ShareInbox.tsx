@@ -41,7 +41,7 @@ export default function ShareInbox({ shares }: { shares: IncomingShare[] }) {
           return (
             <li
               key={s.id}
-              className="rounded-2xl border border-white/10 bg-surface p-4"
+              className="elevation-1 rounded-2xl p-4"
             >
               <p className="text-sm text-ink">
                 <span className="font-semibold">{s.from_name}</span> shared{" "}

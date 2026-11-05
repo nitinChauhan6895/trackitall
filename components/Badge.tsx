@@ -35,7 +35,7 @@ export function Badge({
   const ring = size === "sm" ? "h-14 w-14" : "h-16 w-16";
 
   return (
-    <div className="flex flex-col items-center gap-2 rounded-3xl bg-surface p-3">
+    <div className="elevation-1 flex flex-col items-center gap-2 rounded-3xl p-3">
       <div className={`relative ${ring}`}>
         {!badge.earned && <Ring frac={frac} />}
         <div
@@ -43,7 +43,7 @@ export function Badge({
             "absolute inset-[6px] flex items-center justify-center rounded-full",
             badge.earned
               ? "border-[1.5px] border-gold bg-gold/[0.14] text-gold"
-              : "bg-surface-2 text-muted",
+              : "elevation-2 text-muted",
           ].join(" ")}
         >
           <BadgeIcon id={badge.id} size={size === "sm" ? 20 : 24} />
@@ -51,7 +51,7 @@ export function Badge({
         {!badge.earned && (
           <span
             aria-hidden
-            className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-page text-muted shadow"
+            className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-page text-muted"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <rect x="5" y="11" width="14" height="10" rx="2" />

@@ -115,7 +115,7 @@ export default function DayView({ date }: { date: string }) {
           <Chevron d="M19 12H5M12 19l-7-7 7-7" size={18} />
         </Link>
         <div className="flex-1" />
-        <div className="flex h-11 rounded-full border border-white/[0.12] bg-white/[0.08] backdrop-blur-xl">
+        <div className="elevation-3 flex h-11 rounded-full bg-white/[0.08]">
           <Link href={`/day/${prevKey}`} aria-label="Previous day" className="flex h-11 w-11 items-center justify-center rounded-l-full active:bg-white/10">
             <Chevron d="M15 18l-6-6 6-6" size={16} />
           </Link>
@@ -147,7 +147,7 @@ export default function DayView({ date }: { date: string }) {
       </header>
 
       {/* Hero stats */}
-      <section className="flex flex-col gap-[18px] rounded-[28px] bg-surface px-5 pb-5 pt-[22px]">
+      <section className="elevation-1 flex flex-col gap-[18px] rounded-[28px] px-5 pb-5 pt-[22px]">
         <div className="flex flex-col gap-0.5">
           <span className="text-xs font-semibold tracking-[0.08em] text-muted">TOTAL VOLUME</span>
           <span suppressHydrationWarning className="font-display text-[56px] font-bold leading-[1.05] tracking-[-0.03em]">
@@ -176,11 +176,11 @@ export default function DayView({ date }: { date: string }) {
             // clipping would crop it.
             <section
               key={group}
-              className="relative flex flex-col gap-3.5 rounded-[28px] bg-surface px-[18px] pb-5 pt-[18px]"
+              className="elevation-1 relative flex flex-col gap-3.5 rounded-[28px] px-[18px] pb-5 pt-[18px]"
             >
               <div className="flex items-center gap-2.5">
                 <h2 className="font-display text-lg font-semibold">{MUSCLE_GROUP_LABELS[group]}</h2>
-                <span className="rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium text-muted">
+                <span className="elevation-2 rounded-full px-2.5 py-1 text-xs font-medium text-muted">
                   {plural(list.length, "exercise")} · {plural(groupSets, "set")}
                 </span>
                 <div className="-my-2 -mr-2.5 ml-auto">
@@ -257,7 +257,7 @@ export default function DayView({ date }: { date: string }) {
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto flex w-full max-w-md justify-end px-4 pb-7 safe-bottom">
         <Link
           href={`/log/${date}`}
-          className="pointer-events-auto flex h-[60px] items-center gap-2 rounded-full border border-white/25 bg-green/[0.92] pl-5 pr-6 text-base font-semibold text-ink-inverse shadow-[0_10px_30px_rgba(34,197,94,0.30),inset_0_1px_0_rgba(255,255,255,0.35)] backdrop-blur-xl transition active:scale-95"
+          className="pointer-events-auto flex h-[60px] items-center gap-2 elevation-3 rounded-full bg-green/[0.92] pl-5 pr-6 text-base font-semibold text-ink-inverse transition active:scale-95"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
             <path d="M12 5v14M5 12h14" />
@@ -274,7 +274,7 @@ export default function DayView({ date }: { date: string }) {
 }
 
 const GLASS_BUTTON =
-  "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.08] text-ink backdrop-blur-xl active:bg-white/15";
+  "elevation-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-ink active:bg-white/15";
 
 function Chevron({ d, size }: { d: string; size: number }) {
   return (
@@ -318,7 +318,7 @@ function ShareDayModal({ date, onClose }: { date: string; onClose: () => void })
 
 function Stat({ value, label }: { value: number; label: string }) {
   return (
-    <div className="flex flex-col gap-0.5 rounded-2xl bg-surface-2 px-3.5 py-3">
+    <div className="elevation-2 flex flex-col gap-0.5 rounded-2xl px-3.5 py-3">
       <span suppressHydrationWarning className="font-display text-[22px] font-semibold">
         {value}
       </span>

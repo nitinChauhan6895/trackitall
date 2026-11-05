@@ -150,7 +150,7 @@ export default function CircuitBuilder({ initial }: { initial?: Circuit }) {
           {exercises.map((ex, i) => (
             <div
               key={ex.key}
-              className="rounded-2xl border border-white/10 bg-surface"
+              className="rounded-2xl elevation-1"
             >
               <div className="flex items-center gap-3 px-3 py-3">
                 <span className="w-5 text-center text-sm font-semibold text-muted">
@@ -370,7 +370,7 @@ function AddExerciseSheet({
       <div
         role="dialog"
         aria-label="Add exercise"
-        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[80dvh] w-full max-w-md flex-col rounded-t-3xl bg-page p-4 shadow-xl safe-bottom"
+        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[80dvh] w-full max-w-md flex-col elevation-3 rounded-t-3xl bg-page p-4 safe-bottom"
       >
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-base font-semibold text-ink">Add Exercise</h3>
@@ -415,7 +415,7 @@ function AddExerciseSheet({
               <button
                 type="button"
                 onClick={() => onAdd(it.name)}
-                className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-surface px-4 py-3 text-left active:bg-white/10"
+                className="flex w-full items-center justify-between rounded-xl elevation-1 pressable px-4 py-3 text-left active:bg-white/10"
               >
                 <span>
                   <span className="block font-medium text-ink">{it.name}</span>

@@ -186,7 +186,7 @@ function Overview({
       : Math.round((goals.reduce((n, g) => n + progressOf(g).ratio, 0) / goals.length) * 100);
   return (
     <>
-      <section className="mt-4 rounded-2xl border border-white/10 bg-surface p-4">
+      <section className="mt-4 rounded-2xl elevation-1 p-4">
         <p className="text-sm font-medium text-ink">Today&rsquo;s Progress</p>
         <div className="mt-3 flex items-center gap-4">
           <Ring percent={overall} />
@@ -295,7 +295,7 @@ function ActiveGoals({
         </ul>
       )}
 
-      <div className="mt-5 flex items-center gap-3 rounded-2xl border border-white/10 bg-surface p-4">
+      <div className="mt-5 flex items-center gap-3 rounded-2xl elevation-1 p-4">
         <span aria-hidden className="text-2xl">
           🏆
         </span>
@@ -333,7 +333,7 @@ function History({
             <button
               type="button"
               onClick={() => onOpen(g.id)}
-              className="flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-surface p-3 text-left"
+              className="flex w-full items-center gap-3 rounded-2xl elevation-1 pressable p-3 text-left"
             >
               <span aria-hidden className="text-xl">
                 {p.complete ? "✅" : "—"}
@@ -372,7 +372,7 @@ function GoalCard({
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-2xl border border-white/10 bg-surface p-3 text-left active:bg-white/[0.04]"
+      className="w-full rounded-2xl elevation-1 pressable p-3 text-left active:bg-white/[0.04]"
     >
       <div className="flex items-center gap-3">
         <span
@@ -470,7 +470,7 @@ function GoalDetail({
         </p>
       </div>
 
-      <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-surface p-4">
+      <div className="flex items-center justify-between rounded-2xl elevation-1 p-4">
         <span>
           <span className="block text-sm font-medium text-ink">Target</span>
           <span className="block text-xs text-muted">
@@ -483,7 +483,7 @@ function GoalDetail({
       </div>
 
       <SectionLabel>Progress</SectionLabel>
-      <div className="rounded-2xl border border-white/10 bg-surface p-4">
+      <div className="rounded-2xl elevation-1 p-4">
         <div className="flex h-[140px] items-end gap-1">
           {progress.perDay.map((d, i) => {
             const future = d.date > today;
@@ -513,12 +513,12 @@ function GoalDetail({
       </div>
 
       <SectionLabel>Insights</SectionLabel>
-      <div className="rounded-2xl border border-white/10 bg-surface p-4">
+      <div className="rounded-2xl elevation-1 p-4">
         <p className="text-sm text-ink">{insight(goal, progress)}</p>
       </div>
 
       <SectionLabel>About this goal</SectionLabel>
-      <div className="rounded-2xl border border-white/10 bg-surface p-4">
+      <div className="rounded-2xl elevation-1 p-4">
         <p className="text-sm text-muted">{aboutText(goal.metric)}</p>
         {goal.notes && <p className="mt-2 text-sm text-ink">{goal.notes}</p>}
       </div>

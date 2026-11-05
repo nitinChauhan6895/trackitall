@@ -62,7 +62,7 @@ export default function CircuitsManager({ circuits }: { circuits: Circuit[] }) {
           {circuits.map((c) => (
             <li
               key={c.id}
-              className="rounded-2xl border border-white/10 bg-surface"
+              className="rounded-2xl elevation-1"
             >
               <div className="flex items-center gap-3 px-4 py-3.5">
                 <span

@@ -226,7 +226,7 @@ function LoadStats({ load }: { load?: GroupLoad[] }) {
   return (
     <div className="space-y-2">
       {load.map((l) => (
-        <div key={l.group} className="rounded-2xl border border-white/10 bg-surface p-3">
+        <div key={l.group} className="rounded-2xl elevation-1 p-3">
           <div className="flex items-center gap-2">
             <span className="h-5 w-5 shrink-0" style={{ color: MUSCLE_TONE[l.group] }}>
               <MuscleIcon group={l.group} />
@@ -334,7 +334,7 @@ function ChartBox({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-surface p-3">
+    <div className="rounded-xl elevation-1 p-3">
       <div className="mb-2.5 flex items-center justify-between text-xs font-semibold text-ink">
         <span className="truncate">{title}</span>
         <span className="shrink-0 pl-2 font-normal text-muted">{hint}</span>
@@ -370,7 +370,7 @@ function NutritionTrend({
             onClick={() => setMetric(m)}
             className={[
               "flex-1 rounded-md py-1.5 text-xs font-semibold capitalize transition",
-              metric === m ? "bg-surface text-green shadow-sm" : "text-muted",
+              metric === m ? "elevation-2 text-green" : "text-muted",
             ].join(" ")}
           >
             {m}

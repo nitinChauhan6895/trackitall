@@ -115,7 +115,7 @@ export default function MeasurementsManager({
                   <button
                     type="button"
                     onClick={() => setEditing(m)}
-                    className="w-full rounded-2xl border border-white/10 bg-surface px-4 py-3.5 text-left active:bg-white/10"
+                    className="w-full rounded-2xl elevation-1 pressable px-4 py-3.5 text-left active:bg-white/10"
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-ink">

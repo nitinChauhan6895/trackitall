@@ -106,7 +106,7 @@ export default async function HomePage({
         <Link
           href="/profile"
           aria-label="Profile"
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.08] font-display text-[17px] font-semibold text-ink backdrop-blur-xl active:scale-95"
+          className="elevation-3 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/[0.08] font-display text-[17px] font-semibold text-ink active:scale-95"
         >
           {profileInitial(profile)}
         </Link>
@@ -116,7 +116,7 @@ export default async function HomePage({
 
       {/* Bento tiles */}
       <div className="grid grid-cols-2 gap-3">
-        <Link href="/stats" className="flex flex-col gap-3.5 rounded-3xl bg-surface p-[18px] text-ink active:bg-white/[0.04]">
+        <Link href="/stats" className="elevation-1 pressable flex flex-col gap-3.5 rounded-3xl p-[18px] text-ink">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold/[0.14] text-gold">
             <FlameIcon size={20} />
           </span>
@@ -129,7 +129,7 @@ export default async function HomePage({
             </span>
           </span>
         </Link>
-        <Link href="/habits" className="flex flex-col gap-3.5 rounded-3xl bg-surface p-[18px] text-ink active:bg-white/[0.04]">
+        <Link href="/habits" className="elevation-1 pressable flex flex-col gap-3.5 rounded-3xl p-[18px] text-ink">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-green/[0.14] text-green">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14z" />
@@ -284,7 +284,7 @@ async function NutritionPreview({ date }: { date: string }) {
   return (
     <Link
       href="/nutrition"
-      className="flex items-center gap-4 rounded-3xl bg-surface p-[18px] active:bg-white/[0.04]"
+      className="elevation-1 pressable flex items-center gap-4 rounded-3xl p-[18px]"
     >
       <div className="relative h-16 w-16 shrink-0">
         <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90">
@@ -351,7 +351,7 @@ function dayLabels(key: string, isToday: boolean): { top: string; sub: string } 
 async function RecentTraining() {
   const days = await getRecentTraining(7);
   return (
-    <div className="flex flex-col overflow-hidden rounded-3xl bg-surface">
+    <div className="elevation-1 flex flex-col overflow-hidden rounded-3xl">
       {days.map((day) => {
         const { top, sub } = dayLabels(day.key, day.isToday);
         const href = day.groups.length ? `/day/${day.key}` : `/log/${day.key}`;
@@ -367,7 +367,7 @@ async function RecentTraining() {
             </div>
             <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5">
               {day.groups.length === 0 ? (
-                <span className="rounded-full bg-surface-2 px-2.5 py-1.5 text-[13px] text-muted">Rest day</span>
+                <span className="elevation-2 rounded-full px-2.5 py-1.5 text-[13px] text-muted">Rest day</span>
               ) : (
                 day.groups.map((g) => <MuscleChip key={g} group={g} />)
               )}

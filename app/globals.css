@@ -20,6 +20,28 @@ body {
   overscroll-behavior-y: none;
 }
 
+/* Elevation. On a dark UI depth takes three layers together: a soft drop
+   shadow, a hairline lighter border and a faint top-edge highlight.
+   Level 0 is the page itself. Radii stay on each component. */
+@layer components {
+  /* Cards, tiles, grouped lists. */
+  .elevation-1 {
+    @apply border border-hairline bg-surface shadow-elevation-1;
+  }
+  /* Anything inside a level-1 card: chips, mini-tiles, pills. Never stacks a shadow. */
+  .elevation-2 {
+    @apply border border-hairline-subtle bg-surface-2 shadow-none;
+  }
+  /* Floating glass controls and overlays; keep their own backgrounds. */
+  .elevation-3 {
+    @apply border border-white/10 shadow-elevation-3 backdrop-blur-xl;
+  }
+  /* Tappable level-1 elements sink slightly while pressed. */
+  .pressable {
+    @apply transition duration-[120ms] ease-out active:scale-[0.98] active:shadow-elevation-1-pressed motion-reduce:transition-none motion-reduce:active:scale-100;
+  }
+}
+
 /* Respect iOS safe areas for the PWA */
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
