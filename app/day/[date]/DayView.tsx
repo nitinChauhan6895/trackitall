@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { monthParam } from "@/lib/date";
@@ -52,7 +52,11 @@ function inputsFor(exercise: Exercise, kind: SetKind): InputSpec[] {
 // day key to refetch.
 export default function DayView({ date }: { date: string }) {
   const queryClient = useQueryClient();
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  // The part of the page that becomes the screenshot: title, stats and the
+  // muscle-group cards, without the top controls or the floating button.
+  const captureRef = useRef<HTMLDivElement>(null);
   // Local-first: whatever is in the persisted (IndexedDB) cache renders
   // immediately; the network refresh is a background nicety. Offline with
   // nothing cached simply means an empty day, which is the truth.
@@ -126,7 +130,7 @@ export default function DayView({ date }: { date: string }) {
         </div>
         <button
           type="button"
-          onClick={() => setShareOpen(true)}
+          onClick={() => setShareMenuOpen(true)}
           disabled={exercises.length === 0}
           aria-label="Share this workout"
           className={`${GLASS_BUTTON} disabled:opacity-40`}
@@ -135,6 +139,7 @@ export default function DayView({ date }: { date: string }) {
         </button>
       </div>
 
+      <div ref={captureRef} className="flex flex-col gap-5 bg-page">
       {/* Title */}
       <header className="flex flex-col gap-1 px-1">
         <span className="text-xs font-semibold tracking-[0.08em] text-muted">WORKOUT</span>
@@ -183,7 +188,7 @@ export default function DayView({ date }: { date: string }) {
                 <span className="elevation-2 rounded-full px-2.5 py-1 text-xs font-medium text-muted">
                   {plural(list.length, "exercise")} · {plural(groupSets, "set")}
                 </span>
-                <div className="-my-2 -mr-2.5 ml-auto">
+                <div data-screenshot="hide" className="-my-2 -mr-2.5 ml-auto">
                   <GroupMenu
                     date={date}
                     group={group}
@@ -252,6 +257,7 @@ export default function DayView({ date }: { date: string }) {
           );
         })
       )}
+      </div>
 
       {/* Floating glass action, bottom-right. */}
       <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto flex w-full max-w-md justify-end px-4 pb-7 safe-bottom">
@@ -266,6 +272,17 @@ export default function DayView({ date }: { date: string }) {
         </Link>
       </div>
 
+      {shareMenuOpen && (
+        <ShareMenu
+          date={date}
+          captureRef={captureRef}
+          onSendToFriend={() => {
+            setShareMenuOpen(false);
+            setShareOpen(true);
+          }}
+          onClose={() => setShareMenuOpen(false)}
+        />
+      )}
       {shareOpen && (
         <ShareDayModal date={date} onClose={() => setShareOpen(false)} />
       )}
@@ -303,6 +320,156 @@ function ShareIcon() {
       <path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
     </svg>
   );
+}
+
+// The share button's sheet: a screenshot of the workout, or the existing
+// send-to-a-friend picker.
+function ShareMenu({
+  date,
+  captureRef,
+  onSendToFriend,
+  onClose,
+}: {
+  date: string;
+  captureRef: React.RefObject<HTMLDivElement>;
+  onSendToFriend: () => void;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function shareScreenshot() {
+    const node = captureRef.current;
+    if (!node) return;
+    setBusy(true);
+    setError("");
+    try {
+      const file = await captureWorkout(node, `trackitall-workout-${date}.png`);
+      // Phones: the native share sheet (Save Image, WhatsApp, Instagram…).
+      // Elsewhere: a plain download.
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: "My workout" });
+        } catch (e: any) {
+          if (e?.name !== "AbortError") throw e; // closing the sheet isn't an error
+        }
+      } else {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+      onClose();
+    } catch {
+      setError("Couldn't create the screenshot. Please try again.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div onClick={onClose} aria-hidden className="fixed inset-0 z-40 bg-black/60" />
+      <div
+        role="dialog"
+        aria-label="Share this workout"
+        className="elevation-3 fixed inset-x-0 bottom-0 z-50 mx-auto flex w-full max-w-md flex-col gap-3 rounded-t-3xl bg-page px-4 pb-6 pt-4 safe-bottom"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-ink">Share this workout</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:bg-white/10"
+          >
+            ✕
+          </button>
+        </div>
+        <ShareOption
+          title={busy ? "Creating screenshot…" : "Share screenshot"}
+          subtitle="Save or post an image of this workout"
+          disabled={busy}
+          onClick={shareScreenshot}
+          icon={
+            <>
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <circle cx="8.5" cy="10" r="1.5" />
+              <path d="M21 15l-5-5-11 9" />
+            </>
+          }
+        />
+        <ShareOption
+          title="Send to a friend"
+          subtitle="Share the workout with someone on TrackItAll"
+          disabled={busy}
+          onClick={onSendToFriend}
+          icon={
+            <>
+              <circle cx="9" cy="8" r="3.5" />
+              <path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14a6.5 6.5 0 0 1 3 6" />
+            </>
+          }
+        />
+        {error && <p className="text-center text-sm text-gold">{error}</p>}
+      </div>
+    </>
+  );
+}
+
+function ShareOption({
+  title,
+  subtitle,
+  icon,
+  disabled,
+  onClick,
+}: {
+  title: string;
+  subtitle: string;
+  icon: React.ReactNode;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="elevation-1 pressable flex w-full items-center gap-3.5 rounded-3xl p-4 text-left disabled:opacity-60"
+    >
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-green/[0.14] text-green">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          {icon}
+        </svg>
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="text-base font-semibold text-ink">{title}</span>
+        <span className="text-[13px] text-muted">{subtitle}</span>
+      </span>
+    </button>
+  );
+}
+
+// Renders the workout section to a PNG file. html-to-image is loaded only
+// when someone actually shares, so it costs nothing on a normal page view.
+async function captureWorkout(node: HTMLElement, fileName: string): Promise<File> {
+  const { toBlob } = await import("html-to-image");
+  const PAD = 20;
+  const options = {
+    backgroundColor: "#111111",
+    pixelRatio: 2,
+    width: node.offsetWidth + PAD * 2,
+    height: node.offsetHeight + PAD * 2,
+    style: { margin: "0", padding: `${PAD}px` },
+    // Drop the per-group ⋮ menus from the image.
+    filter: (el: HTMLElement) => !(el instanceof HTMLElement && el.dataset?.screenshot === "hide"),
+  };
+  // Embedding the web fonts can fail on some browsers; fall back to an image
+  // without them rather than no image at all.
+  const blob = (await toBlob(node, options).catch(() => null)) ?? (await toBlob(node, { ...options, skipFonts: true }));
+  if (!blob) throw new Error("capture failed");
+  return new File([blob], fileName, { type: "image/png" });
 }
 
 function ShareDayModal({ date, onClose }: { date: string; onClose: () => void }) {
