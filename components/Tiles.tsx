@@ -7,13 +7,13 @@ import ExerciseLogo from "@/components/ExerciseLogo";
 //  only pass onEdit from a client component.)
 export function PrTile({ pr, onEdit }: { pr: Pr; onEdit?: () => void }) {
   return (
-    <div className="relative rounded-2xl bg-orange-soft p-3">
+    <div className="relative rounded-2xl bg-gold-soft p-3">
       {onEdit && (
         <button
           type="button"
           onClick={onEdit}
           aria-label={`Edit ${pr.exercise_name}`}
-          className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full text-sm text-orange active:bg-orange/10"
+          className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full text-sm text-gold active:bg-gold/10"
         >
           ✎
         </button>
@@ -27,11 +27,11 @@ export function PrTile({ pr, onEdit }: { pr: Pr; onEdit?: () => void }) {
         </p>
       </div>
       <div className="mt-1.5 flex items-baseline gap-1">
-        <span className="text-xl font-bold leading-none text-orange">
+        <span className="text-xl font-bold leading-none text-gold">
           {formatPrValue(pr)}
         </span>
         {pr.reps != null && (
-          <span className="text-xs font-semibold text-orange/70">
+          <span className="text-xs font-semibold text-gold/70">
             ×{pr.reps}
           </span>
         )}

@@ -11,7 +11,7 @@ import {
 } from "@/lib/types";
 
 const inputClass =
-  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
+  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-gold";
 
 type View = "menu" | "edit" | "password";
 
@@ -122,7 +122,7 @@ function Menu({
         <form action={signOut}>
           <button
             type="submit"
-            className="flex w-full items-center gap-3 px-1 py-4 text-left text-base font-medium text-orange active:opacity-70"
+            className="flex w-full items-center gap-3 px-1 py-4 text-left text-base font-medium text-gold active:opacity-70"
           >
             <span aria-hidden>⎋</span> Sign out
           </button>
@@ -263,7 +263,7 @@ function EditProfile({
         placeholder="Last name"
         className={inputClass}
       />
-      {error && <p className="text-sm text-orange">{error}</p>}
+      {error && <p className="text-sm text-gold">{error}</p>}
       <button
         type="submit"
         disabled={busy}
@@ -324,7 +324,7 @@ function ChangePassword({ onDone }: { onDone: () => void }) {
         placeholder="Confirm new password"
         className={inputClass}
       />
-      {error && <p className="text-sm text-orange">{error}</p>}
+      {error && <p className="text-sm text-gold">{error}</p>}
       {done && <p className="text-sm text-green">Password updated.</p>}
       <button
         type="submit"

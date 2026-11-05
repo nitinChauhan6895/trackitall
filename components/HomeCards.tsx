@@ -14,7 +14,7 @@ export function PrCard({ pr }: { pr: Pr }) {
   const recent = isRecent(pr.achieved_date);
   const tag = pr.unit_type === "kg" ? "NEW PR" : "NEW BEST";
   return (
-    <div className="relative flex min-h-[120px] flex-col justify-between overflow-hidden rounded-2xl border border-green/20 bg-surface-2 p-4 text-ink">
+    <div className="relative flex min-h-[120px] flex-col justify-between overflow-hidden rounded-3xl border border-green/20 bg-surface-2 p-4 text-ink">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-gradient-to-br from-green/10 to-transparent"
@@ -37,7 +37,7 @@ export function PrCard({ pr }: { pr: Pr }) {
           )}
         </div>
         {recent && (
-          <span className="mt-2 inline-block rounded-md bg-orange px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide">
+          <span className="mt-2 inline-block rounded-md bg-gold px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-ink-inverse">
             {tag}
           </span>
         )}
@@ -63,16 +63,14 @@ export function MeasurementCard({
   colorClass: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-surface p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-muted">{label}</p>
-          <div className="mt-1.5 flex items-baseline gap-1">
-            <span className="text-xl font-bold text-ink">{value}</span>
-            <span className="text-xs font-semibold text-muted">{unit}</span>
-          </div>
+    <div className="rounded-3xl bg-surface p-3.5">
+      <p className="truncate text-xs font-medium text-muted">{label}</p>
+      <div className="mt-1.5 flex items-end justify-between gap-2">
+        <div className="flex items-baseline gap-1">
+          <span className="text-xl font-bold text-ink">{value}</span>
+          <span className="text-xs font-semibold text-muted">{unit}</span>
         </div>
-        <div className={`h-9 w-24 shrink-0 ${colorClass}`}>
+        <div className={`h-8 min-w-0 max-w-24 flex-1 ${colorClass}`}>
           <Sparkline values={series} className="h-full w-full" />
         </div>
       </div>
@@ -80,7 +78,7 @@ export function MeasurementCard({
         <p
           className={[
             "mt-2 text-xs font-medium",
-            delta < 0 ? "text-green" : "text-orange",
+            delta < 0 ? "text-green" : "text-gold",
           ].join(" ")}
         >
           {delta < 0 ? "↓" : "↑"} {Math.abs(delta)} {unit} this month

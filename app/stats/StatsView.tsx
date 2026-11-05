@@ -10,8 +10,8 @@ import { RANGE_KEYS, RANGE_LABELS, type RangeKey } from "@/lib/stats";
 import type { GroupLoad, HistorySession, SeriesPoint, StatsData, WeekStats } from "@/lib/stats";
 import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
 
-const GREEN = "#A8E830";
-const ORANGE = "#FF571F";
+const GREEN = "#22C55E";
+const ORANGE = "#FFC95C";
 const TEAL_OLD = "#1F7D63";
 const TEAL_NEW = "#3FAE8E";
 const AMBER = "#E0A52A";
@@ -140,9 +140,9 @@ export default function StatsView({
       {/* Streak */}
       <SectionLabel>Streak</SectionLabel>
       <div className="flex gap-2">
-        <div className="flex-1 rounded-xl bg-orange-soft p-3">
-          <div className="text-xl font-bold text-orange">{stats.currentStreak} 🔥</div>
-          <div className="mt-0.5 text-[10px] text-orange/80">Current streak</div>
+        <div className="flex-1 rounded-xl bg-gold-soft p-3">
+          <div className="text-xl font-bold text-gold">{stats.currentStreak} 🔥</div>
+          <div className="mt-0.5 text-[10px] text-gold/80">Current streak</div>
         </div>
         <div className="flex-1 rounded-xl bg-green-tint p-3">
           <div className="text-xl font-bold text-green">{stats.bestStreak}</div>
@@ -163,7 +163,7 @@ export default function StatsView({
             <select
               value={exercise}
               onChange={(e) => setExercise(e.target.value)}
-              className="mb-3 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-orange"
+              className="mb-3 w-full rounded-lg border border-white/10 bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-gold"
             >
               {stats.strengthExercises.map((name) => (
                 <option key={name} value={name}>
@@ -209,7 +209,7 @@ export default function StatsView({
       {/* Muscle group breakdown */}
       <SectionLabel>Muscle group frequency</SectionLabel>
       {week.neglected.length > 0 && (
-        <div className="mb-2 inline-flex flex-wrap items-center gap-1 rounded-lg bg-orange-soft px-3 py-1.5 text-xs text-orange">
+        <div className="mb-2 inline-flex flex-wrap items-center gap-1 rounded-lg bg-gold-soft px-3 py-1.5 text-xs text-gold">
           ⚠️ Neglected: <strong>{week.neglected.join(" · ")}</strong>
         </div>
       )}
@@ -254,7 +254,7 @@ function LoadStats({ load }: { load?: GroupLoad[] }) {
             <Metric
               value={String(l.hardSets)}
               label="hard sets"
-              tone={l.hardSets > 0 ? "#FF6233" : undefined}
+              tone={l.hardSets > 0 ? "#FFC95C" : undefined}
             />
             <Metric
               value={
@@ -282,7 +282,7 @@ function Metric({
 }) {
   return (
     <div>
-      <p className="text-base font-bold tabular-nums" style={{ color: tone ?? "#F1F3EA" }}>
+      <p className="text-base font-bold tabular-nums" style={{ color: tone ?? "#F2F2F2" }}>
         {value}
       </p>
       <p className="text-[10px] text-muted">{label}</p>
@@ -311,13 +311,13 @@ function Card({
 }) {
   return (
     <div className={`rounded-xl p-3 ${green ? "bg-green-tint" : "bg-beige"}`}>
-      <div className={`text-[22px] font-bold leading-none ${green ? "text-green" : "text-[#E8B04B]"}`}>
+      <div className={`text-[22px] font-bold leading-none ${green ? "text-green" : "text-gold"}`}>
         {value}{" "}
-        <span className={`text-[11px] font-normal ${green ? "text-green" : "text-[#E8B04B]"}`}>
+        <span className={`text-[11px] font-normal ${green ? "text-green" : "text-gold"}`}>
           {unit}
         </span>
       </div>
-      <div className={`mt-1.5 text-[11px] ${green ? "text-green" : "text-[#E8B04B]"}`}>
+      <div className={`mt-1.5 text-[11px] ${green ? "text-green" : "text-gold"}`}>
         {label}
       </div>
     </div>
@@ -390,7 +390,7 @@ function NutritionTrend({
                   className="w-full rounded-t"
                   style={{
                     height: v > 0 ? `${Math.max(6, (v / max) * 100)}%` : "2%",
-                    background: v > 0 ? barColor : "#2A2D24",
+                    background: v > 0 ? barColor : "#262626",
                   }}
                 />
                 <span className="text-[9px] text-muted">{d.label}</span>
@@ -434,7 +434,7 @@ function CardioBars({
             className="w-full rounded-t"
             style={{
               height: v > 0 ? `${Math.max(6, (v / max) * 100)}%` : "2%",
-              background: v > 0 ? (i >= values.length - 2 ? TEAL_NEW : TEAL_OLD) : "#2A2D24",
+              background: v > 0 ? (i >= values.length - 2 ? TEAL_NEW : TEAL_OLD) : "#262626",
             }}
           />
           <span className="text-[9px] text-muted">{labels[i]}</span>
@@ -497,7 +497,7 @@ function LineChart({ points }: { points: SeriesPoint[] }) {
       </svg>
       <div className="mt-1 flex justify-between text-[9px] text-muted">
         <span>{weeksAgo}w ago</span>
-        <span className="font-semibold text-orange">{max} kg</span>
+        <span className="font-semibold text-gold">{max} kg</span>
         <span>{lastIsToday ? "today" : shortDate(points[points.length - 1].date)}</span>
       </div>
     </>
@@ -511,7 +511,7 @@ function MuscleBreakdown({ week }: { week: WeekStats }) {
       {week.muscles.map((m) => {
         // One colour for every group: the bar length already encodes the
         // ranking, so tinting by rank only made it harder to compare.
-        const color = m.count === 0 ? "#33362C" : GREEN;
+        const color = m.count === 0 ? "#2C2C2C" : GREEN;
         return (
           <div key={m.group} className="flex flex-col gap-1">
             <div className="flex items-center justify-between text-[11px]">
@@ -571,7 +571,7 @@ function ExerciseHistory({ sessions }: { sessions: HistorySession[] }) {
                     <span
                       className={[
                         "text-[11px] font-semibold",
-                        up ? "text-green" : down ? "text-orange" : "text-muted",
+                        up ? "text-green" : down ? "text-gold" : "text-muted",
                       ].join(" ")}
                     >
                       {up ? `▲ +${fmtKg(delta)}` : down ? `▼ ${fmtKg(delta)}` : "="}

@@ -5,7 +5,7 @@ export default function CircuitsLoading() {
         <div className="h-9 w-9 animate-pulse rounded-full bg-white/10" />
         <div className="h-5 w-32 animate-pulse rounded bg-white/10" />
       </header>
-      <div className="mb-4 h-12 animate-pulse rounded-2xl bg-orange-soft" />
+      <div className="mb-4 h-12 animate-pulse rounded-2xl bg-gold-soft" />
       <div className="space-y-3">
         {[0, 1, 2].map((i) => (
           <div key={i} className="h-20 animate-pulse rounded-2xl bg-surface" />

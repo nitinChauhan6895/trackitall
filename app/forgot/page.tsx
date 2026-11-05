@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { isValidEmail, normalizeUsername } from "@/lib/auth";
 
 const inputClass =
-  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
+  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-gold";
 
 export default function ForgotPasswordPage() {
   const [value, setValue] = useState("");
@@ -92,7 +92,7 @@ export default function ForgotPasswordPage() {
           >
             {pending ? "Sending…" : "Send reset link"}
           </button>
-          {error && <p className="text-center text-sm text-orange">{error}</p>}
+          {error && <p className="text-center text-sm text-gold">{error}</p>}
         </form>
       )}
 

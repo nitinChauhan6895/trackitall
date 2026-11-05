@@ -89,7 +89,7 @@ export default function CircuitsManager({ circuits }: { circuits: Circuit[] }) {
                   onClick={() => remove(c.id)}
                   disabled={busyId === c.id}
                   aria-label={`Delete ${c.name}`}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:text-orange disabled:opacity-40"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted active:text-gold disabled:opacity-40"
                 >
                   🗑
                 </button>

@@ -23,7 +23,7 @@ function latestValues(entries: Measurement[]) {
 }
 
 const inputClass =
-  "w-full rounded-xl border border-white/10 bg-surface px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-orange";
+  "w-full rounded-xl border border-white/10 bg-surface px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-gold";
 
 // Locale-independent so the server-rendered HTML matches every device
 // (see lib/dateFormat.ts).
@@ -121,7 +121,7 @@ export default function MeasurementsManager({
                       <span className="font-medium text-ink">
                         {fmtDate(m.entry_date)}
                       </span>
-                      <span className="text-sm text-orange">Edit ›</span>
+                      <span className="text-sm text-gold">Edit ›</span>
                     </div>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {MEASUREMENT_FIELDS.map((f) => {
@@ -250,7 +250,7 @@ function MeasurementForm({
         ))}
       </div>
 
-      {error && <p className="text-sm text-orange">{error}</p>}
+      {error && <p className="text-sm text-gold">{error}</p>}
 
       <button
         type="submit"
@@ -274,7 +274,7 @@ function MeasurementForm({
             type="button"
             onClick={remove}
             disabled={busy}
-            className="flex-1 rounded-xl px-4 py-2.5 text-sm text-orange active:bg-orange-soft"
+            className="flex-1 rounded-xl px-4 py-2.5 text-sm text-gold active:bg-gold-soft"
           >
             Delete entry
           </button>

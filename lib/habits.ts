@@ -44,13 +44,27 @@ export type HabitsData = { habits: Habit[]; logs: HabitLog[] };
 
 /** Palette offered when creating a habit (kept in sync with the dark theme). */
 export const HABIT_COLORS = [
-  "#A8E830",
-  "#FF6233",
+  "#22C55E",
+  "#FFC95C",
   "#3FAE8E",
   "#5A6FE0",
   "#C79BE8",
-  "#E0A52A",
+  "#E0555A",
 ];
+
+// Habits store their colour in the database, so ones created before the C2
+// Lagoon palette still carry the old lime/orange; show those as the new
+// green/gold instead.
+const LEGACY_COLORS: Record<string, string> = {
+  "#A8E830": "#22C55E",
+  "#FF6233": "#FFC95C",
+};
+
+/** The colour to draw a habit in, mapping retired palette colours forward. */
+export function habitColor(color: string | null | undefined): string {
+  if (!color) return HABIT_COLORS[0];
+  return LEGACY_COLORS[color.toUpperCase()] ?? color;
+}
 
 /** Reminder weekday labels, Monday-first to match the app's week strips. */
 export const DOW_LABELS = [

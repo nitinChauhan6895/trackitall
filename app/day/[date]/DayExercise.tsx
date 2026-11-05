@@ -97,7 +97,7 @@ export default function DayExercise({
                   {s.label}
                   {s.isHard && (
                     <span
-                      className="rounded bg-orange-soft px-1 text-[9px] font-bold text-orange"
+                      className="rounded bg-gold-soft px-1 text-[9px] font-bold text-gold"
                       title="Hard set"
                     >
                       HARD
@@ -122,7 +122,7 @@ export default function DayExercise({
                 </span>
                 {s.label}
                 {s.isHard && (
-                  <span className="rounded bg-orange-soft px-1 text-[9px] font-bold text-orange">
+                  <span className="rounded bg-gold-soft px-1 text-[9px] font-bold text-gold">
                     HARD
                   </span>
                 )}
@@ -131,7 +131,7 @@ export default function DayExercise({
                 type="button"
                 onClick={() => onDeleteSet(s.id)}
                 aria-label="Delete set"
-                className="px-2 text-muted active:text-orange"
+                className="px-2 text-muted active:text-gold"
               >
                 ✕
               </button>
@@ -177,7 +177,7 @@ export default function DayExercise({
               title="Hard set — taken to or near failure"
               className={[
                 "shrink-0 rounded-lg border px-2 py-2 text-xs font-bold transition active:scale-95",
-                hard ? "border-orange bg-orange-soft text-orange" : "border-white/10 text-muted",
+                hard ? "border-gold bg-gold-soft text-gold" : "border-white/10 text-muted",
               ].join(" ")}
             >
               HARD
@@ -194,7 +194,7 @@ export default function DayExercise({
             <button
               type="button"
               onClick={onDeleteExercise}
-              className="text-sm font-semibold text-orange active:opacity-70"
+              className="text-sm font-semibold text-gold active:opacity-70"
             >
               Delete exercise
             </button>

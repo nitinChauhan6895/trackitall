@@ -145,7 +145,7 @@ export default function DayView({ date }: { date: string }) {
         <DayArrow href={`/day/${prevKey}`} label="Previous day" glyph="‹" side="left" />
         <div className="grid flex-1 grid-cols-4 divide-x divide-white/10 py-3">
           <Stat icon="📋" tone="text-green" value={String(totalSets)} label="Sets" />
-          <Stat icon="🏋️" tone="text-orange" value={String(exercises.length)} label="Exercises" />
+          <Stat icon="🏋️" tone="text-gold" value={String(exercises.length)} label="Exercises" />
           <Stat icon="💪" tone="text-[#C79BE8]" value={String(byGroup.size)} label="Muscles" />
           <Stat icon={<KettlebellIcon className="h-5 w-5" />} tone="text-green" value={fmtVolume(totalVolume)} label="Volume" unit="kg" />
         </div>

@@ -193,7 +193,7 @@ function OnboardingForm({
         </div>
       </div>
 
-      {err && <p className="text-sm text-orange">{err}</p>}
+      {err && <p className="text-sm text-gold">{err}</p>}
 
       <button
         type="button"
@@ -307,10 +307,10 @@ function Generator({
           Goal: <strong className="text-ink">{profile.goal}</strong>
         </p>
         <div className="flex gap-3">
-          <button type="button" onClick={onManage} className="text-xs font-semibold text-orange">
+          <button type="button" onClick={onManage} className="text-xs font-semibold text-gold">
             ★ Favourites
           </button>
-          <button type="button" onClick={onEditPrefs} className="text-xs font-semibold text-orange">
+          <button type="button" onClick={onEditPrefs} className="text-xs font-semibold text-gold">
             Edit preferences
           </button>
         </div>
@@ -346,12 +346,12 @@ function Generator({
         type="button"
         disabled={selected.length === 0 || pending}
         onClick={gen}
-        className="mt-4 w-full rounded-xl bg-orange px-4 py-3 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-40"
+        className="mt-4 w-full rounded-xl bg-gold px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-40"
       >
         {pending ? "Generating…" : "⚙️ Generate workout"}
       </button>
 
-      {err && <p className="mt-3 text-center text-sm text-orange">{err}</p>}
+      {err && <p className="mt-3 text-center text-sm text-gold">{err}</p>}
 
       {result && (
         <div className="mt-6">
@@ -395,7 +395,7 @@ function Generator({
           <button
             type="button"
             onClick={() => setAddOpen(true)}
-            className="mt-3 flex w-full items-center justify-center rounded-2xl border border-dashed border-orange/50 px-4 py-3 text-sm font-semibold text-orange active:bg-orange-soft"
+            className="mt-3 flex w-full items-center justify-center rounded-2xl border border-dashed border-gold/50 px-4 py-3 text-sm font-semibold text-gold active:bg-gold-soft"
           >
             + Add exercise
           </button>
@@ -409,13 +409,13 @@ function Generator({
                 onChange={(e) => setNote(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && refine()}
                 placeholder="e.g. only dumbbells, 30 min, sore shoulder"
-                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus:border-orange"
+                className="min-w-0 flex-1 rounded-xl border border-white/10 bg-surface px-3 py-2 text-sm text-ink outline-none placeholder:text-muted focus:border-gold"
               />
               <button
                 type="button"
                 disabled={refining || !note.trim()}
                 onClick={refine}
-                className="shrink-0 rounded-xl bg-orange px-4 py-2 text-sm font-semibold text-white active:scale-95 disabled:opacity-40"
+                className="shrink-0 rounded-xl bg-gold px-4 py-2 text-sm font-semibold text-ink-inverse active:scale-95 disabled:opacity-40"
               >
                 {refining ? "…" : "Refine"}
               </button>
@@ -480,7 +480,7 @@ function ItemCard({
               </>
             )}
           </p>
-          {item.note && <p className="mt-1 text-[11px] italic text-orange">{item.note}</p>}
+          {item.note && <p className="mt-1 text-[11px] italic text-gold">{item.note}</p>}
         </div>
         <div className="flex shrink-0 gap-1.5">
           {canReplace && (
@@ -488,7 +488,7 @@ function ItemCard({
               ⟳
             </button>
           )}
-          <button type="button" onClick={onRemove} aria-label="Remove" className="rounded-lg border border-orange/30 px-2.5 py-1 text-xs text-orange active:bg-orange-soft">
+          <button type="button" onClick={onRemove} aria-label="Remove" className="rounded-lg border border-gold/30 px-2.5 py-1 text-xs text-gold active:bg-gold-soft">
             ✕
           </button>
         </div>
@@ -630,7 +630,7 @@ function ManageExercises({
                           type="button"
                           onClick={() => togglePref(ex.id)}
                           aria-label="Favourite"
-                          className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${fav ? "bg-orange text-white" : "border border-white/10 text-muted"}`}
+                          className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${fav ? "bg-gold text-ink-inverse" : "border border-white/10 text-muted"}`}
                         >
                           ★
                         </button>
@@ -638,7 +638,7 @@ function ManageExercises({
                           type="button"
                           onClick={() => toggleExcl(ex.id)}
                           aria-label="Exclude"
-                          className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${ban ? "bg-orange-soft" : "border border-white/10 opacity-50"}`}
+                          className={`flex h-7 w-7 items-center justify-center rounded-lg text-sm ${ban ? "bg-gold-soft" : "border border-white/10 opacity-50"}`}
                         >
                           🚫
                         </button>
@@ -670,7 +670,7 @@ function DietTab() {
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-tint text-2xl">🥗</div>
         <h2 className="mt-3 flex items-center gap-2 text-base font-bold text-ink">
           Personalised diet plans{" "}
-          <span className="rounded-full bg-orange-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange">Soon</span>
+          <span className="rounded-full bg-gold-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gold">Soon</span>
         </h2>
         <p className="mt-1 text-sm text-muted">
           Daily calorie &amp; macro targets and meal suggestions tailored to your goals and training load.
@@ -708,6 +708,6 @@ function Choice<T extends string>({
 function chipClass(on: boolean): string {
   return [
     "rounded-full border px-3 py-1.5 text-sm font-medium transition",
-    on ? "border-orange bg-orange text-white" : "border-white/10 bg-surface text-ink active:bg-white/10",
+    on ? "border-gold bg-gold text-ink-inverse" : "border-white/10 bg-surface text-ink active:bg-white/10",
   ].join(" ");
 }

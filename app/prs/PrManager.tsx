@@ -104,7 +104,7 @@ export default function PrManager({ initialPrs }: { initialPrs: Pr[] }) {
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="mb-4 w-full rounded-2xl bg-orange px-4 py-3.5 text-base font-semibold text-white transition active:scale-[0.98]"
+            className="mb-4 w-full rounded-2xl bg-gold px-4 py-3.5 text-base font-semibold text-ink-inverse transition active:scale-[0.98]"
           >
             + Add PR
           </button>
@@ -171,7 +171,7 @@ function PrGroupCard({
               {best.exercise_name}
             </span>
             {showNew && (
-              <span className="shrink-0 rounded-md bg-orange px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+              <span className="shrink-0 rounded-md bg-gold px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-ink-inverse">
                 New PR
               </span>
             )}
@@ -357,7 +357,7 @@ function PrForm({
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none focus:border-orange"
+            className="w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none focus:border-gold"
           />
         </div>
 
@@ -365,7 +365,7 @@ function PrForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Exercise name"
-          className="w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange"
+          className="w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-gold"
         />
 
         <div className="flex gap-2.5">
@@ -374,7 +374,7 @@ function PrForm({
             onChange={(e) => setValue(e.target.value)}
             inputMode={unit === "time" ? "text" : "decimal"}
             placeholder={unit === "time" ? "mm:ss" : "Value"}
-            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange"
+            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-gold"
           />
           {unit === "kg" && (
             <input
@@ -382,13 +382,13 @@ function PrForm({
               onChange={(e) => setReps(e.target.value)}
               inputMode="numeric"
               placeholder="Reps"
-              className="w-20 shrink-0 rounded-xl border border-white/10 bg-surface px-3 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-orange"
+              className="w-20 shrink-0 rounded-xl border border-white/10 bg-surface px-3 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-gold"
             />
           )}
           <select
             value={unit}
             onChange={(e) => setUnit(e.target.value as PrUnitType)}
-            className="shrink-0 rounded-xl border border-white/10 bg-surface px-3 py-3 text-base text-ink outline-none focus:border-orange"
+            className="shrink-0 rounded-xl border border-white/10 bg-surface px-3 py-3 text-base text-ink outline-none focus:border-gold"
           >
             {UNIT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -412,7 +412,7 @@ function PrForm({
                 className={[
                   "rounded-lg px-4 py-2 text-sm font-medium",
                   distanceUnit === u
-                    ? "bg-orange text-white"
+                    ? "bg-gold text-ink-inverse"
                     : "border border-white/10 bg-surface text-ink",
                 ].join(" ")}
               >
@@ -422,12 +422,12 @@ function PrForm({
           </div>
         )}
 
-        {error && <p className="text-sm text-orange">{error}</p>}
+        {error && <p className="text-sm text-gold">{error}</p>}
 
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-xl bg-orange px-4 py-3 text-base font-semibold text-white transition active:scale-[0.98] disabled:opacity-50"
+          className="w-full rounded-xl bg-gold px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
         >
           {busy ? "Saving…" : editing ? "Update entry" : "Save PR"}
         </button>
@@ -446,7 +446,7 @@ function PrForm({
               type="button"
               onClick={remove}
               disabled={busy}
-              className="flex-1 rounded-xl px-4 py-2.5 text-sm text-orange active:bg-orange-soft"
+              className="flex-1 rounded-xl px-4 py-2.5 text-sm text-gold active:bg-gold-soft"
             >
               Delete entry
             </button>

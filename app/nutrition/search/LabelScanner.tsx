@@ -87,7 +87,7 @@ export default function LabelScanner({
             : "📷 Scan label"}
       </button>
       {status === "error" && (
-        <p className="mt-1.5 text-xs text-orange">
+        <p className="mt-1.5 text-xs text-gold">
           Couldn&apos;t read the label — enter the values manually below.
         </p>
       )}

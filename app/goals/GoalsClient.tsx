@@ -346,7 +346,7 @@ function History({
               </span>
               <span
                 className="shrink-0 text-sm font-bold"
-                style={{ color: p.complete ? "#A8E830" : "#8D9483" }}
+                style={{ color: p.complete ? "#22C55E" : "#A6A6A6" }}
               >
                 {p.percent}%
               </span>
@@ -496,7 +496,7 @@ function GoalDetail({
                   className="w-full rounded-t"
                   style={{
                     height: d.value > 0 ? `${Math.max(6, (d.value / max) * 100)}%` : "2%",
-                    background: d.value > 0 ? meta.tone : future ? "#22251C" : "#33362C",
+                    background: d.value > 0 ? meta.tone : future ? "#1C1C1C" : "#2C2C2C",
                   }}
                 />
                 <span className="text-[9px] text-muted">
@@ -532,7 +532,7 @@ function GoalDetail({
                 await deleteGoal(goal.id);
                 onDeleted();
               }}
-              className="flex-1 rounded-2xl bg-orange px-4 py-3 text-sm font-bold text-white active:scale-95"
+              className="flex-1 rounded-2xl bg-gold px-4 py-3 text-sm font-bold text-ink-inverse active:scale-95"
             >
               Delete goal
             </button>
@@ -855,7 +855,7 @@ function GoalForm({
           />
         </div>
 
-        {error && <p className="text-sm text-orange">{error}</p>}
+        {error && <p className="text-sm text-gold">{error}</p>}
 
         <button
           type="button"
@@ -875,7 +875,7 @@ function GoalForm({
 function Ring({
   percent,
   size = 96,
-  tone = "#A8E830",
+  tone = "#22C55E",
 }: {
   percent: number;
   size?: number;
@@ -886,7 +886,7 @@ function Ring({
   return (
     <div className="relative shrink-0" style={{ height: size, width: size }}>
       <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full -rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#2A2D24" strokeWidth="8" />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#262626" strokeWidth="8" />
         <circle
           cx={size / 2}
           cy={size / 2}

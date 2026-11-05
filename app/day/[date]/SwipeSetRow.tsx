@@ -36,7 +36,7 @@ export default function SwipeSetRow({
               type="button"
               onClick={requestDelete}
               aria-label="Delete set"
-              className="text-muted active:text-orange"
+              className="text-muted active:text-gold"
             >
               ✕
             </button>
