@@ -33,15 +33,15 @@ export default function ShareInbox({ shares }: { shares: IncomingShare[] }) {
   }
 
   return (
-    <section className="mt-4">
-      <h2 className="mb-2 text-base font-semibold">Shared with you</h2>
+    <section className="flex flex-col gap-3">
+      <h2 className="px-1 font-display text-xl font-semibold">Shared with you</h2>
       <ul className="space-y-2.5">
         {shares.map((s) => {
           const busy = pending && busyId === s.id;
           return (
             <li
               key={s.id}
-              className="elevation-1 rounded-2xl p-4"
+              className="elevation-1 rounded-3xl p-4"
             >
               <p className="text-sm text-ink">
                 <span className="font-semibold">{s.from_name}</span> shared{" "}

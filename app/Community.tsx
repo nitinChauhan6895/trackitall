@@ -3,7 +3,6 @@
 
 type Section = {
   key: string;
-  icon: string;
   title: string;
   blurb: string;
 };
@@ -11,19 +10,16 @@ type Section = {
 const SECTIONS: Section[] = [
   {
     key: "leaderboard",
-    icon: "📊",
     title: "Leaderboard",
     blurb: "See how your training volume stacks up against friends and family.",
   },
   {
     key: "streaks",
-    icon: "🔥",
     title: "Streak award board",
     blurb: "Celebrate the longest active workout streaks in your circle.",
   },
   {
     key: "pr-hall",
-    icon: "🏆",
     title: "PR hall of fame",
     blurb: "The biggest personal records across everyone you follow.",
   },
@@ -31,23 +27,22 @@ const SECTIONS: Section[] = [
 
 export default function Community() {
   return (
-    <div className="mt-4 space-y-4">
+    <section className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between px-1">
+        <h2 className="font-display text-xl font-semibold">Coming soon</h2>
+        <span className="text-sm text-muted">{SECTIONS.length}</span>
+      </div>
       {SECTIONS.map((s) => (
-        <section
-          key={s.key}
-          className="rounded-2xl elevation-1 p-5"
-        >
-          <div className="flex items-center justify-between">
-            <h2 className="flex items-center gap-2 font-semibold text-ink">
-              <span aria-hidden>{s.icon}</span> {s.title}
-            </h2>
-            <span className="rounded-full bg-beige px-2.5 py-1 text-xs font-medium text-muted">
-              Coming soon
+        <div key={s.key} className="elevation-1 flex flex-col gap-2 rounded-3xl p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-display text-[22px] font-semibold">{s.title}</h3>
+            <span className="elevation-2 shrink-0 rounded-full px-[9px] py-[5px] text-[11px] font-semibold tracking-[0.06em] text-muted">
+              SOON
             </span>
           </div>
-          <p className="mt-2 text-sm text-muted">{s.blurb}</p>
-        </section>
+          <p className="text-sm leading-[1.45] text-muted">{s.blurb}</p>
+        </div>
       ))}
-    </div>
+    </section>
   );
 }
