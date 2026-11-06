@@ -26,6 +26,7 @@ import {
 } from "@/lib/auth/validation";
 import { safeNext } from "@/lib/auth/next";
 import { recoveryState } from "@/lib/auth/session";
+import { settleEmailChange } from "@/lib/auth/emailChange";
 
 /** The public origin used in email links: env override, else this request's host. */
 function siteUrl(): string {
@@ -285,7 +286,7 @@ export async function changeEmailAction(input: { email: string }): Promise<AuthR
 
   const { error } = await supabase.auth.updateUser(
     { email },
-    { emailRedirectTo: confirmUrl("/profile?toast=email") },
+    { emailRedirectTo: confirmUrl("/profile") },
   );
   if (error) {
     return authFailure(error, {
@@ -296,6 +297,26 @@ export async function changeEmailAction(input: { email: string }): Promise<AuthR
   return { ok: true };
 }
 
+/**
+ * Confirm an email change with a 6-digit code typed in the app. `email` is the
+ * address the code was sent to: the new one, or (with "Secure email change")
+ * the current one for the second confirmation.
+ */
+export async function verifyEmailChangeAction(input: { email: string; code: string }): Promise<AuthResult> {
+  const { supabase, user } = await requireVerifiedUser();
+  if (!user) return fail("session_expired");
+  const email = normalizeEmail(input.email);
+  const token = cleanCode(input.code);
+  if (token.length !== 6) return fail("otp_expired", "Enter the 6-digit code from the email.");
+
+  const { error } = await supabase.auth.verifyOtp({ email, token, type: "email_change" });
+  if (error) return authFailure(error);
+
+  const state = await settleEmailChange(supabase);
+  if (state === "none") return fail("session_expired");
+  return { ok: true, status: state };
+}
+
 export async function resendEmailChangeAction(): Promise<AuthResult> {
   const { supabase, user } = await requireVerifiedUser();
   const pending = (user as { new_email?: string } | null)?.new_email;
@@ -303,7 +324,7 @@ export async function resendEmailChangeAction(): Promise<AuthResult> {
   const { error } = await supabase.auth.resend({
     type: "email_change",
     email: pending,
-    options: { emailRedirectTo: confirmUrl("/profile?toast=email") },
+    options: { emailRedirectTo: confirmUrl("/profile") },
   });
   if (error) return authFailure(error);
   return { ok: true };

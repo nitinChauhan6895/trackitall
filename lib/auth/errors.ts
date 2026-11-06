@@ -6,7 +6,12 @@ export const RATE_LIMIT_MESSAGE = "Too many attempts. Try again in a few minutes
 export const GENERIC_MESSAGE = "Something went wrong. Please try again.";
 
 export type AuthFailure = { ok: false; code: string; message: string; email?: string };
-export type AuthOk = { ok: true; redirectTo?: string };
+export type AuthOk = {
+  ok: true;
+  redirectTo?: string;
+  /** Email change: "done", or still waiting on the code sent to the current address. */
+  status?: "done" | "pending_current";
+};
 export type AuthResult = AuthOk | AuthFailure;
 
 const MESSAGES: Record<string, string> = {

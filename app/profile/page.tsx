@@ -10,7 +10,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: { vi
       profile={profile}
       summary={summary}
       account={account}
-      initialView={searchParams.view === "password" ? "password" : "menu"}
+      initialView={searchParams.view === "password" ? "password" : searchParams.view === "email" ? "email" : "menu"}
     />
   );
 }

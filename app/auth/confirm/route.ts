@@ -3,6 +3,7 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { safeNext } from "@/lib/auth/next";
 import { authErrorCode, parseFlow } from "@/lib/auth/errors";
+import { settleEmailChange } from "@/lib/auth/emailChange";
 
 // Every auth email link lands here:
 //   /auth/confirm?token_hash=…&type=email|signup|recovery|email_change|magiclink&next=/…
@@ -45,6 +46,12 @@ export async function GET(request: NextRequest) {
   if (error) return fail(authErrorCode(error) === "otp_expired" ? "expired" : "invalid");
 
   const dest = new URL(next, origin);
+  if (type === "email_change") {
+    // Secure email change needs both addresses; say if one is still to go.
+    const state = await settleEmailChange(supabase);
+    dest.searchParams.set("toast", state === "pending_current" ? "email-pending" : "email");
+    return NextResponse.redirect(dest);
+  }
   // A verified sign-up lands on Home with a welcome toast.
   if ((type === "email" || type === "signup") && dest.pathname === "/") dest.searchParams.set("toast", "verified");
   return NextResponse.redirect(dest);

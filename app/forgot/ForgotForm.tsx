@@ -69,9 +69,14 @@ export default function ForgotForm({ initialEmail }: { initialEmail: string }) {
   }
 
   const footer = (
-    <Link href="/login" className="inline-flex min-h-11 items-center text-[15px] font-semibold text-green active:opacity-70">
-      Back to log in
-    </Link>
+    <>
+      <Link href="/login" className="inline-flex min-h-11 items-center text-[15px] font-semibold text-green active:opacity-70">
+        Back to log in
+      </Link>
+      <p className="max-w-[300px] text-center text-[13px] leading-[1.45] text-subtle">
+        Signed up with only a username? Log in, then add your email in Profile so you can reset your password.
+      </p>
+    </>
   );
 
   if (sentTo) {

@@ -8,7 +8,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 const MESSAGES: Record<string, string> = {
   verified: "Email verified. Welcome to TrackItAll.",
   password: "Password updated.",
-  email: "Email address confirmed.",
+  email: "Email address updated.",
+  "email-pending": "Confirmed. Now confirm the email sent to your other address.",
 };
 
 export default function FlashToast() {

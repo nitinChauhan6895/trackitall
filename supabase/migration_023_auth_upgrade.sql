@@ -7,7 +7,12 @@
 --    two emails shared a local part, e.g. john@gmail.com and john@yahoo.com).
 -- 2. profiles.email follows auth.users.email after a confirmed email change.
 -- 3. cancel_email_change(): lets a signed-in user withdraw a pending change.
--- 4. email_for_username is no longer callable from the browser. It returned
+-- 4. complete_placeholder_email_change(): accounts from the username-only era
+--    have an undeliverable @trackitall.local address, so Supabase's "Secure
+--    email change" (confirm at BOTH addresses) could never finish for them.
+--    Once the NEW address is proven by its code or link, this finishes the
+--    change. Real addresses still need both confirmations.
+-- 5. email_for_username is no longer callable from the browser. It returned
 --    the email for ANY username to anyone; the login server action now does
 --    this lookup with the service-role key and never sends the email out.
 
@@ -113,7 +118,61 @@ revoke all on function public.cancel_email_change() from public, anon;
 grant execute on function public.cancel_email_change() to authenticated;
 
 -- ---------------------------------------------------------------------
--- 4. Lock down the pre-auth username helpers
+-- 4. Finish an email change away from an undeliverable placeholder address
+-- ---------------------------------------------------------------------
+create or replace function public.complete_placeholder_email_change()
+returns boolean
+language plpgsql
+security definer
+set search_path = auth, public
+as $$
+declare
+  uid uuid := auth.uid();
+  new_addr text;
+begin
+  if uid is null then
+    raise exception 'not signed in';
+  end if;
+
+  -- Only the caller's own account, only from a placeholder address, and only
+  -- once one side of the change has been confirmed. The placeholder inbox
+  -- can't receive mail, so that side is the new address.
+  select email_change into new_addr
+    from auth.users
+   where id = uid
+     and lower(email) like '%@trackitall.local'
+     and coalesce(email_change, '') <> ''
+     and email_change_confirm_status = 1;
+
+  if new_addr is null then
+    return false;
+  end if;
+
+  update auth.users
+     set email = new_addr,
+         email_confirmed_at = coalesce(email_confirmed_at, now()),
+         email_change = '',
+         email_change_token_new = '',
+         email_change_token_current = '',
+         email_change_confirm_status = 0,
+         email_change_sent_at = null,
+         updated_at = now()
+   where id = uid;
+
+  update auth.identities
+     set identity_data = jsonb_set(coalesce(identity_data, '{}'::jsonb), '{email}', to_jsonb(new_addr)),
+         updated_at = now()
+   where user_id = uid and provider = 'email';
+
+  return true;
+end;
+$$;
+
+revoke all on function public.complete_placeholder_email_change() from public, anon;
+grant execute on function public.complete_placeholder_email_change() to authenticated;
+
+-- ---------------------------------------------------------------------
+-- 5. Lock down the pre-auth username helpers
 -- ---------------------------------------------------------------------
 revoke execute on function public.email_for_username(text) from public, anon, authenticated;
 grant execute on function public.email_for_username(text) to service_role;

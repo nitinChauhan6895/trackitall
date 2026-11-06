@@ -34,3 +34,14 @@ export function isStrongPassword(p: string): boolean {
 export function cleanCode(raw: string): string {
   return raw.replace(/\D/g, "").slice(0, 6);
 }
+
+/**
+ * Accounts from the username-only era were given a placeholder address on
+ * this domain. Nothing can be delivered there, so those accounts can't
+ * receive a reset email until a real address is added.
+ */
+export const PLACEHOLDER_EMAIL_DOMAIN = "trackitall.local";
+
+export function isPlaceholderEmail(email: string | null | undefined): boolean {
+  return !email || email.toLowerCase().endsWith(`@${PLACEHOLDER_EMAIL_DOMAIN}`);
+}

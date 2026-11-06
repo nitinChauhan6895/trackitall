@@ -75,3 +75,20 @@ app, every sign-in fails.
 | `NEXT_PUBLIC_SITE_URL` | Vercel | Optional | Origin used in email links, e.g. `https://www.vesmo.in`. Defaults to the request host. |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Vercel | Optional | Turns on the Turnstile check on auth forms. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Vercel | Existing; needed for username login after migration 023 | Server-only; never `NEXT_PUBLIC_`. |
+
+## Accounts without a real email
+
+Accounts created in the username-only days have a placeholder address
+(`…@trackitall.local`) that can't receive mail, so they can't reset a
+forgotten password. Profile shows "Email: Not added", with **Add email**.
+
+Adding one sends a 6-digit code and a link to the new address. Once that's
+confirmed, `complete_placeholder_email_change()` from migration 023 finishes
+the change. Normally "Secure email change" would also need a confirmation
+from the old address, which can never arrive. Real addresses still confirm
+at both ends.
+
+Supabase also tries to email the placeholder address during the change. With
+custom SMTP that message just bounces. If your provider rejects the send
+outright, tell me and I'll route these accounts through the service-role key
+instead.
