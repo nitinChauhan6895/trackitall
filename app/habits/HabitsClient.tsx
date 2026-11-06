@@ -15,7 +15,6 @@ import { formatShortDate } from "@/lib/dateFormat";
 import {
   CADENCES,
   DOW_LABELS,
-  HABIT_COLORS,
   habitColor,
   HABIT_CATEGORIES,
   HABIT_ICONS,
@@ -26,14 +25,13 @@ import {
   countOn,
   formatDuration,
   nextCount,
-  progressLabel,
+  progressParts,
   progressRatio,
   stepSize,
   habitStreak,
   isComplete,
   isDueOn,
   weekDays,
-  weekOverview,
   weekProgress,
   type Cadence,
   type Habit,
@@ -42,9 +40,6 @@ import {
 } from "@/lib/habits";
 
 const DOW = ["M", "T", "W", "T", "F", "S", "S"];
-const DOW_2 = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
-const INPUT =
-  "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-green";
 
 type View =
   | { name: "list" }
@@ -124,8 +119,24 @@ export default function HabitsClient({
     }
   }
 
+  if (view.name === "edit") {
+    return (
+      // A full-screen layer over the tab bar; the form has its own sticky action.
+      <main className="fixed inset-0 z-40 mx-auto flex w-full max-w-md flex-col overflow-y-auto bg-page px-4 pb-36 safe-top">
+        <EditView
+          habit={view.habitId ? habits.find((h) => h.id === view.habitId) : undefined}
+          onDone={() => {
+            setView({ name: "list" });
+            refresh();
+          }}
+          onCancel={() => setView({ name: "list" })}
+        />
+      </main>
+    );
+  }
+
   return (
-    <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
+    <main className={`flex flex-1 flex-col px-4 pb-36 safe-top ${view.name === "list" ? "gap-5" : ""}`}>
       {view.name === "list" && (
         <TodayView
           habits={habits}
@@ -174,20 +185,23 @@ export default function HabitsClient({
         />
       )}
 
-      {view.name === "edit" && (
-        <EditView
-          habit={view.habitId ? habits.find((h) => h.id === view.habitId) : undefined}
-          onDone={() => {
-            setView({ name: "list" });
-            refresh();
-          }}
-          onCancel={() => setView({ name: "list" })}
-        />
-      )}
     </main>
   );
 }
 // ---------------- today list ----------------
+
+const WEEKDAY_LONG = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const MONTH_LONG = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/** "Friday, 6 November" — locale-free so SSR and client agree. */
+function longDate(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  const dow = (new Date(y, m - 1, d).getDay() + 6) % 7;
+  return `${WEEKDAY_LONG[dow]}, ${d} ${MONTH_LONG[m - 1]}`;
+}
 
 // The list is date-aware: the week strip picks the day everything below acts
 // on, which folds the old separate "daily" screen into one screen and makes
@@ -218,193 +232,187 @@ function TodayView({
     ...Array.from(new Set(habits.map((h) => h.category).filter(Boolean) as string[])),
   ];
   const shown = habits.filter((h) => cat === "All" || h.category === cat);
-  const dueToday = shown.filter((h) => isDueOn(h, date));
+  const due = shown.filter((h) => isDueOn(h, date));
+  const doneCount = due.filter((h) => isComplete(h, logs, date)).length;
+  const allDone = due.length > 0 && doneCount === due.length;
   const days = weekDays(date);
   const isPast = date !== today;
-  const dayLabel = date === today ? "today" : formatShortDate(date);
 
   return (
     <>
-      <header className="flex items-center justify-between gap-3 pb-2 pt-5">
-        <button
-          type="button"
-          onClick={() => onDate(today)}
-          className={[
-            "rounded-full px-3 py-1.5 text-xs font-bold transition",
-            isPast ? "bg-gold text-ink-inverse" : "bg-green/15 text-green",
-          ].join(" ")}
-        >
-          {isPast ? "Back to today" : "Today"}
-        </button>
-        <h1 className="text-lg font-bold tracking-tight">
-          {isPast ? formatShortDate(date) : "Today"}
-        </h1>
+      <header className="flex items-center justify-between gap-3 px-1 pt-5">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="font-display text-[30px] font-bold leading-tight tracking-[-0.02em]">Habits</h1>
+          <p className="text-sm text-muted">
+            {longDate(date)}
+            {isPast && (
+              <>
+                {" · "}
+                <button type="button" onClick={() => onDate(today)} className="font-semibold text-green active:opacity-70">
+                  Back to today
+                </button>
+              </>
+            )}
+          </p>
+        </div>
         <button
           type="button"
           onClick={onNew}
-          aria-label="New habit"
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-green text-2xl font-light text-ink-inverse active:scale-95"
+          className="elevation-3 h-11 shrink-0 rounded-full bg-white/[0.08] px-[18px] text-sm font-semibold text-green active:bg-white/15"
         >
-          +
+          New habit
         </button>
       </header>
-
-      {/* Week strip — each day shows how much of that day was completed. */}
-      <div className="mt-2 flex justify-between">
-        {days.map((d, i) => {
-          const sel = d === date;
-          const future = d > today;
-          const due = habits.filter((h) => h.cadence === "daily");
-          const done = due.filter((h) => isComplete(h, logs, d)).length;
-          const pct = due.length ? done / due.length : 0;
-          return (
-            <button
-              key={d}
-              type="button"
-              disabled={future}
-              onClick={() => onDate(d)}
-              aria-label={`Show ${d}`}
-              aria-pressed={sel}
-              className="flex flex-1 flex-col items-center gap-1.5 disabled:opacity-30"
-            >
-              <span className="text-[11px] text-muted">{DOW_2[i]}</span>
-              <span className="relative flex h-9 w-9 items-center justify-center">
-                <svg viewBox="0 0 36 36" className="absolute inset-0 h-full w-full -rotate-90">
-                  <circle cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
-                  {!future && pct > 0 && (
-                    <circle
-                      cx="18" cy="18" r="16" fill="none" stroke="#22C55E" strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeDasharray={2 * Math.PI * 16}
-                      strokeDashoffset={2 * Math.PI * 16 * (1 - pct)}
-                    />
-                  )}
-                </svg>
-                <span
-                  className={[
-                    "relative text-sm",
-                    sel ? "font-bold text-ink" : "text-muted",
-                  ].join(" ")}
-                >
-                  {Number(d.slice(8, 10))}
-                </span>
-                {sel && (
-                  <span
-                    aria-hidden
-                    className="absolute -inset-1 rounded-full border-2 border-gold"
-                  />
-                )}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {categories.length > 1 && (
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
-          {categories.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setCat(c)}
-              className={[
-                "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition",
-                cat === c ? "bg-green text-ink-inverse" : "bg-white/[0.06] text-muted",
-              ].join(" ")}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-      )}
 
       {habits.length === 0 ? (
         <EmptyState onNew={onNew} />
       ) : (
         <>
+          {/* Hero: the selected day's due habits, then the week. */}
+          <section className="elevation-1 flex flex-col gap-[18px] rounded-[28px] px-5 pb-5 pt-[22px]">
+            <div className="flex items-end justify-between gap-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold tracking-[0.08em] text-muted">
+                  {isPast ? `DUE ${formatShortDate(date).toUpperCase()}` : "DUE TODAY"}
+                </span>
+                <span className="font-display text-[56px] font-bold leading-[1.05] tracking-[-0.03em]">
+                  {doneCount}
+                  <span className="text-2xl text-subtle"> / {due.length}</span>
+                </span>
+                <span className="text-[15px] text-[#D4D4D4]">
+                  {due.length === 0
+                    ? "Nothing scheduled"
+                    : allDone
+                      ? "done — nice work"
+                      : `done · ${due.length - doneCount} to go`}
+                </span>
+              </div>
+              {allDone && (
+                <span className="rounded-lg bg-green px-[9px] py-[5px] text-xs font-bold tracking-[0.06em] text-ink-inverse">
+                  ALL DONE
+                </span>
+              )}
+            </div>
+            <div className="h-2 rounded-full bg-[#2C2C2C]">
+              {doneCount > 0 && (
+                <div className="h-2 rounded-full bg-green" style={{ width: `${(doneCount / Math.max(1, due.length)) * 100}%` }} />
+              )}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {days.map((d, i) => {
+                const sel = d === date;
+                const future = d > today;
+                const dueThatDay = habits.filter((h) => isDueOn(h, d));
+                const complete = dueThatDay.length > 0 && dueThatDay.every((h) => isComplete(h, logs, d));
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    disabled={future}
+                    onClick={() => onDate(d)}
+                    aria-label={`Show ${longDate(d)}`}
+                    aria-pressed={sel}
+                    className="flex flex-col items-center gap-1.5"
+                  >
+                    <span className={`text-[11px] ${sel ? "font-semibold text-green" : "text-subtle"}`}>{DOW[i]}</span>
+                    <span
+                      className={[
+                        "box-border flex h-9 w-9 items-center justify-center rounded-full text-sm",
+                        complete
+                          ? "bg-green font-semibold text-ink-inverse"
+                          : future
+                            ? "border border-dashed border-[#3A3A3A] text-subtle"
+                            : sel
+                              ? "font-semibold text-ink"
+                              : "bg-surface-2 text-muted",
+                        sel ? (complete ? "ring-2 ring-green ring-offset-2 ring-offset-surface" : "border-2 border-green") : "",
+                      ].join(" ")}
+                    >
+                      {Number(d.slice(8, 10))}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          {categories.length > 1 && (
+            <div role="tablist" aria-label="Category" className="flex gap-2 overflow-x-auto pb-1">
+              {categories.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  role="tab"
+                  aria-selected={cat === c}
+                  onClick={() => setCat(c)}
+                  className={[
+                    "h-10 shrink-0 rounded-full px-[18px] text-sm transition",
+                    cat === c ? "bg-ink font-semibold text-ink-inverse" : "elevation-1 font-medium text-[#D4D4D4]",
+                  ].join(" ")}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Due on the selected day: every daily habit, plus weekly habits
               whose chosen weekday is this one. */}
-          <HabitSection
-            title={`Due ${dayLabel}`}
-            count={dueToday.length}
-            habits={dueToday}
-            logs={logs}
-            date={date}
-            onOpen={onOpen}
-            onToggle={onToggle}
-            empty="Nothing scheduled for this day."
-          />
+          <section className="flex flex-col gap-3">
+            <SectionHeader title={isPast ? `Due ${formatShortDate(date)}` : "Due today"} count={due.length} />
+            {due.length === 0 ? (
+              <p className="rounded-3xl border border-dashed border-white/15 px-4 py-6 text-center text-sm text-muted">
+                Nothing scheduled for this day.
+              </p>
+            ) : (
+              <div className="elevation-1 flex flex-col rounded-3xl">
+                {due.map((h) => (
+                  <HabitRow key={h.id} habit={h} logs={logs} date={date} onOpen={() => onOpen(h.id)} onToggle={() => onToggle(h, date)} />
+                ))}
+              </div>
+            )}
+          </section>
 
           {/* Everything, so weekly habits stay reachable on their off-days. */}
-          <HabitSection
-            title="All habits"
-            count={shown.length}
-            habits={shown}
-            logs={logs}
-            date={date}
-            onOpen={onOpen}
-            onToggle={onToggle}
-          />
+          <section className="flex flex-col gap-3">
+            <SectionHeader title="All habits" count={shown.length} />
+            <div className="elevation-1 flex flex-col rounded-3xl">
+              {shown.map((h) => (
+                <button
+                  key={h.id}
+                  type="button"
+                  onClick={() => onOpen(h.id)}
+                  className="flex min-h-14 items-center justify-between gap-3 border-b border-surface-2 px-[18px] text-left last:border-0 active:bg-white/[0.04]"
+                >
+                  <span className="truncate text-base font-semibold">{h.name}</span>
+                  <span className="shrink-0 text-[13px] text-muted">{progressText(h, logs, date)}</span>
+                </button>
+              ))}
+            </div>
+          </section>
         </>
       )}
     </>
   );
 }
 
-function HabitSection({
-  title,
-  count,
-  habits,
-  logs,
-  date,
-  onOpen,
-  onToggle,
-  empty,
-}: {
-  title: string;
-  count: number;
-  habits: Habit[];
-  logs: HabitsData["logs"];
-  date: string;
-  onOpen: (id: string) => void;
-  onToggle: (h: Habit, date: string) => void;
-  empty?: string;
-}) {
+function SectionHeader({ title, count }: { title: string; count: number }) {
   return (
-    <section className="mt-5">
-      <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-muted">
-        {title}
-        <span className="rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[11px] tabular-nums">
-          {count}
-        </span>
-      </h2>
-      {habits.length === 0 ? (
-        empty ? (
-          <p className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-muted">
-            {empty}
-          </p>
-        ) : null
-      ) : (
-        <ul className="space-y-2.5">
-          {habits.map((h) => (
-            <li key={h.id}>
-              <HabitCard
-                habit={h}
-                logs={logs}
-                date={date}
-                onOpen={() => onOpen(h.id)}
-                onToggle={() => onToggle(h, date)}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <div className="flex items-baseline justify-between px-1">
+      <h2 className="font-display text-xl font-semibold">{title}</h2>
+      <span className="text-sm text-muted">{count}</span>
+    </div>
   );
 }
 
-/** A row whose background fills left-to-right with the day's progress. */
-function HabitCard({
+// "10 / 10 g", "4 / 10 min"
+function progressText(habit: Habit, logs: HabitsData["logs"], date: string): string {
+  const { current, target, unit } = progressParts(habit, logs, date);
+  return `${current} / ${target}${unit ? ` ${unit}` : ""}`;
+}
+
+/** A due habit: name, progress and bar; the pill completes or undoes the day. */
+function HabitRow({
   habit,
   logs,
   date,
@@ -417,78 +425,49 @@ function HabitCard({
   onOpen: () => void;
   onToggle: () => void;
 }) {
-  const tone = habitColor(habit.color);
   const ratio = progressRatio(habit, logs, date);
   const done = isComplete(habit, logs, date);
+  const { current, target, unit } = progressParts(habit, logs, date);
 
   return (
-    <div className="elevation-1 relative overflow-hidden rounded-2xl">
-      {/* Progress fill behind the content. */}
-      <div
-        aria-hidden
-        className="absolute inset-y-0 left-0 transition-[width] duration-300"
-        style={{ width: `${ratio * 100}%`, backgroundColor: `${tone}${done ? "" : "40"}` }}
-      />
-      <div className="relative flex items-center gap-3 p-3">
-        <button
-          type="button"
-          onClick={onOpen}
-          className="flex min-w-0 flex-1 items-center gap-3 text-left"
-        >
-          <span
-            aria-hidden
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-page/40 text-xl"
-          >
-            {habit.icon ?? "✅"}
+    <div className="flex items-center gap-3.5 border-b border-surface-2 px-[18px] py-4 last:border-0">
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 flex-col gap-2 text-left">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-base font-semibold">{habit.name}</span>
+          <span className="shrink-0 text-[13px] text-muted">
+            <span className={`font-semibold ${current > 0 ? "text-green" : "text-ink"}`}>{current}</span> / {target}
+            {unit ? ` ${unit}` : ""}
           </span>
-          <span className="min-w-0">
-            <span
-              className="block truncate font-semibold"
-              style={{ color: done ? "#111111" : undefined }}
-            >
-              {habit.name}
-            </span>
-            <span
-              className="mt-1 inline-block rounded-md bg-page/50 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-ink"
-            >
-              {progressLabel(habit, logs, date)}
-            </span>
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={done ? `Undo ${habit.name}` : `Complete ${habit.name}`}
-          aria-pressed={done}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm transition active:scale-90"
-          style={{
-            backgroundColor: done ? "#111111" : "rgba(255,255,255,0.07)",
-            color: done ? tone : "rgba(255,255,255,0.35)",
-          }}
-        >
-          ✓
-        </button>
-      </div>
+        </span>
+        <span className="block h-1.5 rounded-full bg-[#2C2C2C]">
+          {ratio > 0 && (
+            <span className="block h-1.5 rounded-full bg-green transition-[width] duration-300" style={{ width: `${ratio * 100}%` }} />
+          )}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={done ? `Undo ${habit.name}` : `Complete ${habit.name}`}
+        aria-pressed={done}
+        className={[
+          "h-9 shrink-0 rounded-full px-3.5 text-[13px] font-semibold transition active:scale-95",
+          done ? "bg-green text-ink-inverse" : "elevation-2 text-green",
+        ].join(" ")}
+      >
+        Done
+      </button>
     </div>
   );
 }
 
 function EmptyState({ onNew }: { onNew: () => void }) {
   return (
-    <div className="mt-10 rounded-2xl border border-dashed border-white/15 px-5 py-10 text-center">
-      <p className="text-3xl" aria-hidden>
-        🌿
-      </p>
-      <p className="mt-3 font-semibold text-ink">No habits yet</p>
-      <p className="mt-1 text-sm text-muted">
-        Track the small things — creatine, water, stretching — and build streaks.
-      </p>
-      <button
-        type="button"
-        onClick={onNew}
-        className="mt-5 rounded-2xl bg-green px-5 py-3 text-sm font-bold text-ink-inverse active:scale-95"
-      >
-        + Add your first habit
+    <div className="flex flex-col items-center gap-2 rounded-[28px] border border-dashed border-white/15 px-5 py-10 text-center">
+      <p className="font-display text-lg font-semibold text-ink">No habits yet</p>
+      <p className="text-sm text-muted">Track the small things — creatine, water, stretching — and build streaks.</p>
+      <button type="button" onClick={onNew} className="mt-3 h-11 rounded-full bg-green px-5 text-sm font-semibold text-ink-inverse active:scale-95">
+        Add your first habit
       </button>
     </div>
   );
@@ -973,6 +952,57 @@ function DetailView({
 
 // ---------------- create / edit ----------------
 
+const FIELD =
+  "elevation-2 h-[52px] w-full rounded-2xl px-4 text-base text-ink outline-none placeholder:text-subtle focus:border-green/60";
+const LABEL = "px-0.5 text-xs font-semibold tracking-[0.08em] text-muted";
+
+function Step({ n, label, children }: { n: string; label: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <span className="flex items-baseline gap-2.5 px-1">
+        <span className="font-display text-sm font-semibold text-green">{n}</span>
+        <span className="text-xs font-semibold tracking-[0.08em] text-muted">{label}</span>
+      </span>
+      {children}
+    </section>
+  );
+}
+
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className={LABEL}>{label}</span>
+      <div role="radiogroup" aria-label={label} className="elevation-2 grid grid-cols-2 gap-1 rounded-2xl p-1">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={value === o.value}
+            onClick={() => onChange(o.value)}
+            className={[
+              "h-11 rounded-xl text-sm transition",
+              value === o.value ? "bg-[#3A3A3A] font-semibold text-ink" : "font-medium text-muted",
+            ].join(" ")}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function EditView({
   habit,
   onDone,
@@ -984,8 +1014,10 @@ function EditView({
 }) {
   const [name, setName] = useState(habit?.name ?? "");
   const [description, setDescription] = useState(habit?.description ?? "");
-  const [icon, setIcon] = useState(habit?.icon ?? HABIT_ICONS[0]);
-  const [color, setColor] = useState(habitColor(habit?.color));
+  // Icon and colour aren't edited in the redesigned form; existing habits
+  // keep theirs and new ones get the defaults.
+  const icon = habit?.icon ?? HABIT_ICONS[0];
+  const color = habitColor(habit?.color);
   const [cadence, setCadence] = useState<Cadence>(habit?.cadence ?? "daily");
   const [kind, setKind] = useState<HabitKind>(habit?.kind ?? "count");
   const [category, setCategory] = useState(habit?.category ?? "");
@@ -1032,175 +1064,124 @@ function EditView({
     }
   }
 
+  const targetLabel = kind === "timer" ? "MINUTES / DAY" : cadence === "daily" ? "TARGET / DAY" : "TIMES / WEEK";
+  const showUnit = cadence === "daily" && kind === "count";
+
   return (
-    <>
-      <header className="flex items-center gap-3 py-4">
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center gap-3 pt-4">
         <button
           type="button"
           onClick={onCancel}
           aria-label="Back"
-          className="elevation-3 flex h-9 w-9 items-center justify-center rounded-full bg-surface text-xl active:bg-white/10"
+          className="elevation-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-ink active:bg-white/15"
         >
-          ←
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
         </button>
-        <h1 className="text-xl font-bold">{habit ? "Edit habit" : "New habit"}</h1>
-      </header>
+        <span className="flex flex-col gap-px">
+          <span className="text-[15px] font-semibold">Habits</span>
+          <span className="text-[13px] text-muted">{habit ? "Edit habit" : "New habit"}</span>
+        </span>
+      </div>
 
-      <div className="space-y-4">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Habit name (e.g. Take Creatine)"
-          className={INPUT}
-        />
-        <input
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Short description (optional)"
-          className={INPUT}
-        />
+      <h1 className="px-1 font-display text-[34px] font-bold leading-[1.05] tracking-[-0.03em]">
+        {habit ? "Edit your" : "Build a"}
+        <br />
+        <span className="text-green">{habit ? "habit" : "new habit"}</span>
+      </h1>
 
-        <div>
-          <p className="mb-2 text-sm font-medium text-muted">Icon</p>
-          <div className="flex flex-wrap gap-2">
-            {HABIT_ICONS.map((ic) => (
-              <button
-                key={ic}
-                type="button"
-                onClick={() => setIcon(ic)}
-                aria-label={`Icon ${ic}`}
-                aria-pressed={icon === ic}
-                className={[
-                  "flex h-11 w-11 items-center justify-center rounded-xl border text-xl",
-                  icon === ic ? "border-green bg-green-tint" : "border-white/10 bg-surface",
-                ].join(" ")}
-              >
-                {ic}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-2 text-sm font-medium text-muted">Colour</p>
-          <div className="flex gap-2">
-            {HABIT_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setColor(c)}
-                aria-label={`Colour ${c}`}
-                aria-pressed={color === c}
-                className="flex h-9 w-9 items-center justify-center rounded-full text-sm"
-                style={{
-                  backgroundColor: c,
-                  outline: color === c ? "2px solid #F2F2F2" : "none",
-                  outlineOffset: "2px",
-                  color: "#111111",
-                }}
-              >
-                {color === c ? "✓" : ""}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-2 text-sm font-medium text-muted">Track by</p>
-          <div className="flex rounded-xl bg-white/[0.06] p-1">
-            {KINDS.map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setKind(k)}
-                className={[
-                  "flex-1 rounded-lg py-2 text-sm font-semibold transition",
-                  kind === k ? "bg-green text-ink-inverse" : "text-muted",
-                ].join(" ")}
-              >
-                {k === "count" ? "Counter" : "Timer"}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-2 text-sm font-medium text-muted">Category</p>
-          <div className="flex flex-wrap gap-2">
-            {HABIT_CATEGORIES.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCategory(category === c ? "" : c)}
-                aria-pressed={category === c}
-                className={[
-                  "rounded-full px-3.5 py-1.5 text-xs font-semibold transition",
-                  category === c ? "bg-green text-ink-inverse" : "bg-white/[0.06] text-muted",
-                ].join(" ")}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-2 text-sm font-medium text-muted">Repeats</p>
-          <div className="flex rounded-xl bg-white/[0.06] p-1">
-            {CADENCES.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCadence(c)}
-                className={[
-                  "flex-1 rounded-lg py-2 text-sm font-semibold capitalize transition",
-                  cadence === c ? "bg-green text-ink-inverse" : "text-muted",
-                ].join(" ")}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex gap-2">
-          <label className="flex-1">
-            <span className="mb-1 block text-sm font-medium text-muted">
-              {kind === "timer"
-                ? "Minutes per day"
-                : cadence === "daily"
-                  ? "Target per day"
-                  : "Times per week"}
-            </span>
+      <Step n="01" label="WHAT">
+        <div className="elevation-1 flex flex-col gap-2.5 rounded-3xl p-3.5">
+          <label>
+            <span className="sr-only">Habit name</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Habit name, e.g. Take Creatine" className={FIELD} />
+          </label>
+          <label>
+            <span className="sr-only">Short description</span>
             <input
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              className={INPUT}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Short description (optional)"
+              className={FIELD}
             />
           </label>
-          {cadence === "daily" && kind === "count" && (
-            <label className="flex-1">
-              <span className="mb-1 block text-sm font-medium text-muted">Unit</span>
+          <div className="flex flex-col gap-2 px-0.5 pb-0.5 pt-1.5">
+            <span className="text-xs font-semibold tracking-[0.08em] text-muted">CATEGORY</span>
+            <div role="radiogroup" aria-label="Category" className="flex flex-wrap gap-2">
+              {HABIT_CATEGORIES.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  role="radio"
+                  aria-checked={category === c}
+                  onClick={() => setCategory(category === c ? "" : c)}
+                  className={[
+                    "h-10 rounded-full px-4 text-sm transition",
+                    category === c ? "bg-green font-semibold text-ink-inverse" : "elevation-2 font-medium text-[#D4D4D4]",
+                  ].join(" ")}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Step>
+
+      <Step n="02" label="HOW YOU TRACK IT">
+        <div className="elevation-1 flex flex-col gap-3.5 rounded-3xl p-3.5">
+          <Segmented
+            label="TRACK BY"
+            value={kind}
+            options={KINDS.map((k) => ({ value: k, label: k === "count" ? "Counter" : "Timer" }))}
+            onChange={setKind}
+          />
+          <Segmented
+            label="REPEATS"
+            value={cadence}
+            options={CADENCES.map((c) => ({ value: c, label: c === "daily" ? "Daily" : "Weekly" }))}
+            onChange={setCadence}
+          />
+          <div className={showUnit ? "grid grid-cols-2 gap-2.5" : "flex flex-col"}>
+            <label className="flex flex-col gap-2">
+              <span className={LABEL}>{targetLabel}</span>
               <input
-                value={unit}
-                onChange={(e) => setUnit(e.target.value)}
-                placeholder="glasses"
-                className={INPUT}
+                value={target}
+                onChange={(e) => setTarget(e.target.value.replace(/[^0-9]/g, ""))}
+                inputMode="numeric"
+                placeholder="10"
+                className="elevation-2 h-[60px] w-full rounded-2xl px-4 font-display text-[26px] font-semibold text-ink outline-none placeholder:text-subtle focus:border-green/60"
               />
             </label>
-          )}
+            {showUnit && (
+              <label className="flex flex-col gap-2">
+                <span className={LABEL}>UNIT</span>
+                <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="g, min, glasses" className={FIELD + " h-[60px]"} />
+              </label>
+            )}
+          </div>
         </div>
+      </Step>
 
-        <div>
-          <p className="mb-1 text-sm font-medium text-muted">Reminder (optional)</p>
+      <Step n="03" label="REMINDER · OPTIONAL">
+        <div className="elevation-1 flex flex-col gap-3 rounded-[20px] p-3.5">
+          <label className="flex h-11 items-center justify-between gap-3 px-1">
+            <span className="text-base font-semibold">Reminder time</span>
+            <input
+              type="time"
+              value={reminder}
+              onChange={(e) => setReminder(e.target.value)}
+              aria-label="Reminder time"
+              className="bg-transparent text-right text-sm font-medium text-muted outline-none [color-scheme:dark]"
+            />
+          </label>
           {cadence === "weekly" && (
             <>
               {/* A weekly habit needs a DAY as well as a time — "Sunday 09:00",
                   not just 09:00, which would fire every day of the week. */}
-              <div className="mb-2 flex gap-1.5">
+              <div className="flex gap-1.5">
                 {DOW.map((d, i) => (
                   <button
                     key={i}
@@ -1209,42 +1190,37 @@ function EditView({
                     aria-pressed={reminderDow === i}
                     aria-label={DOW_LABELS[i]}
                     className={[
-                      "h-9 flex-1 rounded-lg border text-xs font-semibold transition",
-                      reminderDow === i
-                        ? "border-green bg-green-tint text-green"
-                        : "border-white/10 text-muted",
+                      "h-10 flex-1 rounded-xl text-xs font-semibold transition",
+                      reminderDow === i ? "bg-green text-ink-inverse" : "elevation-2 text-muted",
                     ].join(" ")}
                   >
                     {d}
                   </button>
                 ))}
               </div>
-              <p className="mb-2 text-xs text-muted">
+              <p className="px-1 text-xs text-muted">
                 {reminderDow === null
                   ? "No day picked — the reminder won't fire. Choose one."
                   : `Every ${DOW_LABELS[reminderDow]}`}
               </p>
             </>
           )}
-          <input
-            value={reminder}
-            onChange={(e) => setReminder(e.target.value)}
-            type="time"
-            className={INPUT}
-          />
         </div>
+      </Step>
 
-        {error && <p className="text-sm text-gold">{error}</p>}
+      {error && <p className="text-center text-sm text-gold">{error}</p>}
 
+      {/* Sticky glass action */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md px-4 pb-7 safe-bottom">
         <button
           type="button"
           disabled={busy}
           onClick={submit}
-          className="w-full rounded-2xl bg-green px-4 py-3.5 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
+          className="elevation-3 pointer-events-auto h-[60px] w-full rounded-full bg-green/[0.92] text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60"
         >
           {busy ? "Saving…" : habit ? "Save changes" : "Create habit"}
         </button>
       </div>
-    </>
+    </div>
   );
 }

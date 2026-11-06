@@ -274,13 +274,24 @@ export function formatDuration(totalSeconds: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
 }
 
-/** The "7/10 g" or "0/10min" badge under a habit's name. */
-export function progressLabel(habit: Habit, logs: HabitLog[], date: string): string {
+/** The day's progress as numbers: 7 of 10 "g", or minutes for a timer. */
+export function progressParts(
+  habit: Habit,
+  logs: HabitLog[],
+  date: string,
+): { current: number; target: number; unit: string } {
   const cur = countOn(logs, habit.id, date);
   if (habit.kind === "timer") {
-    return `${Math.floor(cur / 60)}/${Math.round(habit.target_per_period / 60)}min`;
+    return { current: Math.floor(cur / 60), target: Math.round(habit.target_per_period / 60), unit: "min" };
   }
-  return `${cur}/${habit.target_per_period}${habit.unit ? ` ${habit.unit}` : ""}`;
+  return { current: cur, target: habit.target_per_period, unit: habit.unit ?? "" };
+}
+
+/** The "7/10 g" or "0/10min" badge under a habit's name. */
+export function progressLabel(habit: Habit, logs: HabitLog[], date: string): string {
+  const { current, target, unit } = progressParts(habit, logs, date);
+  if (habit.kind === "timer") return `${current}/${target}min`;
+  return `${current}/${target}${unit ? ` ${unit}` : ""}`;
 }
 
 /** 0..1 share of the period's target reached on `date`. */
