@@ -31,6 +31,32 @@ function readSessionExpiry(request: NextRequest): number | null {
   }
 }
 
+// Reachable without a session. Everything else needs one.
+const PUBLIC_PREFIXES = ["/login", "/signup", "/verify-email", "/forgot", "/reset-password", "/reset", "/auth"];
+// Pointless once signed in: bounce to Home.
+const GUEST_ONLY = ["/login", "/signup"];
+
+function matches(path: string, prefixes: string[]): boolean {
+  return prefixes.some((p) => path === p || path.startsWith(p + "/"));
+}
+
+function toLogin(request: NextRequest) {
+  const url = request.nextUrl.clone();
+  const target = request.nextUrl.pathname + request.nextUrl.search;
+  url.pathname = "/login";
+  url.search = "";
+  // Come back to where they were after logging in (sanitised again on use).
+  if (target !== "/") url.searchParams.set("next", target);
+  return NextResponse.redirect(url);
+}
+
+function toHome(request: NextRequest) {
+  const url = request.nextUrl.clone();
+  url.pathname = "/";
+  url.search = "";
+  return NextResponse.redirect(url);
+}
+
 export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
@@ -39,37 +65,27 @@ export async function updateSession(request: NextRequest) {
   // POST) a 200 HTML login page instead of a 401 it can act on.
   if (path.startsWith("/api/")) return NextResponse.next({ request });
 
-  const isAuthRoute =
-    path.startsWith("/login") ||
-    path.startsWith("/forgot") ||
-    path.startsWith("/reset") ||
-    path.startsWith("/auth");
+  const isPublic = matches(path, PUBLIC_PREFIXES);
+  const isGuestOnly = matches(path, GUEST_ONLY);
 
   // Fast path: the session cookie is present and not close to expiry, so skip
-  // the network round-trip to the auth server entirely. Data access is still
-  // protected by RLS — this check only gates routing.
+  // the network round-trip to the auth server. This only decides ROUTING:
+  // pages and actions read data through Supabase, where the token is verified
+  // and RLS applies, and auth-sensitive server code calls getUser().
   const expiresAt = readSessionExpiry(request);
   const nowS = Math.floor(Date.now() / 1000);
   const hasFreshSession = expiresAt !== null && expiresAt - nowS > REFRESH_MARGIN_S;
 
   if (hasFreshSession) {
-    if (path === "/login") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/";
-      return NextResponse.redirect(url);
-    }
+    if (isGuestOnly) return toHome(request);
     return NextResponse.next({ request });
   }
 
-  if (expiresAt === null && !isAuthRoute) {
-    // No session at all — straight to login, no network needed.
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }
+  // No session at all: straight to login, no network needed.
+  if (expiresAt === null && !isPublic) return toLogin(request);
 
-  // Slow path: token missing on an auth route, expired, or about to expire.
-  // Run the full Supabase round-trip so the refresh token can rotate.
+  // Slow path: token expired or about to. Run the Supabase round-trip so the
+  // refresh token rotates and fresh cookies go back with the response.
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -81,13 +97,9 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value),
-          );
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
-          );
+          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
         },
       },
     },
@@ -97,17 +109,8 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && !isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
-  }
-
-  if (user && path === "/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return NextResponse.redirect(url);
-  }
+  if (!user && !isPublic) return toLogin(request);
+  if (user && isGuestOnly) return toHome(request);
 
   return response;
 }

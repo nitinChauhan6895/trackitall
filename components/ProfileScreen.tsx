@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import {
   exportNutritionCsv,
   exportWorkoutsCsv,
@@ -19,13 +18,40 @@ import {
 } from "@/lib/pushClient";
 import { displayName, profileInitial, type Profile } from "@/lib/types";
 import { APP_VERSION } from "@/lib/version";
+import {
+  cancelEmailChangeAction,
+  changeEmailAction,
+  changePasswordAction,
+  resendEmailChangeAction,
+  signOutEverywhereAction,
+} from "@/app/auth/actions";
+import { Field, PasswordField } from "@/components/auth/Field";
+import FormMessage from "@/components/auth/FormMessage";
+import PasswordChecklist from "@/components/auth/PasswordChecklist";
+import { useTurnstile } from "@/components/auth/Turnstile";
+import { callAction } from "@/components/auth/callAction";
+import { isStrongPassword, isValidEmail } from "@/lib/auth/validation";
 
 const inputClass =
   "elevation-2 h-[52px] w-full rounded-2xl px-4 text-base text-ink outline-none placeholder:text-subtle focus:border-green/60";
 const PRIMARY_BUTTON =
   "h-[52px] w-full rounded-full bg-green text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60";
 
-type View = "menu" | "edit" | "password" | "export";
+type View = "menu" | "edit" | "password" | "email" | "export";
+
+export type AccountInfo = {
+  email: string | null;
+  verified: boolean;
+  /** Address waiting for confirmation after a change, if any. */
+  pendingEmail: string | null;
+};
+
+const TITLES: Record<Exclude<View, "menu">, string> = {
+  edit: "Edit profile",
+  password: "Change password",
+  email: "Change email",
+  export: "Export data",
+};
 
 export type ProfileSummary = {
   workouts: number;
@@ -37,11 +63,15 @@ export type ProfileSummary = {
 export default function ProfileScreen({
   profile,
   summary,
+  account,
+  initialView = "menu",
 }: {
   profile: Profile;
   summary: ProfileSummary | null;
+  account: AccountInfo | null;
+  initialView?: View;
 }) {
-  const [view, setView] = useState<View>("menu");
+  const [view, setView] = useState<View>(initialView);
 
   return (
     <main className="flex flex-1 flex-col gap-6 px-4 pb-36 safe-top">
@@ -60,7 +90,7 @@ export default function ProfileScreen({
             </svg>
           </button>
           <h1 className="font-display text-[26px] font-bold tracking-[-0.02em]">
-            {view === "edit" ? "Edit profile" : view === "password" ? "Change password" : "Export data"}
+            {TITLES[view]}
           </h1>
         </div>
       )}
@@ -69,13 +99,16 @@ export default function ProfileScreen({
         <Menu
           profile={profile}
           summary={summary}
+          account={account}
           onEdit={() => setView("edit")}
           onPassword={() => setView("password")}
+          onEmail={() => setView("email")}
           onExport={() => setView("export")}
         />
       )}
       {view === "edit" && <EditProfile profile={profile} onDone={() => setView("menu")} />}
       {view === "password" && <ChangePassword onDone={() => setView("menu")} />}
+      {view === "email" && <ChangeEmail current={account?.email ?? profile.email} onDone={() => setView("menu")} />}
       {view === "export" && <ExportData />}
     </main>
   );
@@ -84,14 +117,18 @@ export default function ProfileScreen({
 function Menu({
   profile,
   summary,
+  account,
   onEdit,
   onPassword,
+  onEmail,
   onExport,
 }: {
   profile: Profile;
   summary: ProfileSummary | null;
+  account: AccountInfo | null;
   onEdit: () => void;
   onPassword: () => void;
+  onEmail: () => void;
   onExport: () => void;
 }) {
   return (
@@ -130,10 +167,8 @@ function Menu({
       </SettingsGroup>
 
       <SettingsGroup title="ACCOUNT">
-        <div className="flex min-h-14 items-center justify-between gap-3 border-b border-surface-2 px-[18px]">
-          <span className="text-base font-semibold">Email</span>
-          <span className="truncate text-sm text-muted">{profile.email ?? "Not on file"}</span>
-        </div>
+        <EmailRow email={account?.email ?? profile.email} account={account} />
+        <AccountButton label="Change email" onClick={onEmail} />
         <AccountButton label="Change password" onClick={onPassword} />
         <AccountButton label="Export data" onClick={onExport} />
       </SettingsGroup>
@@ -142,6 +177,11 @@ function Menu({
         <form action={signOut} className="w-full">
           <button type="submit" className="h-[52px] w-full rounded-full border border-white/[0.14] text-[15px] font-semibold active:bg-white/10">
             Sign out
+          </button>
+        </form>
+        <form action={signOutEverywhereAction} className="w-full">
+          <button type="submit" className="h-11 w-full text-[15px] font-semibold text-muted active:text-ink">
+            Sign out of all devices
           </button>
         </form>
         <p className="text-xs text-subtle">TrackItAll · v{APP_VERSION}</p>
@@ -434,41 +474,195 @@ function EditProfile({ profile, onDone }: { profile: Profile; onDone: () => void
   );
 }
 
+function EmailRow({ email, account }: { email: string | null; account: AccountInfo | null }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(null);
+  const pending = account?.pendingEmail;
+
+  async function run(kind: "resend" | "cancel") {
+    setBusy(true);
+    setMessage(null);
+    const res = await callAction(kind === "resend" ? resendEmailChangeAction : cancelEmailChangeAction);
+    setBusy(false);
+    if (!res.ok) return setMessage({ tone: "error", text: res.message });
+    if (kind === "resend") setMessage({ tone: "success", text: "Confirmation emails sent again." });
+    else router.refresh();
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5 border-b border-surface-2 px-[18px] py-3.5">
+      <div className="flex min-h-7 items-center justify-between gap-3">
+        <span className="text-base font-semibold">Email</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm text-muted">{email ?? "Not on file"}</span>
+          {account?.verified && <span className="shrink-0 text-xs font-semibold text-green">Verified</span>}
+        </span>
+      </div>
+      {pending && (
+        <div className="flex flex-wrap items-center gap-x-1 text-[13px] text-muted">
+          <span>
+            Pending: <span className="text-ink">{pending}</span>
+          </span>
+          <span aria-hidden>·</span>
+          <button type="button" disabled={busy} onClick={() => run("resend")} className="min-h-11 px-1 font-semibold text-green disabled:opacity-50">
+            Resend
+          </button>
+          <span aria-hidden>·</span>
+          <button type="button" disabled={busy} onClick={() => run("cancel")} className="min-h-11 px-1 font-semibold text-green disabled:opacity-50">
+            Cancel
+          </button>
+        </div>
+      )}
+      <FormMessage tone={message?.tone}>{message?.text}</FormMessage>
+    </div>
+  );
+}
+
 function ChangePassword({ onDone }: { onDone: () => void }) {
+  const captcha = useTurnstile();
+  const [current, setCurrent] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+  const [fieldError, setFieldError] = useState<{ current?: string; password?: string; confirm?: string }>({});
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (password.length < 6) return setError("Password must be at least 6 characters.");
-    if (password !== confirm) return setError("Passwords don't match.");
+    const errs: typeof fieldError = {};
+    if (!current) errs.current = "Enter your current password.";
+    if (!isStrongPassword(password)) errs.password = "Meet every rule below.";
+    else if (password !== confirm) errs.confirm = "Passwords don't match.";
+    setFieldError(errs);
+    const first = (["current", "password", "confirm"] as const).find((k) => errs[k]);
+    if (first) return document.getElementById(`pw-${first}`)?.focus();
+
     setBusy(true);
-    const supabase = createClient();
-    const { error: updErr } = await supabase.auth.updateUser({ password });
-    if (updErr) {
-      setError(updErr.message);
-      setBusy(false);
+    const res = await callAction(() => changePasswordAction({ current, password, captchaToken: captcha.token }));
+    captcha.reset();
+    setBusy(false);
+    if (!res.ok) {
+      if (res.code === "invalid_credentials") {
+        setFieldError({ current: res.message });
+        document.getElementById("pw-current")?.focus();
+      } else setError(res.message);
       return;
     }
     setDone(true);
-    setBusy(false);
-    setTimeout(onDone, 1200);
+    setTimeout(onDone, 1500);
   }
 
   return (
-    <form onSubmit={save} className="flex flex-col gap-4">
-      <div className="elevation-1 flex flex-col gap-2.5 rounded-[28px] p-5">
-        <input type="password" autoComplete="new-password" aria-label="New password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="New password" className={inputClass} />
-        <input type="password" autoComplete="new-password" aria-label="Confirm new password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm new password" className={inputClass} />
+    <form noValidate onSubmit={save} className="flex flex-col gap-4">
+      <div className="elevation-1 flex flex-col gap-4 rounded-[28px] p-5">
+        <PasswordField
+          id="pw-current"
+          label="Current password"
+          autoComplete="current-password"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          error={fieldError.current}
+        />
+        <PasswordField
+          id="pw-password"
+          label="New password"
+          autoComplete="new-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          error={fieldError.password}
+        />
+        <PasswordField
+          id="pw-confirm"
+          label="Confirm new password"
+          autoComplete="new-password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          error={fieldError.confirm}
+          showCapsHint={false}
+        />
+        <PasswordChecklist password={password} confirm={confirm} />
+        {captcha.widget}
       </div>
-      {error && <p className="text-center text-sm text-gold">{error}</p>}
-      {done && <p className="text-center text-sm text-green">Password updated.</p>}
+      <p className="px-1 text-[13px] text-muted">Other devices will be signed out.</p>
+      <FormMessage tone={done ? "success" : "error"}>{done ? "Password updated." : error}</FormMessage>
       <button type="submit" disabled={busy || done} className={PRIMARY_BUTTON}>
         {busy ? "Saving…" : "Update password"}
+      </button>
+    </form>
+  );
+}
+
+function ChangeEmail({ current, onDone }: { current: string | null; onDone: () => void }) {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [sentTo, setSentTo] = useState<string | null>(null);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    if (!isValidEmail(email)) {
+      setError("Enter a valid email address.");
+      return document.getElementById("new-email")?.focus();
+    }
+    setBusy(true);
+    const res = await callAction(() => changeEmailAction({ email }));
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.message);
+      return document.getElementById("new-email")?.focus();
+    }
+    setSentTo(email.trim());
+    router.refresh();
+  }
+
+  if (sentTo) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="elevation-1 flex flex-col gap-2 rounded-[28px] p-5">
+          <span className="font-display text-xl font-semibold">Check both inboxes</span>
+          <p className="text-[15px] leading-[1.45] text-muted">
+            We sent confirmation links to {current ? <span className="text-ink">{current}</span> : "your current address"} and{" "}
+            <span className="text-ink">{sentTo}</span>. Your email changes once both are confirmed.
+          </p>
+        </div>
+        <button type="button" onClick={onDone} className={PRIMARY_BUTTON}>
+          Done
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form noValidate onSubmit={save} className="flex flex-col gap-4">
+      <div className="elevation-1 flex flex-col gap-4 rounded-[28px] p-5">
+        {current && (
+          <p className="text-[13px] text-muted">
+            Current: <span className="text-ink">{current}</span>
+          </p>
+        )}
+        <Field
+          id="new-email"
+          label="New email"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          error={error || undefined}
+        />
+      </div>
+      <p className="px-1 text-[13px] text-muted">For your security we confirm the change at both addresses.</p>
+      <button type="submit" disabled={busy} className={PRIMARY_BUTTON}>
+        {busy ? "Sending…" : "Send confirmation"}
       </button>
     </form>
   );
