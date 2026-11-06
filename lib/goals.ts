@@ -41,7 +41,7 @@ export const GOAL_META: Record<GoalMetric, GoalMetricMeta> = {
     group: "Strength",
   },
   hard_sets: {
-    label: "Hard Sets",
+    label: "Hard sets",
     blurb: "Quality working sets",
     unit: "sets",
     icon: "🔥",
@@ -59,7 +59,7 @@ export const GOAL_META: Record<GoalMetric, GoalMetricMeta> = {
     group: "Strength",
   },
   cardio_time: {
-    label: "Cardio Time",
+    label: "Cardio time",
     blurb: "Total time in cardio",
     unit: "min",
     icon: "❤️",
@@ -68,7 +68,7 @@ export const GOAL_META: Record<GoalMetric, GoalMetricMeta> = {
     group: "Cardio",
   },
   running_distance: {
-    label: "Running Distance",
+    label: "Running distance",
     blurb: "Total distance running",
     unit: "km",
     icon: "👟",

@@ -35,7 +35,11 @@ const INPUT =
   "w-full rounded-xl border border-white/10 bg-surface px-4 py-3 text-base text-ink outline-none placeholder:text-muted focus:border-green";
 
 type Tab = "overview" | "active" | "history";
-type View = { name: "list" } | { name: "detail"; id: string } | { name: "new" | "edit"; id?: string };
+type View =
+  | { name: "list" }
+  | { name: "detail"; id: string }
+  | { name: "new"; id?: undefined; metric?: GoalMetric }
+  | { name: "edit"; id: string };
 
 export type GoalsData = { goals: Goal[]; exercises: GoalExercise[] };
 
@@ -82,9 +86,12 @@ export default function GoalsClient({
 
   if (view.name === "new" || view.name === "edit") {
     return (
-      <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
+      // A full-screen layer over the tab bar: the form has its own sticky
+      // action where the bar would be.
+      <main className="fixed inset-0 z-40 mx-auto flex w-full max-w-md flex-col overflow-y-auto bg-page px-4 pb-36 safe-top">
         <GoalForm
           goal={view.id ? goals.find((g) => g.id === view.id) : undefined}
+          initialMetric={view.name === "new" ? view.metric : undefined}
           today={today}
           onDone={(saved) => {
             upsertGoalCache(saved);
@@ -99,7 +106,7 @@ export default function GoalsClient({
 
   if (view.name === "detail" && detail) {
     return (
-      <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
+      <main className="flex flex-1 flex-col gap-5 px-4 pb-36 safe-top">
         <GoalDetail
           goal={detail}
           progress={progressOf(detail)}
@@ -116,26 +123,26 @@ export default function GoalsClient({
   }
 
   return (
-    <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
-      <header className="flex items-start justify-between gap-3 pb-3 pt-5">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Goals</h1>
-          <p className="mt-0.5 text-sm text-muted">Track your progress. Stay consistent.</p>
-        </div>
+    <main className="flex flex-1 flex-col gap-5 px-4 pb-36 safe-top">
+      <header className="flex flex-col gap-1 px-1 pt-5">
+        <h1 className="font-display text-[30px] font-bold leading-tight tracking-[-0.02em]">Goals</h1>
+        <p className="text-sm text-muted">Track your progress. Stay consistent.</p>
       </header>
 
-      <div className="flex rounded-xl bg-white/[0.06] p-1">
+      <div role="tablist" aria-label="Goals view" className="elevation-1 grid grid-cols-3 gap-1 rounded-[18px] p-1">
         {(["overview", "active", "history"] as Tab[]).map((t) => (
           <button
             key={t}
             type="button"
+            role="tab"
+            aria-selected={tab === t}
             onClick={() => setTab(t)}
             className={[
-              "flex-1 rounded-lg py-2 text-xs font-semibold capitalize transition",
-              tab === t ? "bg-green text-ink-inverse" : "text-muted",
+              "h-11 rounded-[14px] text-sm capitalize transition",
+              tab === t ? "bg-[#3A3A3A] font-semibold text-ink" : "font-medium text-muted",
             ].join(" ")}
           >
-            {t === "active" ? "Active Goals" : t}
+            {t}
           </button>
         ))}
       </div>
@@ -145,7 +152,7 @@ export default function GoalsClient({
           goals={active}
           progressOf={progressOf}
           onOpen={(id) => setView({ name: "detail", id })}
-          onNew={() => setView({ name: "new" })}
+          onNew={(metric) => setView({ name: "new", metric })}
         />
       )}
 
@@ -176,75 +183,84 @@ function Overview({
   goals: Goal[];
   progressOf: (g: Goal) => GoalProgress;
   onOpen: (id: string) => void;
-  onNew: () => void;
+  onNew: (metric?: GoalMetric) => void;
 }) {
-  // The headline ring averages the active goals — one number for "am I on
+  // The headline averages the active goals — one number for "am I on
   // track", rather than making you read five bars.
   const overall =
     goals.length === 0
       ? 0
       : Math.round((goals.reduce((n, g) => n + progressOf(g).ratio, 0) / goals.length) * 100);
+  const done = goals.filter((g) => progressOf(g).complete).length;
   return (
     <>
-      <section className="mt-4 rounded-2xl elevation-1 p-4">
-        <p className="text-sm font-medium text-ink">Today&rsquo;s Progress</p>
-        <div className="mt-3 flex items-center gap-4">
-          <Ring percent={overall} />
-          <div className="min-w-0 flex-1 space-y-2.5">
-            {goals.length === 0 && (
-              <p className="text-sm text-muted">No active goals yet.</p>
-            )}
-            {goals.slice(0, 3).map((g) => {
-              const p = progressOf(g);
-              const meta = GOAL_META[g.metric];
-              return (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => onOpen(g.id)}
-                  className="block w-full text-left"
-                >
-                  <span className="flex items-baseline justify-between gap-2 text-xs">
-                    <span className="truncate font-medium text-ink">{goalTitle(g)}</span>
-                    <span className="shrink-0 text-muted">
-                      {formatValue(g.metric, p.value)} / {formatValue(g.metric, p.target)}
-                    </span>
-                  </span>
-                  <span className="mt-1 block h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
-                    <span
-                      className="block h-full rounded-full"
-                      style={{ width: `${p.ratio * 100}%`, background: meta.tone }}
-                    />
-                  </span>
-                </button>
-              );
-            })}
+      <section className="elevation-1 flex flex-col gap-5 rounded-[28px] px-5 pb-5 pt-[22px]">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs font-semibold tracking-[0.08em] text-muted">TODAY&rsquo;S PROGRESS</span>
+            <span className="font-display text-[56px] font-bold leading-[1.05] tracking-[-0.03em]">
+              {overall}
+              <span className="text-2xl text-subtle">%</span>
+            </span>
+            <span className="text-[15px] text-[#D4D4D4]">
+              {goals.length === 0
+                ? "No active goals yet"
+                : `${done} of ${goals.length} active ${goals.length === 1 ? "goal" : "goals"} complete`}
+            </span>
           </div>
+          <Ring percent={overall} size={88} />
         </div>
+        <button
+          type="button"
+          onClick={() => onNew()}
+          className="h-[52px] rounded-full bg-green text-base font-semibold text-ink-inverse transition active:scale-[0.98]"
+        >
+          Add new goal
+        </button>
       </section>
 
       {goals.length > 0 && (
-        <>
-          <SectionLabel>Active goals</SectionLabel>
-          <ul className="space-y-2.5">
+        <section className="flex flex-col gap-3">
+          <SectionHeader title="Active goals" note={String(goals.length)} />
+          <ul className="flex flex-col gap-3">
             {goals.map((g) => (
               <li key={g.id}>
                 <GoalCard goal={g} progress={progressOf(g)} onClick={() => onOpen(g.id)} />
               </li>
             ))}
           </ul>
-        </>
+        </section>
       )}
 
-      <button
-        type="button"
-        onClick={onNew}
-        className="mt-5 w-full rounded-2xl bg-green px-4 py-3.5 text-base font-bold text-ink-inverse transition active:scale-[0.98]"
-      >
-        + Add New Goal
-      </button>
-
+      <section className="flex flex-col gap-3">
+        <SectionHeader title="Start with a goal" note={`${GOAL_METRICS.length} types`} />
+        <div className="elevation-1 flex flex-col rounded-3xl">
+          {GOAL_METRICS.map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => onNew(m)}
+              className="flex items-center gap-3 border-b border-surface-2 px-[18px] py-3.5 text-left last:border-0 active:bg-white/[0.04]"
+            >
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-base font-semibold">{GOAL_META[m].label}</span>
+                <span className="text-[13px] text-muted">{GOAL_META[m].blurb}</span>
+              </span>
+              <span className="text-sm font-semibold text-green">Set</span>
+            </button>
+          ))}
+        </div>
+      </section>
     </>
+  );
+}
+
+function SectionHeader({ title, note }: { title: string; note?: string }) {
+  return (
+    <div className="flex items-baseline justify-between px-1">
+      <h2 className="font-display text-xl font-semibold">{title}</h2>
+      {note && <span className="text-xs text-muted">{note}</span>}
+    </div>
   );
 }
 
@@ -267,15 +283,16 @@ function ActiveGoals({
 
   return (
     <>
-      <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {groups.map((f) => (
           <button
             key={f}
             type="button"
             onClick={() => setFilter(f)}
+            aria-pressed={filter === f}
             className={[
-              "shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition",
-              filter === f ? "bg-green text-ink-inverse" : "bg-white/[0.06] text-muted",
+              "h-9 shrink-0 rounded-full px-4 text-sm font-semibold transition",
+              filter === f ? "bg-green text-ink-inverse" : "elevation-2 text-muted",
             ].join(" ")}
           >
             {f}
@@ -286,7 +303,7 @@ function ActiveGoals({
       {shown.length === 0 ? (
         <EmptyGoals onNew={onNew} />
       ) : (
-        <ul className="mt-3 space-y-2.5">
+        <ul className="flex flex-col gap-3">
           {shown.map((g) => (
             <li key={g.id}>
               <GoalCard goal={g} progress={progressOf(g)} onClick={() => onOpen(g.id)} />
@@ -294,16 +311,6 @@ function ActiveGoals({
           ))}
         </ul>
       )}
-
-      <div className="mt-5 flex items-center gap-3 rounded-2xl elevation-1 p-4">
-        <span aria-hidden className="text-2xl">
-          🏆
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block font-semibold text-ink">Keep it up!</span>
-          <span className="block text-xs text-muted">You&rsquo;re building great habits.</span>
-        </span>
-      </div>
     </>
   );
 }
@@ -319,42 +326,35 @@ function History({
 }) {
   if (goals.length === 0) {
     return (
-      <p className="mt-10 rounded-2xl border border-dashed border-white/15 px-4 py-10 text-center text-sm text-muted">
+      <p className="rounded-[28px] border border-dashed border-white/15 px-4 py-10 text-center text-sm text-muted">
         Finished goals will appear here.
       </p>
     );
   }
   return (
-    <ul className="mt-4 space-y-2.5">
+    <div className="elevation-1 flex flex-col rounded-3xl">
       {goals.map((g) => {
         const p = progressOf(g);
         return (
-          <li key={g.id}>
-            <button
-              type="button"
-              onClick={() => onOpen(g.id)}
-              className="flex w-full items-center gap-3 rounded-2xl elevation-1 pressable p-3 text-left"
-            >
-              <span aria-hidden className="text-xl">
-                {p.complete ? "✅" : "—"}
+          <button
+            key={g.id}
+            type="button"
+            onClick={() => onOpen(g.id)}
+            className="flex items-center gap-3 border-b border-surface-2 px-[18px] py-3.5 text-left last:border-0 active:bg-white/[0.04]"
+          >
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="truncate text-base font-semibold">{goalTitle(g)}</span>
+              <span className="text-[13px] text-muted">
+                {formatShortDate(g.start_date)} – {formatShortDate(g.end_date)}
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-semibold text-ink">{goalTitle(g)}</span>
-                <span className="block text-xs text-muted">
-                  {formatShortDate(g.start_date)} – {formatShortDate(g.end_date)}
-                </span>
-              </span>
-              <span
-                className="shrink-0 text-sm font-bold"
-                style={{ color: p.complete ? "#22C55E" : "#A6A6A6" }}
-              >
-                {p.percent}%
-              </span>
-            </button>
-          </li>
+            </span>
+            <span className={`shrink-0 font-display text-lg font-semibold ${p.complete ? "text-green" : "text-muted"}`}>
+              {p.percent}%
+            </span>
+          </button>
         );
       })}
-    </ul>
+    </div>
   );
 }
 
@@ -369,48 +369,42 @@ function GoalCard({
 }) {
   const meta = GOAL_META[goal.metric];
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full rounded-2xl elevation-1 pressable p-3 text-left active:bg-white/[0.04]"
-    >
-      <div className="flex items-center gap-3">
-        <span
-          aria-hidden
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg"
-          style={{ backgroundColor: `${meta.tone}1F` }}
-        >
-          {meta.icon}
+    <button type="button" onClick={onClick} className="elevation-1 pressable flex w-full flex-col gap-3 rounded-3xl p-[18px] text-left">
+      <span className="flex items-start justify-between gap-3">
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-base font-semibold">{goalTitle(goal)}</span>
+          <span className="truncate text-[13px] text-muted">{scopeLabel(goal)}</span>
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate font-semibold text-ink">{goalTitle(goal)}</span>
-          <span className="block truncate text-xs text-muted">{meta.blurb}</span>
+        <span className="shrink-0 rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium text-muted">
+          {progress.daysLeft === 0 ? "ended" : `${progress.daysLeft} day${progress.daysLeft === 1 ? "" : "s"} left`}
         </span>
-        <span className="shrink-0 text-right">
-          <span className="block font-bold text-ink">{formatValue(goal.metric, goal.target)}</span>
-          <span className="block text-[10px] text-muted">{meta.unit}</span>
+      </span>
+      <ProgressBar ratio={progress.ratio} />
+      <span className="flex items-baseline justify-between text-[13px]">
+        <span className="text-muted">
+          <span className="font-display text-base font-semibold text-ink">{formatValue(goal.metric, progress.value)}</span>{" "}
+          / {formatValue(goal.metric, progress.target)} {meta.unit}
         </span>
-      </div>
-
-      <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
-        <div
-          className="h-full rounded-full transition-[width] duration-300"
-          style={{ width: `${progress.ratio * 100}%`, background: meta.tone }}
-        />
-      </div>
-
-      <div className="mt-2 flex items-center justify-between text-xs">
-        <span style={{ color: meta.tone }}>
-          {formatValue(goal.metric, progress.value)} / {formatValue(goal.metric, progress.target)}{" "}
-          {meta.unit}
-        </span>
-        <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-muted">
-          {progress.daysLeft === 0
-            ? "ended"
-            : `${progress.daysLeft} day${progress.daysLeft === 1 ? "" : "s"} left`}
-        </span>
-      </div>
+        <span className={`font-semibold ${progress.complete ? "text-green" : "text-ink"}`}>{progress.percent}%</span>
+      </span>
     </button>
+  );
+}
+
+// "Sets · Legs", "Cardio time · All cardio", or the metric's description.
+function scopeLabel(goal: Goal): string {
+  if (goal.muscle_group) return `${GOAL_META[goal.metric].label} · ${MUSCLE_GROUP_LABELS[goal.muscle_group as keyof typeof MUSCLE_GROUP_LABELS] ?? goal.muscle_group}`;
+  if (goal.cardio_type) return `${GOAL_META[goal.metric].label} · ${CARDIO_TYPE_LABELS[goal.cardio_type as keyof typeof CARDIO_TYPE_LABELS] ?? goal.cardio_type}`;
+  return GOAL_META[goal.metric].blurb;
+}
+
+function ProgressBar({ ratio }: { ratio: number }) {
+  return (
+    <span className="block h-2 rounded-full bg-[#2C2C2C]">
+      {ratio > 0 && (
+        <span className="block h-2 rounded-full bg-green transition-[width] duration-300" style={{ width: `${Math.min(1, ratio) * 100}%` }} />
+      )}
+    </span>
   );
 }
 
@@ -438,129 +432,95 @@ function GoalDetail({
 
   return (
     <>
-      <header className="flex items-center justify-between py-4">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-ink active:bg-white/10"
-        >
-          ←
+      <div className="flex items-center gap-3 pt-4">
+        <button type="button" onClick={onBack} aria-label="Back" className={GLASS_BACK}>
+          <BackArrow />
         </button>
-        <h1 className="truncate px-2 text-base font-bold">{goalTitle(goal)}</h1>
-        <button
-          type="button"
-          onClick={onEdit}
-          className="rounded-full px-3 py-1.5 text-sm font-semibold text-muted active:bg-white/10"
-        >
+        <span className="flex min-w-0 flex-1 flex-col gap-px">
+          <span className="text-[15px] font-semibold">Goals</span>
+          <span className="truncate text-[13px] text-muted">{goalTitle(goal)}</span>
+        </span>
+        <button type="button" onClick={onEdit} className="elevation-3 h-11 shrink-0 rounded-full bg-white/[0.08] px-[18px] text-[15px] font-semibold text-green active:bg-white/15">
           Edit
         </button>
-      </header>
-
-      <div className="flex flex-col items-center py-4">
-        <Ring percent={progress.percent} size={180} tone={meta.tone} />
-        <p className="mt-2 text-sm text-muted">
-          {formatValue(goal.metric, progress.value)} / {formatValue(goal.metric, progress.target)}{" "}
-          {meta.unit}
-        </p>
-        <p className="mt-1 text-xs text-muted">
-          {progress.daysLeft === 0
-            ? "This goal has ended"
-            : `${progress.daysLeft} day${progress.daysLeft === 1 ? "" : "s"} left`}
-        </p>
       </div>
 
-      <div className="flex items-center justify-between rounded-2xl elevation-1 p-4">
-        <span>
-          <span className="block text-sm font-medium text-ink">Target</span>
-          <span className="block text-xs text-muted">
-            {formatShortDate(goal.start_date)} – {formatShortDate(goal.end_date)}
-          </span>
-        </span>
-        <span className="text-sm font-bold" style={{ color: meta.tone }}>
-          {formatValue(goal.metric, goal.target)} {meta.unit}
-        </span>
-      </div>
+      <section className="elevation-1 flex flex-col gap-5 rounded-[28px] px-5 pb-5 pt-[22px]">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-xs font-semibold tracking-[0.08em] text-muted">
+              {formatShortDate(goal.start_date).toUpperCase()} – {formatShortDate(goal.end_date).toUpperCase()}
+            </span>
+            <span className="font-display text-[44px] font-bold leading-[1.05] tracking-[-0.03em]">
+              {formatValue(goal.metric, progress.value)}
+              <span className="text-lg font-semibold text-muted">
+                {" "}/ {formatValue(goal.metric, progress.target)} {meta.unit}
+              </span>
+            </span>
+            <span className="text-[15px] text-[#D4D4D4]">
+              {progress.daysLeft === 0 ? "This goal has ended" : `${progress.daysLeft} day${progress.daysLeft === 1 ? "" : "s"} left`}
+            </span>
+          </div>
+          <Ring percent={progress.percent} size={88} />
+        </div>
+        <p className="elevation-2 rounded-2xl px-3.5 py-3 text-sm">{insight(goal, progress)}</p>
+      </section>
 
-      <SectionLabel>Progress</SectionLabel>
-      <div className="rounded-2xl elevation-1 p-4">
+      <section className="elevation-1 flex flex-col gap-3 rounded-[28px] p-5">
+        <h2 className="font-display text-lg font-semibold">Progress</h2>
         <div className="flex h-[140px] items-end gap-1">
           {progress.perDay.map((d, i) => {
             const future = d.date > today;
             return (
               <div key={d.date} className="flex h-full flex-1 flex-col items-center justify-end gap-1">
-                <span className="text-[9px] font-semibold text-ink/70">
-                  {d.value > 0 ? formatValue(goal.metric, d.value) : ""}
-                </span>
+                <span className="text-[9px] font-semibold text-ink/70">{d.value > 0 ? formatValue(goal.metric, d.value) : ""}</span>
                 <div
-                  className="w-full rounded-t"
-                  style={{
-                    height: d.value > 0 ? `${Math.max(6, (d.value / max) * 100)}%` : "2%",
-                    background: d.value > 0 ? meta.tone : future ? "#1C1C1C" : "#2C2C2C",
-                  }}
+                  className={`w-full rounded-t ${d.value > 0 ? "bg-green" : future ? "bg-surface-2" : "bg-[#2C2C2C]"}`}
+                  style={{ height: d.value > 0 ? `${Math.max(6, (d.value / max) * 100)}%` : "2%" }}
                 />
                 <span className="text-[9px] text-muted">
-                  {progress.perDay.length <= 7
-                    ? DOW[i]
-                    : i % 5 === 0
-                      ? Number(d.date.slice(8, 10))
-                      : ""}
+                  {progress.perDay.length <= 7 ? DOW[i] : i % 5 === 0 ? Number(d.date.slice(8, 10)) : ""}
                 </span>
               </div>
             );
           })}
         </div>
-      </div>
+      </section>
 
-      <SectionLabel>Insights</SectionLabel>
-      <div className="rounded-2xl elevation-1 p-4">
-        <p className="text-sm text-ink">{insight(goal, progress)}</p>
-      </div>
-
-      <SectionLabel>About this goal</SectionLabel>
-      <div className="rounded-2xl elevation-1 p-4">
+      <section className="elevation-1 flex flex-col gap-2 rounded-[28px] p-5">
+        <h2 className="font-display text-lg font-semibold">About this goal</h2>
         <p className="text-sm text-muted">{aboutText(goal.metric)}</p>
-        {goal.notes && <p className="mt-2 text-sm text-ink">{goal.notes}</p>}
-      </div>
+        {goal.notes && <p className="text-sm text-ink">{goal.notes}</p>}
+      </section>
 
-      <div className="mt-5">
-        {confirm ? (
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={async () => {
-                await deleteGoal(goal.id);
-                onDeleted();
-              }}
-              className="flex-1 rounded-2xl bg-gold px-4 py-3 text-sm font-bold text-ink-inverse active:scale-95"
-            >
-              Delete goal
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirm(false)}
-              className="flex-1 rounded-2xl border border-white/15 px-4 py-3 text-sm font-semibold text-ink active:bg-white/10"
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
+      {confirm ? (
+        <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => setConfirm(true)}
-            className="w-full rounded-2xl border border-white/10 px-4 py-3 text-sm font-semibold text-muted active:bg-white/10"
+            onClick={async () => {
+              await deleteGoal(goal.id);
+              onDeleted();
+            }}
+            className="h-12 flex-1 rounded-full bg-gold text-sm font-semibold text-ink-inverse active:scale-95"
           >
             Delete goal
           </button>
-        )}
-      </div>
+          <button type="button" onClick={() => setConfirm(false)} className="h-12 flex-1 rounded-full border border-white/15 text-sm font-semibold text-ink active:bg-white/10">
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setConfirm(true)} className="h-12 rounded-full border border-white/[0.14] text-sm font-semibold text-muted active:bg-white/10">
+          Delete goal
+        </button>
+      )}
     </>
   );
 }
 
 /** A sentence about whether the current pace reaches the target. */
 function insight(goal: Goal, p: GoalProgress): string {
-  if (p.complete) return "Goal reached — nice work. 🎉";
+  if (p.complete) return "Goal reached — nice work.";
   if (p.daysLeft === 0) {
     return `Ended at ${p.percent}% of target. Worth setting a slightly smaller one next time?`;
   }
@@ -592,22 +552,39 @@ function aboutText(metric: GoalMetric): string {
 
 // ---------------- create / edit ----------------
 
+const STEP_LABEL = "text-xs font-semibold tracking-[0.08em] text-muted";
+const FIELD = "elevation-2 w-full rounded-2xl px-4 text-base text-ink outline-none placeholder:text-subtle focus:border-green/60";
+
+function Step({ n, label, children }: { n: string; label: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-3">
+      <span className="flex items-baseline gap-2.5 px-1">
+        <span className="font-display text-sm font-semibold text-green">{n}</span>
+        <span className={STEP_LABEL}>{label}</span>
+      </span>
+      {children}
+    </section>
+  );
+}
+
 function GoalForm({
   goal,
+  initialMetric,
   today,
   onDone,
   onCancel,
 }: {
   goal?: Goal;
+  /** Preselected type, e.g. from "Start with a goal". */
+  initialMetric?: GoalMetric;
   today: string;
   onDone: (saved: Goal) => void;
   onCancel: () => void;
 }) {
-  const [metric, setMetric] = useState<GoalMetric>(goal?.metric ?? "sets");
-  const [target, setTarget] = useState(String(goal?.target ?? GOAL_META.sets.presets[2]));
-  const [duration, setDuration] = useState<"week" | "month" | "custom">(
-    goal ? "custom" : "week",
-  );
+  const startMetric = goal?.metric ?? initialMetric ?? "sets";
+  const [metric, setMetric] = useState<GoalMetric>(startMetric);
+  const [target, setTarget] = useState(String(goal?.target ?? GOAL_META[startMetric].presets[2]));
+  const [duration, setDuration] = useState<"week" | "month" | "custom">(goal ? "custom" : "week");
   const [start, setStart] = useState(goal?.start_date ?? thisWeek(today).start);
   const [end, setEnd] = useState(goal?.end_date ?? thisWeek(today).end);
   const [name, setName] = useState(goal?.name ?? "");
@@ -671,269 +648,278 @@ function GoalForm({
     }
   }
 
-  return (
-    <>
-      <header className="flex items-center gap-3 py-4">
-        <button
-          type="button"
-          onClick={onCancel}
-          aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-ink active:bg-white/10"
-        >
-          ←
-        </button>
-        <h1 className="text-xl font-bold">{goal ? "Edit goal" : "Add New Goal"}</h1>
-      </header>
+  const period = duration === "week" ? "this week" : duration === "month" ? "this month" : "";
+  const actionLabel = goal
+    ? "Save changes"
+    : `Create goal · ${formatValue(metric, Number(target) || 0)} ${meta.unit}${period ? ` ${period}` : ""}`;
 
-      <div className="space-y-5">
-        <div>
-          <p className="mb-2 text-sm font-semibold text-ink">1. Choose Goal Type</p>
-          <div className="grid grid-cols-3 gap-2">
-            {GOAL_METRICS.map((m) => {
-              const mm = GOAL_META[m];
-              const on = metric === m;
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center gap-3 pt-4">
+        <button type="button" onClick={onCancel} aria-label="Back" className={GLASS_BACK}>
+          <BackArrow />
+        </button>
+        <span className="flex flex-col gap-px">
+          <span className="text-[15px] font-semibold">Goals</span>
+          <span className="text-[13px] text-muted">{goal ? "Edit goal" : "New goal"}</span>
+        </span>
+      </div>
+
+      <h1 className="px-1 font-display text-[34px] font-bold leading-[1.05] tracking-[-0.03em]">
+        {goal ? "Edit" : "Set a"}
+        <br />
+        <span className="text-green">{goal ? "your goal" : "new goal"}</span>
+      </h1>
+
+      <Step n="01" label="GOAL TYPE">
+        <div role="radiogroup" aria-label="Goal type" className="grid grid-cols-2 gap-2.5">
+          {GOAL_METRICS.map((m, i) => {
+            const mm = GOAL_META[m];
+            const on = metric === m;
+            const wide = i === GOAL_METRICS.length - 1;
+            return (
+              <button
+                key={m}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => {
+                  setMetric(m);
+                  if (!goal) setTarget(String(mm.presets[2]));
+                }}
+                className={[
+                  "elevation-1 flex rounded-[20px] px-4 py-3.5 text-left",
+                  wide ? "col-span-2 min-h-16 items-center justify-between" : "min-h-20 flex-col items-start justify-between",
+                  on ? "!border-[1.5px] !border-green !bg-green-tint" : "",
+                ].join(" ")}
+              >
+                <span className="font-display text-lg font-semibold">{mm.label}</span>
+                <span className="text-xs text-muted">{mm.blurb}</span>
+              </button>
+            );
+          })}
+        </div>
+      </Step>
+
+      <Step n="02" label="TARGET">
+        <div className="elevation-1 flex flex-col gap-4 rounded-3xl p-[18px]">
+          <label className="flex items-baseline gap-2.5">
+            <span className="sr-only">Target {meta.unit}</span>
+            <input
+              value={target}
+              onChange={(e) => setTarget(e.target.value.replace(/[^0-9.]/g, ""))}
+              inputMode="decimal"
+              // Sized to its digits so the unit sits right after the number.
+              style={{ width: `${Math.max(1, target.length) * 0.62 + 0.1}em` }}
+              className="min-w-0 max-w-[60%] bg-transparent p-0 font-display text-[56px] font-bold tracking-[-0.03em] text-ink outline-none"
+            />
+            <span className="text-lg font-semibold text-green">{meta.unit}</span>
+          </label>
+          <div className="flex gap-2">
+            {meta.presets.map((v) => {
+              const on = Number(target) === v;
               return (
                 <button
-                  key={m}
+                  key={v}
                   type="button"
-                  onClick={() => {
-                    setMetric(m);
-                    if (!goal) setTarget(String(mm.presets[2]));
-                  }}
+                  onClick={() => setTarget(String(v))}
                   aria-pressed={on}
                   className={[
-                    "flex flex-col items-start gap-1 rounded-2xl border p-3 text-left transition",
-                    on ? "border-green bg-green-tint" : "border-white/10 bg-surface",
+                    "h-11 flex-1 rounded-xl text-sm",
+                    on ? "bg-green font-semibold text-ink-inverse" : "elevation-2 font-medium text-[#D4D4D4]",
                   ].join(" ")}
                 >
-                  <span aria-hidden className="text-lg">
-                    {mm.icon}
-                  </span>
-                  <span className="text-xs font-bold text-ink">{mm.label}</span>
-                  <span className="text-[10px] leading-tight text-muted">{mm.blurb}</span>
+                  {v}
                 </button>
               );
             })}
           </div>
+          {(scopedByGroup || scopedByCardio) && (
+            <>
+              <div className="h-px bg-[#2C2C2C]" />
+              <label className="elevation-2 relative flex h-[52px] items-center justify-between rounded-2xl px-4">
+                <span className="flex flex-col gap-px">
+                  <span className="text-[11px] font-semibold tracking-[0.08em] text-muted">
+                    {scopedByGroup ? "MUSCLE GROUP" : "CARDIO TYPE"}
+                  </span>
+                  <span className="text-[15px]">
+                    {scopedByGroup
+                      ? muscleGroup
+                        ? MUSCLE_GROUP_LABELS[muscleGroup as keyof typeof MUSCLE_GROUP_LABELS]
+                        : "All muscle groups"
+                      : cardioType
+                        ? CARDIO_TYPE_LABELS[cardioType as keyof typeof CARDIO_TYPE_LABELS]
+                        : "All cardio"}
+                  </span>
+                </span>
+                <span className="text-[13px] font-semibold text-green">Change</span>
+                {/* The native picker, invisible over the row. */}
+                {scopedByGroup ? (
+                  <select
+                    aria-label="Muscle group"
+                    value={muscleGroup}
+                    onChange={(e) => setMuscleGroup(e.target.value)}
+                    className="absolute inset-0 cursor-pointer appearance-none opacity-0"
+                  >
+                    <option value="">All muscle groups</option>
+                    {SCOPE_GROUPS.map((g) => (
+                      <option key={g} value={g}>
+                        {MUSCLE_GROUP_LABELS[g]}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    aria-label="Cardio type"
+                    value={cardioType}
+                    onChange={(e) => setCardioType(e.target.value)}
+                    className="absolute inset-0 cursor-pointer appearance-none opacity-0"
+                  >
+                    <option value="">All cardio</option>
+                    {CARDIO_TYPES.map((c) => (
+                      <option key={c} value={c}>
+                        {CARDIO_TYPE_LABELS[c]}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </label>
+            </>
+          )}
         </div>
+      </Step>
 
-        <div>
-          <p className="mb-2 text-sm font-semibold text-ink">2. Set Your Target</p>
-          <div className="flex items-center gap-2">
+      <Step n="03" label="DURATION">
+        <div role="radiogroup" aria-label="Duration" className="elevation-1 grid grid-cols-3 gap-1 rounded-[18px] p-1">
+          {([
+            ["week", "This week"],
+            ["month", "This month"],
+            ["custom", "Custom"],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={duration === key}
+              onClick={() => pickDuration(key)}
+              className={[
+                "h-11 rounded-[14px] text-sm transition",
+                duration === key ? "bg-[#3A3A3A] font-semibold text-ink" : "font-medium text-muted",
+              ].join(" ")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {duration === "custom" ? (
+          <div className="grid grid-cols-2 gap-2.5">
+            <label className="flex flex-col gap-1.5">
+              <span className="px-1 text-xs text-muted">Start</span>
+              <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className={FIELD + " h-[52px] [color-scheme:dark]"} />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="px-1 text-xs text-muted">End</span>
+              <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className={FIELD + " h-[52px] [color-scheme:dark]"} />
+            </label>
+          </div>
+        ) : (
+          <span className="px-1 text-[13px] text-muted">
+            {formatShortDate(start)} – {formatShortDate(end)}
+          </span>
+        )}
+      </Step>
+
+      <Step n="04" label="NAME & NOTES · OPTIONAL">
+        <div className="elevation-1 flex flex-col gap-2.5 rounded-3xl p-3.5">
+          <label>
+            <span className="sr-only">Goal name</span>
             <input
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              type="number"
-              inputMode="decimal"
-              min={1}
-              className={INPUT}
+              value={name}
+              onChange={(e) => setName(e.target.value.slice(0, 40))}
+              placeholder="Goal name"
+              className={FIELD + " h-[52px]"}
             />
-            <span className="shrink-0 text-sm text-muted">{meta.unit}</span>
-          </div>
-          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-            {meta.presets.map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setTarget(String(v))}
-                className={[
-                  "shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold transition",
-                  Number(target) === v
-                    ? "border-green text-green"
-                    : "border-white/10 text-muted",
-                ].join(" ")}
-              >
-                {v}
-              </button>
-            ))}
-          </div>
+          </label>
+          <label>
+            <span className="sr-only">Notes</span>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value.slice(0, 100))}
+              placeholder="Notes"
+              rows={3}
+              className={FIELD + " resize-none py-3.5"}
+            />
+          </label>
         </div>
+      </Step>
 
-        {scopedByGroup && (
-          <div>
-            <p className="mb-2 text-sm font-semibold text-ink">Muscle group</p>
-            <select
-              value={muscleGroup}
-              onChange={(e) => setMuscleGroup(e.target.value)}
-              className={INPUT}
-            >
-              <option value="">All muscle groups</option>
-              {SCOPE_GROUPS.map((g) => (
-                <option key={g} value={g}>
-                  {MUSCLE_GROUP_LABELS[g]}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+      {error && <p className="text-center text-sm text-gold">{error}</p>}
 
-        {scopedByCardio && (
-          <div>
-            <p className="mb-2 text-sm font-semibold text-ink">Cardio type</p>
-            <select
-              value={cardioType}
-              onChange={(e) => setCardioType(e.target.value)}
-              className={INPUT}
-            >
-              <option value="">All cardio</option>
-              {CARDIO_TYPES.map((c) => (
-                <option key={c} value={c}>
-                  {CARDIO_TYPE_LABELS[c]}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        <div>
-          <p className="mb-2 text-sm font-semibold text-ink">3. Duration</p>
-          <div className="grid grid-cols-3 gap-2">
-            {([
-              ["week", "This Week"],
-              ["month", "This Month"],
-              ["custom", "Custom"],
-            ] as const).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => pickDuration(key)}
-                className={[
-                  "rounded-xl border px-2 py-2.5 text-xs font-semibold transition",
-                  duration === key ? "border-green text-green" : "border-white/10 text-muted",
-                ].join(" ")}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {duration === "custom" && (
-            <div className="mt-2 flex gap-2">
-              <label className="flex-1">
-                <span className="mb-1 block text-xs text-muted">Start</span>
-                <input
-                  type="date"
-                  value={start}
-                  onChange={(e) => setStart(e.target.value)}
-                  className={INPUT}
-                />
-              </label>
-              <label className="flex-1">
-                <span className="mb-1 block text-xs text-muted">End</span>
-                <input
-                  type="date"
-                  value={end}
-                  onChange={(e) => setEnd(e.target.value)}
-                  className={INPUT}
-                />
-              </label>
-            </div>
-          )}
-          {duration !== "custom" && (
-            <p className="mt-1.5 text-xs text-muted">
-              {formatShortDate(start)} – {formatShortDate(end)}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <p className="mb-2 text-sm font-semibold text-ink">4. Goal Name (Optional)</p>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value.slice(0, 40))}
-            placeholder={`Weekly ${meta.label} Goal`}
-            className={INPUT}
-          />
-        </div>
-
-        <div>
-          <p className="mb-2 text-sm font-semibold text-ink">5. Notes (Optional)</p>
-          <input
-            value={notes}
-            onChange={(e) => setNotes(e.target.value.slice(0, 100))}
-            placeholder="Add a note to remind yourself…"
-            className={INPUT}
-          />
-        </div>
-
-        {error && <p className="text-sm text-gold">{error}</p>}
-
+      {/* Sticky glass action */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md px-4 pb-7 safe-bottom">
         <button
           type="button"
           disabled={busy}
           onClick={submit}
-          className="w-full rounded-2xl bg-green px-4 py-3.5 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
+          className="elevation-3 pointer-events-auto h-[60px] w-full rounded-full bg-green/[0.92] text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60"
         >
-          {busy ? "Saving…" : goal ? "Save changes" : "Create Goal"}
+          {busy ? "Saving…" : actionLabel}
         </button>
       </div>
-    </>
+    </div>
   );
 }
 
 // ---------------- shared bits ----------------
 
-function Ring({
-  percent,
-  size = 96,
-  tone = "#22C55E",
-}: {
-  percent: number;
-  size?: number;
-  tone?: string;
-}) {
+const GLASS_BACK =
+  "elevation-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-ink active:bg-white/15";
+
+function BackArrow() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M19 12H5M12 19l-7-7 7-7" />
+    </svg>
+  );
+}
+
+// Progress ring; at 0% a single dot marks where it starts.
+function Ring({ percent, size = 88 }: { percent: number; size?: number }) {
+  const stroke = 9;
   const r = size / 2 - 8;
   const c = 2 * Math.PI * r;
+  const p = Math.min(100, Math.max(0, percent));
   return (
-    <div className="relative shrink-0" style={{ height: size, width: size }}>
-      <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full -rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#262626" strokeWidth="8" />
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`Progress ${p} percent`} className="shrink-0">
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#2C2C2C" strokeWidth={stroke} />
+      {p > 0 ? (
         <circle
           cx={size / 2}
           cy={size / 2}
           r={r}
           fill="none"
-          stroke={tone}
-          strokeWidth="8"
+          stroke="#22C55E"
+          strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={c}
-          strokeDashoffset={c - (c * Math.min(100, percent)) / 100}
+          strokeDashoffset={c - (c * p) / 100}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-bold leading-none text-ink" style={{ fontSize: size / 4.5 }}>
-          {percent}%
-        </span>
-        <span className="mt-0.5 text-[9px] text-muted">Overall</span>
-      </div>
-    </div>
+      ) : (
+        <circle cx={size / 2} cy={size / 2 - r} r={stroke / 2} fill="#22C55E" />
+      )}
+    </svg>
   );
 }
 
 function EmptyGoals({ onNew }: { onNew: () => void }) {
   return (
-    <div className="mt-8 rounded-2xl border border-dashed border-white/15 px-5 py-10 text-center">
-      <p className="text-3xl" aria-hidden>
-        🎯
-      </p>
-      <p className="mt-3 font-semibold text-ink">No goals yet</p>
-      <p className="mt-1 text-sm text-muted">
-        Set a target and it fills in automatically from the workouts you log.
-      </p>
-      <button
-        type="button"
-        onClick={onNew}
-        className="mt-5 rounded-2xl bg-green px-5 py-3 text-sm font-bold text-ink-inverse active:scale-95"
-      >
-        + Add New Goal
+    <div className="flex flex-col items-center gap-2 rounded-[28px] border border-dashed border-white/15 px-5 py-10 text-center">
+      <p className="font-display text-lg font-semibold text-ink">No goals here yet</p>
+      <p className="text-sm text-muted">Set a target and it fills in automatically from the workouts you log.</p>
+      <button type="button" onClick={onNew} className="mt-3 h-11 rounded-full bg-green px-5 text-sm font-semibold text-ink-inverse active:scale-95">
+        Add new goal
       </button>
     </div>
-  );
-}
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-muted">
-      {children}
-    </h2>
   );
 }
