@@ -55,7 +55,9 @@ export default function GoalsClient({
   const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: qk.goals(),
-    queryFn: loadGoalsAction,
+    // Wrapped so React Query's context object isn't sent to the server action
+    // (it can't be serialised, and the refetch would silently fail).
+    queryFn: () => loadGoalsAction(),
     initialData: initial,
   });
   const goals = data?.goals ?? [];
