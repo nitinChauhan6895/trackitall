@@ -59,7 +59,10 @@ export default function HabitsClient({
   const queryClient = useQueryClient();
   const { data } = useQuery({
     queryKey: qk.habits(),
-    queryFn: loadHabitsAction,
+    // Wrapped: React Query passes a context object (with an AbortSignal) to
+    // queryFn, and a server action can't serialise it — the call would throw
+    // before reaching the server, so new habits only showed after a reload.
+    queryFn: () => loadHabitsAction(),
     initialData: initial,
   });
   const habits = data?.habits ?? [];
