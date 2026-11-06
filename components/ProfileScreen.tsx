@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import {
   exportNutritionCsv,
   exportWorkoutsCsv,
@@ -19,13 +18,43 @@ import {
 } from "@/lib/pushClient";
 import { displayName, profileInitial, type Profile } from "@/lib/types";
 import { APP_VERSION } from "@/lib/version";
+import {
+  cancelEmailChangeAction,
+  changeEmailAction,
+  changePasswordAction,
+  resendEmailChangeAction,
+  signOutEverywhereAction,
+  verifyEmailChangeAction,
+} from "@/app/auth/actions";
+import CodeInput from "@/components/auth/CodeInput";
+import ResendButton from "@/components/auth/ResendButton";
+import { Field, PasswordField } from "@/components/auth/Field";
+import FormMessage from "@/components/auth/FormMessage";
+import PasswordChecklist from "@/components/auth/PasswordChecklist";
+import { useTurnstile } from "@/components/auth/Turnstile";
+import { callAction } from "@/components/auth/callAction";
+import { isPlaceholderEmail, isStrongPassword, isValidEmail } from "@/lib/auth/validation";
 
 const inputClass =
   "elevation-2 h-[52px] w-full rounded-2xl px-4 text-base text-ink outline-none placeholder:text-subtle focus:border-green/60";
 const PRIMARY_BUTTON =
   "h-[52px] w-full rounded-full bg-green text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-60";
 
-type View = "menu" | "edit" | "password" | "export";
+type View = "menu" | "edit" | "password" | "email" | "export";
+
+export type AccountInfo = {
+  email: string | null;
+  verified: boolean;
+  /** Address waiting for confirmation after a change, if any. */
+  pendingEmail: string | null;
+};
+
+const TITLES: Record<Exclude<View, "menu">, string> = {
+  edit: "Edit profile",
+  password: "Change password",
+  email: "Change email",
+  export: "Export data",
+};
 
 export type ProfileSummary = {
   workouts: number;
@@ -37,11 +66,15 @@ export type ProfileSummary = {
 export default function ProfileScreen({
   profile,
   summary,
+  account,
+  initialView = "menu",
 }: {
   profile: Profile;
   summary: ProfileSummary | null;
+  account: AccountInfo | null;
+  initialView?: View;
 }) {
-  const [view, setView] = useState<View>("menu");
+  const [view, setView] = useState<View>(initialView);
 
   return (
     <main className="flex flex-1 flex-col gap-6 px-4 pb-36 safe-top">
@@ -60,7 +93,7 @@ export default function ProfileScreen({
             </svg>
           </button>
           <h1 className="font-display text-[26px] font-bold tracking-[-0.02em]">
-            {view === "edit" ? "Edit profile" : view === "password" ? "Change password" : "Export data"}
+            {view === "email" && isPlaceholderEmail(account?.email ?? profile.email) ? "Add email" : TITLES[view]}
           </h1>
         </div>
       )}
@@ -69,13 +102,22 @@ export default function ProfileScreen({
         <Menu
           profile={profile}
           summary={summary}
+          account={account}
           onEdit={() => setView("edit")}
           onPassword={() => setView("password")}
+          onEmail={() => setView("email")}
           onExport={() => setView("export")}
         />
       )}
       {view === "edit" && <EditProfile profile={profile} onDone={() => setView("menu")} />}
       {view === "password" && <ChangePassword onDone={() => setView("menu")} />}
+      {view === "email" && (
+        <ChangeEmail
+          current={account?.email ?? profile.email}
+          pendingEmail={account?.pendingEmail ?? null}
+          onDone={() => setView("menu")}
+        />
+      )}
       {view === "export" && <ExportData />}
     </main>
   );
@@ -84,14 +126,18 @@ export default function ProfileScreen({
 function Menu({
   profile,
   summary,
+  account,
   onEdit,
   onPassword,
+  onEmail,
   onExport,
 }: {
   profile: Profile;
   summary: ProfileSummary | null;
+  account: AccountInfo | null;
   onEdit: () => void;
   onPassword: () => void;
+  onEmail: () => void;
   onExport: () => void;
 }) {
   return (
@@ -130,10 +176,11 @@ function Menu({
       </SettingsGroup>
 
       <SettingsGroup title="ACCOUNT">
-        <div className="flex min-h-14 items-center justify-between gap-3 border-b border-surface-2 px-[18px]">
-          <span className="text-base font-semibold">Email</span>
-          <span className="truncate text-sm text-muted">{profile.email ?? "Not on file"}</span>
-        </div>
+        <EmailRow email={account?.email ?? profile.email} account={account} onEnterCode={onEmail} />
+        <AccountButton
+          label={isPlaceholderEmail(account?.email ?? profile.email) ? "Add email" : "Change email"}
+          onClick={onEmail}
+        />
         <AccountButton label="Change password" onClick={onPassword} />
         <AccountButton label="Export data" onClick={onExport} />
       </SettingsGroup>
@@ -142,6 +189,11 @@ function Menu({
         <form action={signOut} className="w-full">
           <button type="submit" className="h-[52px] w-full rounded-full border border-white/[0.14] text-[15px] font-semibold active:bg-white/10">
             Sign out
+          </button>
+        </form>
+        <form action={signOutEverywhereAction} className="w-full">
+          <button type="submit" className="h-11 w-full text-[15px] font-semibold text-muted active:text-ink">
+            Sign out of all devices
           </button>
         </form>
         <p className="text-xs text-subtle">TrackItAll · v{APP_VERSION}</p>
@@ -434,41 +486,325 @@ function EditProfile({ profile, onDone }: { profile: Profile; onDone: () => void
   );
 }
 
+function EmailRow({
+  email,
+  account,
+  onEnterCode,
+}: {
+  email: string | null;
+  account: AccountInfo | null;
+  onEnterCode: () => void;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(null);
+  const pending = account?.pendingEmail;
+  const placeholder = isPlaceholderEmail(email);
+
+  async function run(kind: "resend" | "cancel") {
+    setBusy(true);
+    setMessage(null);
+    const res = await callAction(kind === "resend" ? resendEmailChangeAction : cancelEmailChangeAction);
+    setBusy(false);
+    if (!res.ok) return setMessage({ tone: "error", text: res.message });
+    if (kind === "resend") setMessage({ tone: "success", text: "Confirmation email sent again." });
+    else router.refresh();
+  }
+
+  const link = "min-h-11 px-1 font-semibold text-green disabled:opacity-50";
+
+  return (
+    <div className="flex flex-col gap-1.5 border-b border-surface-2 px-[18px] py-3.5">
+      <div className="flex min-h-7 items-center justify-between gap-3">
+        <span className="text-base font-semibold">Email</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm text-muted">{placeholder ? "Not added" : email}</span>
+          {!placeholder && account?.verified && <span className="shrink-0 text-xs font-semibold text-green">Verified</span>}
+        </span>
+      </div>
+      {placeholder && !pending && (
+        <p className="flex items-start gap-2 text-[13px] leading-[1.4] text-ink">
+          <span aria-hidden className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-gold" />
+          Add an email so you can reset your password if you forget it.
+        </p>
+      )}
+      {pending && (
+        <div className="flex flex-wrap items-center gap-x-1 text-[13px] text-muted">
+          <span>
+            Pending: <span className="text-ink">{pending}</span>
+          </span>
+          <span aria-hidden>·</span>
+          <button type="button" disabled={busy} onClick={onEnterCode} className={link}>
+            Enter code
+          </button>
+          <span aria-hidden>·</span>
+          <button type="button" disabled={busy} onClick={() => run("resend")} className={link}>
+            Resend
+          </button>
+          <span aria-hidden>·</span>
+          <button type="button" disabled={busy} onClick={() => run("cancel")} className={link}>
+            Cancel
+          </button>
+        </div>
+      )}
+      <FormMessage tone={message?.tone}>{message?.text}</FormMessage>
+    </div>
+  );
+}
+
 function ChangePassword({ onDone }: { onDone: () => void }) {
+  const router = useRouter();
+  const captcha = useTurnstile();
+  const [current, setCurrent] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
+  const [fieldError, setFieldError] = useState<{ current?: string; password?: string; confirm?: string }>({});
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    if (password.length < 6) return setError("Password must be at least 6 characters.");
-    if (password !== confirm) return setError("Passwords don't match.");
+    const errs: typeof fieldError = {};
+    if (!current) errs.current = "Enter your current password.";
+    if (!isStrongPassword(password)) errs.password = "Meet every rule below.";
+    else if (password !== confirm) errs.confirm = "Passwords don't match.";
+    setFieldError(errs);
+    const first = (["current", "password", "confirm"] as const).find((k) => errs[k]);
+    if (first) return document.getElementById(`pw-${first}`)?.focus();
+
     setBusy(true);
-    const supabase = createClient();
-    const { error: updErr } = await supabase.auth.updateUser({ password });
-    if (updErr) {
-      setError(updErr.message);
-      setBusy(false);
+    const res = await callAction(() => changePasswordAction({ current, password, captchaToken: captcha.token }));
+    captcha.reset();
+    setBusy(false);
+    if (!res.ok) {
+      if (res.code === "invalid_credentials") {
+        setFieldError({ current: res.message });
+        document.getElementById("pw-current")?.focus();
+      } else setError(res.message);
       return;
     }
     setDone(true);
-    setBusy(false);
-    setTimeout(onDone, 1200);
+    if (res.redirectTo) {
+      router.replace(res.redirectTo);
+      router.refresh();
+      return;
+    }
+    setTimeout(onDone, 1500);
   }
 
   return (
-    <form onSubmit={save} className="flex flex-col gap-4">
-      <div className="elevation-1 flex flex-col gap-2.5 rounded-[28px] p-5">
-        <input type="password" autoComplete="new-password" aria-label="New password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="New password" className={inputClass} />
-        <input type="password" autoComplete="new-password" aria-label="Confirm new password" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="Confirm new password" className={inputClass} />
+    <form noValidate onSubmit={save} className="flex flex-col gap-4">
+      <div className="elevation-1 flex flex-col gap-4 rounded-[28px] p-5">
+        <PasswordField
+          id="pw-current"
+          label="Current password"
+          autoComplete="current-password"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          error={fieldError.current}
+        />
+        <PasswordField
+          id="pw-password"
+          label="New password"
+          autoComplete="new-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          error={fieldError.password}
+        />
+        <PasswordField
+          id="pw-confirm"
+          label="Confirm new password"
+          autoComplete="new-password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          error={fieldError.confirm}
+          showCapsHint={false}
+        />
+        <PasswordChecklist password={password} confirm={confirm} />
+        {captcha.widget}
       </div>
-      {error && <p className="text-center text-sm text-gold">{error}</p>}
-      {done && <p className="text-center text-sm text-green">Password updated.</p>}
+      <p className="px-1 text-[13px] text-muted">Other devices will be signed out.</p>
+      <FormMessage tone={done ? "success" : "error"}>{done ? "Password updated." : error}</FormMessage>
       <button type="submit" disabled={busy || done} className={PRIMARY_BUTTON}>
         {busy ? "Saving…" : "Update password"}
+      </button>
+    </form>
+  );
+}
+
+type EmailStep = "form" | "code-new" | "code-current" | "done";
+
+/**
+ * Add or change the account email, then prove it with the 6-digit code (or
+ * the link) sent there. With Supabase's "Secure email change" the current
+ * address confirms too; accounts on a placeholder address skip that side
+ * because nothing can be delivered there.
+ */
+function ChangeEmail({
+  current,
+  pendingEmail,
+  onDone,
+}: {
+  current: string | null;
+  pendingEmail: string | null;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const placeholder = isPlaceholderEmail(current);
+  const [step, setStep] = useState<EmailStep>(pendingEmail ? "code-new" : "form");
+  const [email, setEmail] = useState("");
+  const [target, setTarget] = useState(pendingEmail ?? "");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(null);
+
+  async function send(e: React.FormEvent) {
+    e.preventDefault();
+    setMessage(null);
+    if (!isValidEmail(email)) {
+      setMessage({ tone: "error", text: "Enter a valid email address." });
+      return document.getElementById("new-email")?.focus();
+    }
+    setBusy(true);
+    const res = await callAction(() => changeEmailAction({ email }));
+    setBusy(false);
+    if (!res.ok) {
+      setMessage({ tone: "error", text: res.message });
+      return document.getElementById("new-email")?.focus();
+    }
+    setTarget(email.trim().toLowerCase());
+    setCode("");
+    setStep("code-new");
+    router.refresh();
+  }
+
+  async function verify(value = code) {
+    setMessage(null);
+    if (value.length !== 6) {
+      setMessage({ tone: "error", text: "Enter the 6-digit code from the email." });
+      return;
+    }
+    const sentTo = step === "code-current" ? current ?? "" : target;
+    setBusy(true);
+    const res = await callAction(() => verifyEmailChangeAction({ email: sentTo, code: value }));
+    setBusy(false);
+    setCode("");
+    if (!res.ok) {
+      setMessage({ tone: "error", text: res.message });
+      return;
+    }
+    if (res.status === "pending_current" && step === "code-new") {
+      setStep("code-current");
+      setMessage({ tone: "success", text: `${target} confirmed.` });
+      return;
+    }
+    if (res.redirectTo) {
+      router.replace(res.redirectTo);
+      router.refresh();
+      return;
+    }
+    setStep("done");
+    router.refresh();
+  }
+
+  async function resend(): Promise<boolean> {
+    const res = await callAction(resendEmailChangeAction);
+    if (!res.ok) {
+      setMessage({ tone: "error", text: res.message });
+      return false;
+    }
+    setMessage({ tone: "success", text: "We've sent it again." });
+    return true;
+  }
+
+  if (step === "done") {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="elevation-1 flex flex-col gap-2 rounded-[28px] p-5">
+          <span className="font-display text-xl font-semibold">Email {placeholder ? "added" : "updated"}</span>
+          <p className="text-[15px] leading-[1.45] text-muted">
+            <span className="text-ink">{target}</span> is verified. Password reset links and codes will go there.
+          </p>
+        </div>
+        <button type="button" onClick={onDone} className={PRIMARY_BUTTON}>
+          Done
+        </button>
+      </div>
+    );
+  }
+
+  if (step === "code-new" || step === "code-current") {
+    const sentTo = step === "code-current" ? current : target;
+    return (
+      <form
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          verify();
+        }}
+        className="flex flex-col gap-4"
+      >
+        <div className="elevation-1 flex flex-col gap-4 rounded-[28px] p-5">
+          <p className="text-[15px] leading-[1.45] text-muted">
+            {step === "code-current" ? "Last step: enter" : "Enter"} the 6-digit code we sent to{" "}
+            <span className="font-semibold text-ink">{sentTo}</span>, or tap the link in that email.
+          </p>
+          <CodeInput value={code} onChange={setCode} onComplete={(v) => verify(v)} error={message?.tone === "error"} disabled={busy} />
+          <FormMessage tone={message?.tone}>{message?.text}</FormMessage>
+          <div className="flex justify-center">
+            <ResendButton onResend={resend} startCooling={!pendingEmail || step === "code-current"} />
+          </div>
+        </div>
+        {step === "code-current" && (
+          <p className="px-1 text-[13px] text-muted">For your security, changes to an existing email are confirmed at both addresses.</p>
+        )}
+        <button type="submit" disabled={busy} className={PRIMARY_BUTTON}>
+          {busy ? "Verifying…" : "Verify"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setStep("form");
+            setMessage(null);
+          }}
+          className="h-11 text-[15px] font-semibold text-muted active:text-ink"
+        >
+          Use a different email
+        </button>
+      </form>
+    );
+  }
+
+  return (
+    <form noValidate onSubmit={send} className="flex flex-col gap-4">
+      <div className="elevation-1 flex flex-col gap-4 rounded-[28px] p-5">
+        {!placeholder && current && (
+          <p className="text-[13px] text-muted">
+            Current: <span className="text-ink">{current}</span>
+          </p>
+        )}
+        <Field
+          id="new-email"
+          label={placeholder ? "Email" : "New email"}
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          error={message?.tone === "error" ? message.text : undefined}
+        />
+      </div>
+      <p className="px-1 text-[13px] text-muted">
+        We&apos;ll send a 6-digit code and a link to check it&apos;s yours. It&apos;s used to reset your password.
+      </p>
+      <button type="submit" disabled={busy} className={PRIMARY_BUTTON}>
+        {busy ? "Sending…" : "Send code"}
       </button>
     </form>
   );
