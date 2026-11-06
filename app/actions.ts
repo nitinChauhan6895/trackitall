@@ -519,11 +519,27 @@ export async function updateProfile(input: {
   const first = input.first_name.trim().slice(0, 60);
   const last = input.last_name.trim().slice(0, 60);
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("profiles")
     .update({ first_name: first || null, last_name: last || null })
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .select("user_id");
   if (error) throw error;
+
+  // Older accounts can lack a profile row; an update would then change
+  // nothing and the name would silently not save. Create the row instead.
+  if (!updated || updated.length === 0) {
+    const local = (user.email ?? "user").split("@")[0].toLowerCase().replace(/[^a-z0-9._-]/g, "") || "user";
+    const username = `${local.slice(0, 24)}${user.id.replace(/-/g, "").slice(0, 4)}`;
+    const { error: insErr } = await supabase.from("profiles").insert({
+      user_id: user.id,
+      username,
+      email: user.email,
+      first_name: first || null,
+      last_name: last || null,
+    });
+    if (insErr) throw insErr;
+  }
 
   // Keep auth metadata in sync (used as a fallback display source).
   await supabase.auth.updateUser({
