@@ -22,9 +22,7 @@ import {
   profileInitial,
   type Measurement,
   type MeasurementField,
-  type MuscleGroup,
 } from "@/lib/types";
-import MuscleIcon, { MUSCLE_TONE } from "@/components/MuscleIcon";
 import { evaluateBadges, sortedByEarned } from "@/lib/badges";
 import { groupPrs } from "@/lib/prGroups";
 import { parseMonthParam, prevMonth, toDateKey } from "@/lib/date";
@@ -354,46 +352,53 @@ async function RecentTraining() {
     <div className="elevation-1 flex flex-col overflow-hidden rounded-3xl">
       {days.map((day) => {
         const { top, sub } = dayLabels(day.key, day.isToday);
-        const href = day.groups.length ? `/day/${day.key}` : `/log/${day.key}`;
+        const trained = day.groups.length > 0;
+        const href = trained ? `/day/${day.key}` : `/log/${day.key}`;
         return (
           <Link
             key={day.key}
             href={href}
-            className="flex items-center gap-3 border-b border-surface-2 px-[18px] py-3.5 text-ink last:border-0 active:bg-white/[0.04]"
+            className={[
+              "flex gap-3 border-b border-surface-2 pl-[18px] pr-3.5 text-ink last:border-0 active:bg-white/[0.06]",
+              trained ? "bg-green/[0.05] py-4" : "min-h-16 items-center",
+            ].join(" ")}
           >
-            <div className="flex w-20 shrink-0 flex-col">
+            <div className="flex w-[88px] shrink-0 flex-col">
               <span className="text-base font-semibold">{top}</span>
               <span className="text-[13px] text-muted">{sub}</span>
             </div>
-            <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-1.5">
-              {day.groups.length === 0 ? (
-                <span className="elevation-2 rounded-full px-2.5 py-1.5 text-[13px] text-muted">Rest day</span>
-              ) : (
-                day.groups.map((g) => <MuscleChip key={g} group={g} />)
-              )}
-            </div>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="shrink-0 text-subtle">
+            {trained ? (
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <span className="text-[11px] font-semibold tracking-[0.08em] text-green">WORKOUT</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {day.groups.map((g) => (
+                    <span key={g} className="elevation-2 rounded-full px-[11px] py-[5px] text-[13px]">
+                      {MUSCLE_GROUP_LABELS[g]}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <span className="flex-1 text-sm text-subtle">Rest day</span>
+            )}
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+              className={["shrink-0 self-center", trained ? "text-subtle" : "text-white/30"].join(" ")}
+            >
               <path d="M9 18l6-6-6-6" />
             </svg>
           </Link>
         );
       })}
     </div>
-  );
-}
-
-function MuscleChip({ group }: { group: MuscleGroup }) {
-  const tone = MUSCLE_TONE[group];
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full py-1 pl-1 pr-2"
-      style={{ backgroundColor: `${tone}22` }}
-    >
-      <span className="h-4 w-4" style={{ color: tone }}>
-        <MuscleIcon group={group} />
-      </span>
-      <span className="text-[11px] font-medium text-ink">{MUSCLE_GROUP_LABELS[group]}</span>
-    </span>
   );
 }
 
