@@ -12,22 +12,27 @@ import {
 } from "@/lib/types";
 import { toDateKey } from "@/lib/date";
 import { deleteMeasurement, saveMeasurement } from "@/app/actions";
-import { MetricTile, metricIcon } from "@/components/Tiles";
 
-// Latest non-null value recorded for each tracked metric (entries are newest-first).
-function latestValues(entries: Measurement[]) {
-  return MEASUREMENT_FIELDS.map((f) => {
-    const hit = entries.find((m) => m[f.key] != null);
-    return { field: f, value: hit ? hit[f.key] : null };
-  });
+// Latest non-null value recorded for a metric (entries are newest-first).
+function latest(entries: Measurement[], key: MeasurementField): number | null {
+  const hit = entries.find((m) => m[key] != null);
+  return hit ? (hit[key] as number) : null;
 }
-
-const inputClass =
-  "w-full rounded-xl border border-white/10 bg-surface px-3 py-2.5 text-base text-ink outline-none placeholder:text-muted focus:border-gold";
 
 // Locale-independent so the server-rendered HTML matches every device
 // (see lib/dateFormat.ts).
 const fmtDate = formatShortDate;
+
+// The form's body grid reads weight, fat, height, age (as in the design);
+// everything else is a circumference.
+const BODY_ORDER: string[] = ["bodyweight", "body_fat_pct", "height", "age"];
+const BODY_FIELDS = MEASUREMENT_FIELDS.filter((f) => BODY_ORDER.includes(f.key)).sort(
+  (a, b) => BODY_ORDER.indexOf(a.key) - BODY_ORDER.indexOf(b.key),
+);
+const CIRCUMFERENCE_FIELDS = MEASUREMENT_FIELDS.filter((f) => !BODY_ORDER.includes(f.key));
+
+const GLASS_BACK =
+  "elevation-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-ink active:bg-white/15";
 
 export default function MeasurementsManager({
   initial,
@@ -45,107 +50,110 @@ export default function MeasurementsManager({
     initialData: initial,
   });
 
-  function done() {
+  function close() {
     setEditing(null);
     setAdding(false);
+  }
+  function done() {
+    close();
     queryClient.invalidateQueries({ queryKey: qk.measurements() });
   }
 
+  if (editing || adding) {
+    return (
+      // A full-screen layer over the tab bar; the form has its own actions.
+      <main className="fixed inset-0 z-40 mx-auto flex w-full max-w-md flex-col overflow-y-auto bg-page px-4 pb-10 safe-top">
+        <MeasurementForm key={editing?.id ?? "new"} editing={editing} onDone={done} onCancel={close} />
+      </main>
+    );
+  }
+
+  const weight = latest(entries, "bodyweight");
+
   return (
-    <main className="flex flex-1 flex-col px-4 pb-16 safe-top">
-      <header className="flex items-center gap-3 py-4">
-        <Link
-          href="/"
-          aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-xl active:bg-white/10"
-        >
-          ←
+    <main className="flex flex-1 flex-col gap-5 px-4 pb-36 safe-top">
+      <div className="flex items-center gap-3 pt-4">
+        <Link href="/" aria-label="Back" className={GLASS_BACK}>
+          <BackArrow />
         </Link>
-        <h1 className="flex items-center gap-2 text-lg font-semibold">
-          <span aria-hidden>📏</span> Measurements
-        </h1>
-      </header>
+        <span className="flex min-w-0 flex-1 flex-col gap-px">
+          <h1 className="font-display text-[26px] font-bold leading-tight tracking-[-0.02em]">Measurements</h1>
+          <span className="text-[13px] text-muted">
+            {entries.length ? `Last updated ${fmtDate(entries[0].entry_date)}` : "Track your body over time"}
+          </span>
+        </span>
+      </div>
 
-      {editing || adding ? (
-        <MeasurementForm
-          key={editing?.id ?? "new"}
-          editing={editing}
-          onDone={done}
-          onCancel={() => {
-            setEditing(null);
-            setAdding(false);
-          }}
-        />
-      ) : (
-        <>
-          {entries.length > 0 && (
-            <div className="mb-4 grid grid-cols-2 gap-3">
-              {latestValues(entries)
-                .filter((m) => m.value != null)
-                .map(({ field, value }) => (
-                  <MetricTile
-                    key={field.key}
-                    icon={metricIcon(field.key)}
-                    label={field.label}
-                    value={String(value)}
-                    unit={field.unit}
-                  />
-                ))}
+      <section className="elevation-1 flex flex-col gap-[18px] rounded-[28px] px-5 pb-5 pt-[22px]">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs font-semibold tracking-[0.08em] text-muted">BODYWEIGHT</span>
+          <span className="font-display text-[56px] font-bold leading-[1.05] tracking-[-0.03em]">
+            {weight ?? "—"}
+            {weight != null && <span className="text-xl font-semibold text-green"> kg</span>}
+          </span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <MiniStat value={latest(entries, "height")} unit="cm" label="Height" />
+          <MiniStat value={latest(entries, "body_fat_pct")} unit="%" label="Body fat" />
+          <MiniStat value={latest(entries, "age")} unit="yr" label="Age" />
+        </div>
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="h-[52px] rounded-full bg-green text-base font-semibold text-ink-inverse transition active:scale-[0.98]"
+        >
+          Add entry
+        </button>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-baseline justify-between px-1">
+          <h2 className="font-display text-xl font-semibold">History</h2>
+          <span className="text-sm text-muted">
+            {entries.length} {entries.length === 1 ? "entry" : "entries"}
+          </span>
+        </div>
+        {entries.length === 0 ? (
+          <p className="rounded-3xl border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted">
+            No measurements yet. Add your first entry above.
+          </p>
+        ) : (
+          entries.map((m) => (
+            <div key={m.id} className="elevation-1 flex flex-col gap-3 rounded-3xl px-[18px] pb-[18px] pt-4">
+              <div className="flex items-baseline justify-between">
+                <span className="text-base font-semibold">{fmtDate(m.entry_date)}</span>
+                <button type="button" onClick={() => setEditing(m)} className="text-sm font-semibold text-green active:opacity-70">
+                  Edit
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {MEASUREMENT_FIELDS.map((f) => {
+                  const v = m[f.key];
+                  if (v == null) return null;
+                  return (
+                    <span key={f.key} className="elevation-2 rounded-xl px-2.5 py-[7px] text-[13px]">
+                      <span className="text-muted">{f.label}</span> {v} {f.unit}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="mb-4 w-full rounded-2xl bg-green px-4 py-3.5 text-base font-semibold text-ink-inverse transition active:scale-[0.98]"
-          >
-            + Add entry
-          </button>
-
-          <h2 className="mb-2 text-sm font-semibold text-muted">History</h2>
-
-          {entries.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted">
-              No measurements yet. Add your first entry above.
-            </p>
-          ) : (
-            <ul className="space-y-2.5">
-              {entries.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    onClick={() => setEditing(m)}
-                    className="w-full rounded-2xl elevation-1 pressable px-4 py-3.5 text-left active:bg-white/10"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-ink">
-                        {fmtDate(m.entry_date)}
-                      </span>
-                      <span className="text-sm text-gold">Edit ›</span>
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {MEASUREMENT_FIELDS.map((f) => {
-                        const v = m[f.key];
-                        if (v == null) return null;
-                        return (
-                          <span
-                            key={f.key}
-                            className="rounded-lg bg-beige px-2 py-1 text-xs text-ink"
-                          >
-                            {f.label} {v}
-                            {f.unit}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
+          ))
+        )}
+      </section>
     </main>
+  );
+}
+
+function MiniStat({ value, unit, label }: { value: number | null; unit: string; label: string }) {
+  return (
+    <div className="elevation-2 flex flex-col gap-0.5 rounded-2xl px-3.5 py-3">
+      <span className="font-display text-[22px] font-semibold">
+        {value ?? "—"}
+        {value != null && <span className="text-xs text-muted"> {unit}</span>}
+      </span>
+      <span className="text-xs text-muted">{label}</span>
+    </div>
   );
 }
 
@@ -169,6 +177,9 @@ function MeasurementForm({
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  const set = (key: MeasurementField) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setValues((prev) => ({ ...prev, [key]: e.target.value.replace(/[^0-9.]/g, "") }));
 
   function num(key: MeasurementField): number | null {
     const s = values[key].trim();
@@ -216,70 +227,106 @@ function MeasurementForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3">
-      <div>
-        <label className="mb-1 block text-sm text-muted">Date</label>
+    <form onSubmit={submit} className="flex min-h-full flex-1 flex-col gap-6 [&>*]:shrink-0">
+      <div className="flex items-center gap-3 pt-4">
+        <button type="button" onClick={onCancel} aria-label="Back" className={GLASS_BACK}>
+          <BackArrow />
+        </button>
+        <span className="flex flex-col gap-px">
+          <span className="text-[15px] font-semibold">Measurements</span>
+          <span className="text-[13px] text-muted">{editing ? "Edit entry" : "New entry"}</span>
+        </span>
+      </div>
+
+      <h1 className="px-1 font-display text-[34px] font-bold leading-[1.05] tracking-[-0.03em]">
+        {editing ? "Edit your" : "Log your"}
+        <br />
+        <span className="text-green">measurements</span>
+      </h1>
+
+      <label className="elevation-1 flex h-14 items-center justify-between gap-3 rounded-[20px] px-[18px]">
+        <span className="text-base font-semibold">Date</span>
         <input
           type="date"
           required
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          className={inputClass}
+          className="bg-transparent text-right text-[15px] font-medium text-muted outline-none [color-scheme:dark]"
         />
-      </div>
+      </label>
 
-      <div className="grid grid-cols-2 gap-3">
-        {MEASUREMENT_FIELDS.map((f) => (
-          <div key={f.key}>
-            <label className="mb-1 block text-sm text-muted">
-              {f.label} ({f.unit})
+      <section className="flex flex-col gap-3">
+        <span className="px-1 text-xs font-semibold tracking-[0.08em] text-muted">BODY</span>
+        <div className="grid grid-cols-2 gap-2.5">
+          {BODY_FIELDS.map((f) => (
+            <label key={f.key} className="elevation-1 flex flex-col gap-1.5 rounded-[20px] px-4 py-3.5">
+              <span className="text-[13px] text-muted">{f.label}</span>
+              <span className="flex items-baseline gap-1.5">
+                <input
+                  inputMode="decimal"
+                  value={values[f.key]}
+                  onChange={set(f.key)}
+                  placeholder="—"
+                  className="w-full min-w-0 bg-transparent p-0 font-display text-[28px] font-semibold text-ink outline-none placeholder:text-subtle"
+                />
+                <span className="text-sm font-semibold text-green">{f.unit}</span>
+              </span>
             </label>
-            <input
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="0.1"
-              value={values[f.key]}
-              onChange={(e) =>
-                setValues((prev) => ({ ...prev, [f.key]: e.target.value }))
-              }
-              placeholder="—"
-              className={inputClass}
-            />
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </section>
 
-      {error && <p className="text-sm text-gold">{error}</p>}
+      <section className="flex flex-col gap-3">
+        <div className="flex items-baseline justify-between px-1">
+          <span className="text-xs font-semibold tracking-[0.08em] text-muted">CIRCUMFERENCE</span>
+          <span className="text-xs text-subtle">all in cm · optional</span>
+        </div>
+        <div className="elevation-1 flex flex-col rounded-3xl">
+          {CIRCUMFERENCE_FIELDS.map((f) => (
+            <label
+              key={f.key}
+              className="flex min-h-[52px] items-center justify-between gap-3 border-b border-surface-2 px-[18px] last:border-0"
+            >
+              <span className="text-[15px] font-semibold">{f.label}</span>
+              <input
+                inputMode="decimal"
+                value={values[f.key]}
+                onChange={set(f.key)}
+                placeholder="—"
+                className="w-20 bg-transparent text-right font-display text-lg font-semibold text-ink outline-none placeholder:text-subtle"
+              />
+            </label>
+          ))}
+        </div>
+      </section>
 
-      <button
-        type="submit"
-        disabled={busy}
-        className="w-full rounded-xl bg-green px-4 py-3 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
-      >
-        {busy ? "Saving…" : editing ? "Update entry" : "Save entry"}
-      </button>
+      {error && <p className="text-center text-sm text-gold">{error}</p>}
 
-      <div className="flex gap-3">
+      <div className="mt-auto flex flex-col gap-2">
         <button
-          type="button"
-          onClick={onCancel}
+          type="submit"
           disabled={busy}
-          className="flex-1 rounded-xl border border-white/10 px-4 py-2.5 text-sm text-muted active:bg-white/10"
+          className="h-14 rounded-full bg-green text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
         >
-          Cancel
+          {busy ? "Saving…" : editing ? "Update entry" : "Save entry"}
         </button>
         {editing && (
-          <button
-            type="button"
-            onClick={remove}
-            disabled={busy}
-            className="flex-1 rounded-xl px-4 py-2.5 text-sm text-gold active:bg-gold-soft"
-          >
+          <button type="button" onClick={remove} disabled={busy} className="h-12 text-[15px] font-medium text-gold active:opacity-70">
             Delete entry
           </button>
         )}
+        <button type="button" onClick={onCancel} disabled={busy} className="h-12 text-[15px] font-medium text-muted active:opacity-70">
+          Cancel
+        </button>
       </div>
     </form>
+  );
+}
+
+function BackArrow() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M19 12H5M12 19l-7-7 7-7" />
+    </svg>
   );
 }
