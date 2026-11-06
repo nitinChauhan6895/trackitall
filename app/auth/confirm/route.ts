@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
   if (type === "email_change") {
     // Secure email change needs both addresses; say if one is still to go.
     const state = await settleEmailChange(supabase);
+    if (state === "done") await supabase.auth.refreshSession();
     dest.searchParams.set("toast", state === "pending_current" ? "email-pending" : "email");
     return NextResponse.redirect(dest);
   }

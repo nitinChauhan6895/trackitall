@@ -16,11 +16,7 @@ export async function settleEmailChange(supabase: SupabaseClient): Promise<"done
 
   if (isPlaceholderEmail(user.email)) {
     const { data: completed } = await supabase.rpc("complete_placeholder_email_change");
-    if (completed) {
-      // New email into the session token right away.
-      await supabase.auth.refreshSession();
-      return "done";
-    }
+    if (completed) return "done";
   }
   return "pending_current";
 }

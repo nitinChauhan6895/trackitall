@@ -11,6 +11,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createSessionClient, createStatelessClient } from "@/lib/supabase/stateless";
 import {
   authFailure,
   fail,
@@ -100,7 +101,7 @@ export async function requestLoginCodeAction(input: {
   const email = normalizeEmail(input.email);
   if (!isValidEmail(email)) return fail("email_address_invalid");
 
-  const supabase = createClient();
+  const supabase = createStatelessClient();
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
@@ -161,7 +162,7 @@ export async function signUpAction(input: {
   if (!isStrongPassword(input.password)) return fail("weak_password");
 
   const [first, ...rest] = name.split(" ");
-  const supabase = createClient();
+  const supabase = createStatelessClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password: input.password,
@@ -180,7 +181,13 @@ export async function signUpAction(input: {
     return res;
   }
   // "Confirm email" switched off in Supabase: the account is live already.
-  if (data.session) return { ok: true, redirectTo: "/" };
+  if (data.session) {
+    await createClient().auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    });
+    return { ok: true, redirectTo: "/" };
+  }
   return { ok: true, redirectTo: verify };
 }
 
@@ -190,7 +197,7 @@ export async function resendSignupCodeAction(input: {
 }): Promise<AuthResult> {
   const email = normalizeEmail(input.email);
   if (!isValidEmail(email)) return fail("email_address_invalid");
-  const supabase = createClient();
+  const supabase = createStatelessClient();
   const { error } = await supabase.auth.resend({
     type: "signup",
     email,
@@ -211,7 +218,7 @@ export async function requestPasswordResetAction(input: {
 }): Promise<AuthResult> {
   const email = normalizeEmail(input.email);
   if (!isValidEmail(email)) return fail("email_address_invalid");
-  const supabase = createClient();
+  const supabase = createStatelessClient();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: confirmUrl("/reset-password"),
     captchaToken: input.captchaToken,
@@ -274,7 +281,9 @@ export async function changePasswordAction(input: {
   const { error } = await supabase.auth.updateUser({ password: input.password });
   if (error) return authFailure(error);
   await supabase.auth.signOut({ scope: "others" });
-  return { ok: true };
+  // The check above rewrote the session cookies, which re-renders the page;
+  // land on Profile with a confirmation instead of a half-reset form.
+  return { ok: true, redirectTo: "/profile?toast=password" };
 }
 
 export async function changeEmailAction(input: { email: string }): Promise<AuthResult> {
@@ -284,7 +293,9 @@ export async function changeEmailAction(input: { email: string }): Promise<AuthR
   if (!isValidEmail(email)) return fail("email_address_invalid");
   if (email === user.email?.toLowerCase()) return fail("validation_failed", "That's already your email.");
 
-  const { error } = await supabase.auth.updateUser(
+  // Cookie-free copy of the session, so the "enter code" step survives.
+  const client = (await createSessionClient()) ?? supabase;
+  const { error } = await client.auth.updateUser(
     { email },
     { emailRedirectTo: confirmUrl("/profile") },
   );
@@ -309,19 +320,22 @@ export async function verifyEmailChangeAction(input: { email: string; code: stri
   const token = cleanCode(input.code);
   if (token.length !== 6) return fail("otp_expired", "Enter the 6-digit code from the email.");
 
-  const { error } = await supabase.auth.verifyOtp({ email, token, type: "email_change" });
+  const { error } = await createStatelessClient().auth.verifyOtp({ email, token, type: "email_change" });
   if (error) return authFailure(error);
 
   const state = await settleEmailChange(supabase);
   if (state === "none") return fail("session_expired");
-  return { ok: true, status: state };
+  if (state === "pending_current") return { ok: true, status: state };
+  // Done: put the new email into this device's session, then land on Profile.
+  await supabase.auth.refreshSession();
+  return { ok: true, status: "done", redirectTo: "/profile?toast=email" };
 }
 
 export async function resendEmailChangeAction(): Promise<AuthResult> {
   const { supabase, user } = await requireVerifiedUser();
   const pending = (user as { new_email?: string } | null)?.new_email;
   if (!user || !pending) return fail("validation_failed", "There's no email change waiting.");
-  const { error } = await supabase.auth.resend({
+  const { error } = await createStatelessClient().auth.resend({
     type: "email_change",
     email: pending,
     options: { emailRedirectTo: confirmUrl("/profile") },

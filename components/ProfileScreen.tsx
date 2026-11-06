@@ -553,6 +553,7 @@ function EmailRow({
 }
 
 function ChangePassword({ onDone }: { onDone: () => void }) {
+  const router = useRouter();
   const captcha = useTurnstile();
   const [current, setCurrent] = useState("");
   const [password, setPassword] = useState("");
@@ -585,6 +586,11 @@ function ChangePassword({ onDone }: { onDone: () => void }) {
       return;
     }
     setDone(true);
+    if (res.redirectTo) {
+      router.replace(res.redirectTo);
+      router.refresh();
+      return;
+    }
     setTimeout(onDone, 1500);
   }
 
@@ -692,6 +698,11 @@ function ChangeEmail({
     if (res.status === "pending_current" && step === "code-new") {
       setStep("code-current");
       setMessage({ tone: "success", text: `${target} confirmed.` });
+      return;
+    }
+    if (res.redirectTo) {
+      router.replace(res.redirectTo);
+      router.refresh();
       return;
     }
     setStep("done");
