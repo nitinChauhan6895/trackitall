@@ -78,180 +78,157 @@ export default function NutritionDiary({
 
   const overCal = totals.calories > targets.daily_calories;
 
+  const left = Math.round(targets.daily_calories - totals.calories);
+  const loggedKcal = Math.round(totals.calories);
+
   return (
-    <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
-      <header className="flex items-center justify-between gap-2 py-4">
-        <h1 className="flex items-center gap-2 text-xl font-bold">
-          <span aria-hidden>🍽️</span> Nutrition
-        </h1>
+    <main className="flex flex-1 flex-col gap-5 px-4 pb-36 safe-top">
+      <div className="flex items-center gap-3 pt-4">
+        <Link href="/" aria-label="Back" className={GLASS_BACK}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+        </Link>
+        <h1 className="flex-1 font-display text-[26px] font-bold tracking-[-0.02em]">Nutrition</h1>
         <button
           type="button"
           onClick={() => setShowTargets(true)}
-          className="flex items-center gap-1.5 rounded-full elevation-1 pressable px-3 py-1.5 text-sm font-medium text-muted active:bg-white/10"
+          className="elevation-3 h-11 shrink-0 rounded-full bg-white/[0.08] px-[18px] text-sm font-semibold text-ink active:bg-white/15"
         >
-          ⚙︎ Targets
+          Targets
         </button>
-      </header>
+      </div>
 
-      {/* Date navigator */}
-      <div className="mb-4 flex items-center justify-between rounded-2xl elevation-1 px-2 py-2">
-        <Link
-          href={`/nutrition?d=${shiftKey(date, -1)}`}
-          aria-label="Previous day"
-          className="flex h-9 w-10 items-center justify-center rounded-xl text-xl text-muted active:bg-white/10"
-        >
-          ‹
+      {/* Day switcher */}
+      <div className="elevation-1 flex h-12 items-center justify-between rounded-full px-1">
+        <Link href={`/nutrition?d=${shiftKey(date, -1)}`} aria-label="Previous day" className="flex h-10 w-11 items-center justify-center rounded-full text-muted active:bg-white/10">
+          <Chevron d="M15 18l-6-6 6-6" />
         </Link>
-        <div className="text-center">
-          <p className="text-base font-bold text-ink">{heading(date, today)}</p>
+        <span className="truncate text-[15px] font-semibold">
+          {heading(date, today)}
+          {(date === today || date === shiftKey(today, -1)) && (
+            <span className="font-normal text-muted"> · {formatWeekdayDayMonth(date)}</span>
+          )}
           {date !== today && (
-            <Link href={`/nutrition?d=${today}`} className="text-xs font-medium text-green">
-              Jump to today
+            <Link href={`/nutrition?d=${today}`} className="ml-2 text-xs font-semibold text-green">
+              Today
             </Link>
           )}
-        </div>
-        <Link
-          href={`/nutrition?d=${shiftKey(date, 1)}`}
-          aria-label="Next day"
-          className="flex h-9 w-10 items-center justify-center rounded-xl text-xl text-muted active:bg-white/10"
-        >
-          ›
+        </span>
+        <Link href={`/nutrition?d=${shiftKey(date, 1)}`} aria-label="Next day" className="flex h-10 w-11 items-center justify-center rounded-full text-muted active:bg-white/10">
+          <Chevron d="M9 18l6-6-6-6" />
         </Link>
       </div>
 
-      {/* Calorie ring + macro bars */}
-      <section className="mb-4 rounded-2xl elevation-1 p-4">
-        <div className="flex items-center gap-4">
-          <CalorieRing
-            consumed={totals.calories}
-            target={targets.daily_calories}
-            over={overCal}
-          />
-          <div className="flex-1 space-y-2.5">
-            {MACRO_META.map((m) => {
-              const consumed = Math.round(totals[m.key]);
-              const target = targets[m.targetKey];
-              return (
-                <MacroBar
-                  key={m.key}
-                  label={m.label}
-                  color={m.color}
-                  consumed={consumed}
-                  target={target}
-                />
-              );
-            })}
+      {/* Hero */}
+      <section className="elevation-1 flex flex-col gap-[18px] rounded-[28px] px-5 pb-5 pt-[22px]">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-xs font-semibold tracking-[0.08em] text-muted">{overCal ? "OVER TARGET" : "CALORIES LEFT"}</span>
+            <span className={`font-display text-[56px] font-bold leading-[1.05] tracking-[-0.03em] ${overCal ? "text-gold" : ""}`}>
+              {fmtThousands(Math.abs(left))}
+            </span>
+            <span className="text-[15px] text-[#D4D4D4]">
+              of {fmtThousands(targets.daily_calories)} kcal · {fmtThousands(loggedKcal)} eaten
+            </span>
           </div>
+          <CalorieRing consumed={totals.calories} target={targets.daily_calories} over={overCal} />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {MACRO_META.map((m) => (
+            <MacroTile key={m.key} label={m.label} consumed={Math.round(totals[m.key])} target={targets[m.targetKey]} />
+          ))}
         </div>
         {!hasTargets && (
-          <button
-            type="button"
-            onClick={() => setShowTargets(true)}
-            className="mt-3 w-full rounded-xl bg-green-tint px-3 py-2 text-xs font-medium text-green active:opacity-80"
-          >
-            Using default targets — tap to set your own →
-          </button>
+          <div className="flex items-center justify-between gap-3 border-t border-[#2C2C2C] pt-3.5">
+            <span className="text-[13px] text-muted">Using default targets</span>
+            <button type="button" onClick={() => setShowTargets(true)} className="text-[13px] font-semibold text-green active:opacity-70">
+              Set your own
+            </button>
+          </div>
         )}
       </section>
 
       {/* Meals */}
-      <div className="space-y-3">
-        {MEALS.map((meal) => {
-          const items = byMeal(meal);
-          const sub = items.reduce((n, e) => n + e.computed_calories, 0);
-          return (
-            <section
-              key={meal}
-              className="overflow-hidden rounded-2xl elevation-1"
-            >
-              <button
-                type="button"
-                disabled={items.length === 0}
-                onClick={() => setBreakdown({ meal, entries: items })}
-                className="flex w-full items-center gap-2 px-4 pt-3.5 text-left disabled:cursor-default"
-              >
-                <h2 className="text-sm font-bold uppercase tracking-wide text-ink">
-                  {meal}
-                </h2>
-                {items.length > 0 && (
-                  <span className="ml-auto flex items-center gap-1.5 text-sm font-semibold tabular-nums text-muted">
-                    {Math.round(sub)} kcal
-                    <span aria-hidden className="text-xs">›</span>
-                  </span>
-                )}
-              </button>
-
-              <div className="px-4 pb-2 pt-1">
-                {items.length === 0 ? (
-                  <EmptyMeal
-                    disabled={pending}
-                    onCopyYesterday={() =>
-                      startTransition(async () => {
-                        await copyMeal({
-                          fromDate: shiftKey(date, -1),
-                          toDate: date,
-                          meal,
-                        });
-                        refresh();
-                      })
-                    }
-                  />
-                ) : (
-                  items.map((e) => (
-                    <button
-                      key={e.id}
-                      type="button"
-                      onClick={() => setEditing(e)}
-                      className="flex w-full items-center gap-3 border-b border-white/5 py-2.5 text-left last:border-0 active:opacity-70"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium text-ink">
-                          {e.food_name}
-                        </span>
-                        <span className="block truncate text-xs text-muted">
-                          {trimQty(e.quantity)} {e.unit} · P{Math.round(e.computed_protein)}
-                          {" "}C{Math.round(e.computed_carbs)} F{Math.round(e.computed_fat)}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-sm font-semibold tabular-nums text-ink">
-                        {Math.round(e.computed_calories)}
-                      </span>
-                    </button>
-                  ))
-                )}
-
-                <div className="mt-1 flex items-center justify-between">
-                  <Link
-                    href={searchHref(meal)}
-                    className="flex items-center gap-1.5 py-2 text-sm font-semibold text-green active:opacity-70"
+      <section className="flex flex-col gap-3">
+        <div className="flex items-baseline justify-between px-1">
+          <h2 className="font-display text-xl font-semibold">Meals</h2>
+          <span className="text-xs text-muted">{fmtThousands(loggedKcal)} kcal logged</span>
+        </div>
+        <div className="elevation-1 flex flex-col rounded-3xl">
+          {MEALS.map((meal) => {
+            const items = byMeal(meal);
+            const sub = Math.round(items.reduce((n, e) => n + e.computed_calories, 0));
+            return (
+              <div key={meal} className="border-b border-surface-2 last:border-0">
+                <div className="flex items-center gap-2.5 py-3.5 pl-[18px] pr-3.5">
+                  <button
+                    type="button"
+                    disabled={items.length === 0}
+                    onClick={() => setBreakdown({ meal, entries: items })}
+                    className="flex min-w-0 flex-1 flex-col gap-0.5 text-left disabled:cursor-default"
                   >
-                    + Add food
-                  </Link>
-                  {items.length > 0 && (
+                    <span className="text-base font-semibold">{meal}</span>
+                    <span className="text-[13px] text-subtle">
+                      {items.length === 0 ? "Nothing logged" : `${items.length} ${items.length === 1 ? "item" : "items"} · ${sub} kcal`}
+                    </span>
+                  </button>
+                  {items.length === 0 ? (
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() =>
+                        startTransition(async () => {
+                          await copyMeal({ fromDate: shiftKey(date, -1), toDate: date, meal });
+                          refresh();
+                        })
+                      }
+                      className="h-9 shrink-0 px-2 text-[13px] font-medium text-muted active:text-ink disabled:opacity-50"
+                    >
+                      Copy yesterday
+                    </button>
+                  ) : (
                     <button
                       type="button"
                       onClick={() => setSavingMeal({ meal, entries: items })}
-                      className="py-2 text-xs font-medium text-muted active:text-ink"
+                      className="h-9 shrink-0 px-2 text-[13px] font-medium text-muted active:text-ink"
                     >
-                      Save as meal
+                      Save meal
                     </button>
                   )}
+                  <Link
+                    href={searchHref(meal)}
+                    className="elevation-2 flex h-9 shrink-0 items-center rounded-full px-3.5 text-[13px] font-semibold text-green active:bg-white/10"
+                  >
+                    Add food
+                  </Link>
                 </div>
+                {items.length > 0 && (
+                  <ul className="flex flex-col gap-1.5 px-3.5 pb-3.5">
+                    {items.map((e) => (
+                      <li key={e.id}>
+                        <button
+                          type="button"
+                          onClick={() => setEditing(e)}
+                          className="elevation-2 flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-left active:bg-white/10"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">{e.food_name}</span>
+                            <span className="block truncate text-xs text-muted">
+                              {trimQty(e.quantity)} {e.unit} · P {Math.round(e.computed_protein)} · C {Math.round(e.computed_carbs)} · F {Math.round(e.computed_fat)}
+                            </span>
+                          </span>
+                          <span className="shrink-0 font-display text-[15px] font-semibold">{Math.round(e.computed_calories)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
-            </section>
-          );
-        })}
-      </div>
-
-      {/* Primary CTA */}
-      <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md border-t border-white/10 bg-page px-4 pb-5 pt-3 safe-bottom">
-        <Link
-          href={`/nutrition/search?d=${date}&meal=Breakfast`}
-          className="flex w-full items-center justify-center rounded-2xl bg-green px-4 py-4 text-base font-bold text-ink-inverse transition active:scale-[0.98]"
-        >
-          + Log food
-        </Link>
-      </div>
+            );
+          })}
+        </div>
+      </section>
 
       {editing && (
         <EditEntrySheet
@@ -433,6 +410,8 @@ function trimQty(n: number): string {
 
 // ---------- Calorie ring ----------
 
+// 84px ring: green while under target, gold once over; a dot marks the start
+// when nothing has been eaten yet.
 function CalorieRing({
   consumed,
   target,
@@ -442,91 +421,65 @@ function CalorieRing({
   target: number;
   over: boolean;
 }) {
-  const r = 42;
+  const r = 34;
   const c = 2 * Math.PI * r;
   const frac = fraction(consumed, target);
-  const dash = c * frac;
-  const remaining = Math.max(0, target - consumed);
-  const color = over ? "#FFC95C" : "#22C55E";
-
   return (
-    <div className="relative h-28 w-28 shrink-0">
-      <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
-        <circle cx="50" cy="50" r={r} fill="none" stroke="#ffffff" strokeOpacity="0.08" strokeWidth="9" />
+    <svg width="84" height="84" viewBox="0 0 84 84" role="img" aria-label={`${Math.round(consumed)} of ${target} kilocalories eaten`} className="shrink-0">
+      <circle cx="42" cy="42" r={r} fill="none" stroke="#2C2C2C" strokeWidth="9" />
+      {frac > 0 ? (
         <circle
-          cx="50"
-          cy="50"
+          cx="42"
+          cy="42"
           r={r}
           fill="none"
-          stroke={color}
+          stroke={over ? "#FFC95C" : "#22C55E"}
           strokeWidth="9"
           strokeLinecap="round"
-          strokeDasharray={`${dash} ${c}`}
+          strokeDasharray={`${c * frac} ${c}`}
+          transform="rotate(-90 42 42)"
         />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="text-2xl font-bold tabular-nums text-ink">
-          {Math.round(consumed)}
-        </span>
-        <span className="text-[11px] text-muted">
-          {over ? `+${Math.round(consumed - target)} over` : `${Math.round(remaining)} left`}
-        </span>
-        <span className="text-[10px] text-muted">of {target}</span>
-      </div>
-    </div>
+      ) : (
+        <circle cx="42" cy="8" r="4.5" fill="#22C55E" />
+      )}
+    </svg>
   );
 }
 
-function MacroBar({
-  label,
-  color,
-  consumed,
-  target,
-}: {
-  label: string;
-  color: string;
-  consumed: number;
-  target: number;
-}) {
+function MacroTile({ label, consumed, target }: { label: string; consumed: number; target: number }) {
   const frac = fraction(consumed, target);
+  const over = consumed > target;
   return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between text-xs">
-        <span className="font-semibold text-ink">{label}</span>
-        <span className="tabular-nums text-muted">
+    <div className="elevation-2 flex flex-col gap-2 rounded-2xl px-3.5 py-3">
+      <span className="flex justify-between gap-2 text-[13px]">
+        <span className="font-semibold">{label}</span>
+        <span className="text-muted">
           {consumed} / {target} g
         </span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-white/10">
-        <div
-          className="h-full rounded-full"
-          style={{ width: `${frac * 100}%`, backgroundColor: color }}
-        />
-      </div>
+      </span>
+      <span className="block h-[5px] rounded-full bg-[#3A3A3A]">
+        {frac > 0 && (
+          <span className={`block h-[5px] rounded-full ${over ? "bg-gold" : "bg-green"}`} style={{ width: `${frac * 100}%` }} />
+        )}
+      </span>
     </div>
   );
 }
 
-function EmptyMeal({
-  disabled,
-  onCopyYesterday,
-}: {
-  disabled: boolean;
-  onCopyYesterday: () => void;
-}) {
+const GLASS_BACK =
+  "elevation-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-ink active:bg-white/15";
+
+function Chevron({ d }: { d: string }) {
   return (
-    <div className="flex items-center justify-between gap-2 py-1">
-      <p className="text-sm italic text-muted">Nothing logged</p>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onCopyYesterday}
-        className="shrink-0 text-xs font-medium text-muted underline-offset-2 active:underline disabled:opacity-50"
-      >
-        Copy yesterday
-      </button>
-    </div>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d={d} />
+    </svg>
   );
+}
+
+/** Locale-free thousands grouping (SSR and client must match). */
+function fmtThousands(n: number): string {
+  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
 // ---------- Edit a logged entry (scale portion / remove) ----------

@@ -7,7 +7,7 @@ import { toDateKey } from "@/lib/date";
 
 // Routes that should NOT show the app nav (auth screens + full-screen flows that
 // carry their own bottom action bar — revisited in the day-view round).
-const HIDDEN = ["/login", "/forgot", "/reset", "/auth", "/log", "/day", "/prs"];
+const HIDDEN = ["/login", "/forgot", "/reset", "/auth", "/log", "/day", "/prs", "/nutrition/search"];
 
 export default function BottomNav() {
   const path = usePathname() ?? "/";
