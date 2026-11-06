@@ -111,31 +111,35 @@ export default function SearchClient({
 
   const shown = tab === "all" ? results : tab === "recent" ? filteredRecent : filteredMine;
 
+  const listLabel = tab === "all" ? "ALL FOODS" : tab === "recent" ? "RECENT" : "MY FOODS";
+
   return (
-    <main className="flex flex-1 flex-col px-4 pb-6 safe-top">
-      <header className="flex items-center gap-3 py-4">
+    <main className="flex flex-1 flex-col gap-[18px] px-4 pb-12 safe-top">
+      <div className="flex items-center gap-3 pt-4">
         <Link
           href={`/nutrition?d=${date}`}
           aria-label="Back to diary"
-          className="elevation-3 flex h-9 w-9 items-center justify-center rounded-full bg-surface text-xl active:bg-white/10"
+          className="elevation-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-ink active:bg-white/15"
         >
-          ←
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
         </Link>
-        <h1 className="text-lg font-bold leading-tight">Add food</h1>
-      </header>
+        <h1 className="flex-1 font-display text-[26px] font-bold tracking-[-0.02em]">Add food</h1>
+      </div>
 
       {/* Meal chooser */}
-      <div className="mb-3 grid grid-cols-4 gap-2">
+      <div role="radiogroup" aria-label="Meal" className="elevation-1 grid grid-cols-4 gap-1 rounded-[18px] p-1">
         {MEALS.map((m) => (
           <button
             key={m}
             type="button"
+            role="radio"
+            aria-checked={m === meal}
             onClick={() => setMeal(m)}
             className={[
-              "rounded-xl border px-1 py-2.5 text-sm font-semibold transition",
-              m === meal
-                ? "border-green bg-green-tint text-green"
-                : "border-white/10 bg-surface text-muted",
+              "h-11 rounded-[14px] text-[13px] transition",
+              m === meal ? "bg-[#3A3A3A] font-semibold text-ink" : "font-medium text-muted",
             ].join(" ")}
           >
             {m}
@@ -144,20 +148,23 @@ export default function SearchClient({
       </div>
 
       {/* Search bar */}
-      <div className="relative mb-3">
-        <span aria-hidden className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
-          🔍
-        </span>
+      <label className="elevation-1 flex h-14 items-center gap-3 rounded-[18px] px-[18px] focus-within:border-green/60">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden className="shrink-0 text-muted">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M20 20l-3.5-3.5" />
+        </svg>
+        <span className="sr-only">Search foods</span>
         <input
+          type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search foods…"
-          className="w-full rounded-2xl border border-white/10 bg-surface py-3 pl-10 pr-4 text-base text-ink outline-none placeholder:text-muted focus:border-green"
+          className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-muted"
         />
-      </div>
+      </label>
 
       {/* Tabs */}
-      <div className="mb-3 flex gap-2 overflow-x-auto">
+      <div className="flex gap-2 overflow-x-auto">
         {([
           ["all", "All"],
           ["recent", "Recent"],
@@ -168,9 +175,10 @@ export default function SearchClient({
             key={key}
             type="button"
             onClick={() => setTab(key)}
+            aria-pressed={tab === key}
             className={[
-              "shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold transition",
-              tab === key ? "bg-green text-ink-inverse" : "bg-surface text-muted",
+              "h-9 shrink-0 rounded-full px-4 text-[13px] transition",
+              tab === key ? "bg-ink font-semibold text-ink-inverse" : "elevation-1 font-medium text-[#D4D4D4]",
             ].join(" ")}
           >
             {label}
@@ -179,77 +187,72 @@ export default function SearchClient({
       </div>
 
       {/* Create custom food + quick-add macros */}
-      <div className="mb-3 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-gold/50 px-3 py-3 text-sm font-semibold text-gold active:bg-gold-soft"
-        >
-          + Custom food
+      <div className="grid grid-cols-2 gap-2.5">
+        <button type="button" onClick={() => setCreating(true)} className="elevation-1 pressable h-[52px] rounded-2xl text-sm font-semibold">
+          Custom food
         </button>
-        <button
-          type="button"
-          onClick={() => setQuickAdd(true)}
-          className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-green/50 px-3 py-3 text-sm font-semibold text-green active:bg-green-tint"
-        >
-          ✎ Quick add
+        <button type="button" onClick={() => setQuickAdd(true)} className="elevation-1 pressable h-[52px] rounded-2xl text-sm font-semibold">
+          Quick add
         </button>
       </div>
 
       {/* Results */}
       {tab === "meals" ? (
-        <>
+        <section className="flex flex-col gap-2.5">
           <button
             type="button"
             onClick={() => setBuilding(true)}
-            className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-green px-4 py-3 text-sm font-bold text-ink-inverse active:scale-[0.98]"
+            className="h-[52px] rounded-full bg-green text-sm font-semibold text-ink-inverse active:scale-[0.98]"
           >
-            🍳 Build a meal from ingredients
+            Build a meal from ingredients
           </button>
           <SavedMealList meals={filteredMeals} onLog={setLoggingMeal} />
-        </>
+        </section>
       ) : (
-        <ul className="space-y-2">
+        <section className="flex flex-col gap-2.5">
+          <div className="flex items-baseline justify-between px-1">
+            <span className="text-xs font-semibold tracking-[0.08em] text-muted">{listLabel}</span>
+            <span className="text-xs text-subtle">{searching ? "Searching…" : "per 100 g"}</span>
+          </div>
           {tab === "all" && searching && shown.length === 0 ? (
-            <li className="py-6 text-center text-sm text-muted">Searching…</li>
+            <p className="py-6 text-center text-sm text-muted">Searching…</p>
           ) : shown.length === 0 ? (
-            <li className="rounded-xl border border-dashed border-white/15 px-4 py-6 text-center text-sm text-muted">
+            <p className="rounded-3xl border border-dashed border-white/15 px-4 py-6 text-center text-sm text-muted">
               {tab === "recent"
                 ? "No recently logged foods yet."
                 : tab === "my"
                   ? "You haven't created any foods yet."
                   : "No foods found — create a custom food above."}
-            </li>
+            </p>
           ) : (
-            shown.map((f) => (
-              <li key={f.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelected(f)}
-                  className="flex w-full items-center gap-3 rounded-xl elevation-1 pressable px-4 py-3 text-left active:bg-white/10"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2">
-                      <span className="truncate font-medium text-ink">{f.name}</span>
-                      {f.source === "custom" && (
-                        <span className="shrink-0 rounded bg-gold-soft px-1.5 py-0.5 text-[10px] font-bold uppercase text-gold">
-                          Custom
-                        </span>
-                      )}
+            <ul className="elevation-1 flex flex-col rounded-3xl">
+              {shown.map((f) => (
+                <li key={f.id} className="border-b border-surface-2 last:border-0">
+                  <button
+                    type="button"
+                    onClick={() => setSelected(f)}
+                    className="flex w-full items-center gap-3 py-3 pl-[18px] pr-3 text-left active:bg-white/[0.04]"
+                  >
+                    <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+                      <span className="flex items-baseline gap-1.5">
+                        <span className="truncate text-[15px] font-semibold">{f.name}</span>
+                        {f.default_unit === "ml" && <span className="shrink-0 text-xs font-medium text-subtle">per 100 ml</span>}
+                        {f.source === "custom" && <span className="shrink-0 text-xs font-semibold text-gold">Custom</span>}
+                      </span>
+                      <span className="truncate text-xs text-muted">
+                        <span className="font-semibold text-ink">{Math.round(f.calories_per_100g)}</span> kcal · P {f.protein_per_100g} · C{" "}
+                        {f.carbs_per_100g} · F {f.fat_per_100g}
+                      </span>
                     </span>
-                    <span className="block truncate text-xs text-muted">
-                      {Math.round(f.calories_per_100g)} kcal · P{f.protein_per_100g} C
-                      {f.carbs_per_100g} F{f.fat_per_100g} per 100{f.default_unit === "ml" ? "ml" : "g"}
+                    <span className="elevation-2 flex h-9 shrink-0 items-center rounded-full px-3.5 text-[13px] font-semibold text-green">
+                      Add
                     </span>
-                  </span>
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green text-lg font-bold text-ink-inverse">
-                    +
-                  </span>
-                </button>
-              </li>
-            ))
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
-        </ul>
+        </section>
       )}
 
       {selected && (
