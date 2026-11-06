@@ -32,7 +32,6 @@ import { fetchLogContext, qk, type MonthSummary } from "@/lib/browserData";
 import { toDateKey } from "@/lib/date";
 import { formatWeekdayDayMonth } from "@/lib/dateFormat";
 import { fuzzySearch } from "@/lib/fuzzy";
-import MuscleBadge from "@/components/MuscleBadge";
 
 // Cardio "Exercise" dropdown options (JSON cardio names → field type).
 const CARDIO_LIBRARY = libraryFor("cardio");
@@ -637,23 +636,30 @@ function ExerciseSearch({
       </label>
 
       {q && (
-        <ul className="flex flex-col gap-2">
-          {results.map(({ group: g, item }) => (
-            <li key={`${g}:${item.name}`}>
-              <button
-                type="button"
-                onClick={() => add(g, item.cardioType ? { name: item.name, cardioType: item.cardioType } : { name: item.name })}
-                className="elevation-1 pressable flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left"
-              >
-                <MuscleBadge group={g} className="h-8 w-8 shrink-0" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-ink">{item.name}</span>
-                  <span className="block text-xs text-muted">{MUSCLE_GROUP_LABELS[g]}</span>
-                </span>
-                <PlusMark />
-              </button>
+        <ul className="flex flex-col gap-2.5">
+          {results.length > 0 && (
+            <li>
+              <ul className="elevation-1 flex flex-col rounded-3xl">
+                {results.map(({ group: g, item }) => (
+                  <li key={`${g}:${item.name}`} className="border-b border-surface-2 last:border-0">
+                    <button
+                      type="button"
+                      onClick={() => add(g, item.cardioType ? { name: item.name, cardioType: item.cardioType } : { name: item.name })}
+                      className="flex w-full items-center gap-3 py-3 pl-[18px] pr-3 text-left active:bg-white/[0.04]"
+                    >
+                      <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
+                        <span className="truncate text-[15px] font-semibold text-ink">{item.name}</span>
+                        <span className="text-xs text-muted">{MUSCLE_GROUP_LABELS[g]}</span>
+                      </span>
+                      <span className="elevation-2 flex h-9 shrink-0 items-center rounded-full px-3.5 text-[13px] font-semibold text-green">
+                        Add
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </li>
-          ))}
+          )}
           {results.length === 0 && (
             <li className="flex flex-col gap-2.5">
               <button
