@@ -168,7 +168,11 @@ export default function HabitsClient({
             setView({ name: "list" });
             refresh();
           }}
-          onDelete={() => setView({ name: "detail", habitId: logging.id })}
+          onStats={() => setView({ name: "detail", habitId: logging.id })}
+          onDeleted={() => {
+            setView({ name: "list" });
+            refresh();
+          }}
         />
       )}
 
@@ -487,7 +491,8 @@ function LoggerView({
   onSetCount,
   onEdit,
   onArchive,
-  onDelete,
+  onStats,
+  onDeleted,
   onShare,
 }: {
   habit: Habit;
@@ -498,15 +503,21 @@ function LoggerView({
   onSetCount: (count: number) => void;
   onEdit: () => void;
   onArchive: () => void;
-  onDelete: () => void;
+  onStats: () => void;
+  onDeleted: () => void;
   onShare: () => void;
 }) {
   const tone = habitColor(habit.color);
   const cur = countOn(logs, habit.id, date);
   const target = habit.target_per_period;
-  const ratio = Math.min(1, target > 0 ? cur / target : 0);
-  const done = cur >= target;
+  // What "done for this day" means: a daily habit reaches its target; a
+  // weekly habit just needs the day logged (the week's tally is elsewhere).
+  const fullDay = habit.cadence === "daily" ? target : Math.max(1, habit.kind === "timer" ? target : 1);
+  const done = habit.cadence === "daily" ? cur >= target : cur > 0;
   const [menu, setMenu] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   // Timer: ticks locally and only persists when paused or completed, so a
   // running timer doesn't write a row every second.
@@ -528,12 +539,38 @@ function LoggerView({
     }
   }
 
+  /** The tick: record the day as complete and go back to the list. Tapping
+   *  it on a finished day clears it instead (and stays, to show the undo). */
+  function complete() {
+    setRunning(false);
+    setElapsed(0);
+    if (done) {
+      onSetCount(0);
+      return;
+    }
+    onSetCount(fullDay);
+    onBack();
+  }
+
+  async function remove() {
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteHabit(habit.id);
+      onDeleted();
+    } catch {
+      setDeleting(false);
+      setDeleteError("Couldn't delete. Check your connection and try again.");
+    }
+  }
+
   const R = 92;
   const C = 2 * Math.PI * R;
+  const ICON = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
 
   return (
     <>
-      <header className="relative flex items-center justify-between py-4">
+      <header className="relative flex items-center gap-3 pt-4">
         <button
           type="button"
           onClick={() => {
@@ -541,147 +578,185 @@ function LoggerView({
             onBack();
           }}
           aria-label="Back"
-          className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-ink active:bg-white/10"
+          className="elevation-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-ink active:bg-white/15"
         >
-          ←
+          <svg {...ICON} width={18} height={18}>
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
         </button>
-        <h1 className="flex min-w-0 flex-1 flex-col items-center px-2">
-          <span className="flex max-w-full items-center gap-2 text-base font-bold">
-            <span aria-hidden>{habit.icon ?? "✅"}</span>
-            <span className="truncate">{habit.name}</span>
+        <h1 className="flex min-w-0 flex-1 flex-col gap-px">
+          <span className="truncate font-display text-[22px] font-bold tracking-[-0.02em]">{habit.name}</span>
+          <span className="truncate text-[13px] text-muted">
+            {habit.description || (date === today ? "Today" : `Logging for ${formatShortDate(date)}`)}
           </span>
-          {habit.description && (
-            <span className="max-w-full truncate text-xs font-normal text-muted">
-              {habit.description}
-            </span>
-          )}
         </h1>
         <button
           type="button"
           onClick={() => setMenu((v) => !v)}
           aria-label="Habit options"
           aria-expanded={menu}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-xl text-muted active:bg-white/10"
+          className="elevation-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-ink active:bg-white/15"
         >
-          ⋯
+          <svg {...ICON}>
+            <circle cx="5" cy="12" r="1" fill="currentColor" />
+            <circle cx="12" cy="12" r="1" fill="currentColor" />
+            <circle cx="19" cy="12" r="1" fill="currentColor" />
+          </svg>
         </button>
 
         {menu && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setMenu(false)} aria-hidden />
-            <div className="absolute right-0 top-12 z-50 w-44 overflow-hidden elevation-3 rounded-xl bg-surface py-1">
+            <div className="elevation-3 absolute right-0 top-[68px] z-50 w-52 overflow-hidden rounded-2xl bg-surface-2 py-1">
               <MenuItem label="Edit" onClick={() => { setMenu(false); onEdit(); }} />
+              <MenuItem label="Stats & history" onClick={() => { setMenu(false); onStats(); }} />
               <MenuItem label="Share progress" onClick={() => { setMenu(false); onShare(); }} />
               <MenuItem label="Archive" onClick={() => { setMenu(false); onArchive(); }} />
-              <MenuItem label="Delete" danger onClick={() => { setMenu(false); onDelete(); }} />
+              <MenuItem label="Delete" danger onClick={() => { setMenu(false); setConfirmDelete(true); }} />
             </div>
           </>
         )}
       </header>
 
-      {date !== today && (
-        <p className="rounded-xl bg-gold-soft px-3 py-1.5 text-center text-xs font-medium text-gold">
+      {date !== today && habit.description && (
+        <p className="mt-3 rounded-full bg-gold-soft px-3 py-1.5 text-center text-xs font-semibold text-gold">
           Logging for {formatShortDate(date)}
         </p>
       )}
 
-      {/* Big progress dial */}
-      <div className="flex flex-1 items-center justify-center py-6">
-        <div className="relative h-[220px] w-[220px]">
-          <svg viewBox="0 0 220 220" className="h-full w-full -rotate-90">
-            <circle cx="110" cy="110" r={R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="14" />
+      {/* Progress dial */}
+      <div className="flex flex-1 items-center justify-center py-8">
+        <div className="relative h-[232px] w-[232px]">
+          <svg viewBox="0 0 220 220" className="h-full w-full -rotate-90" aria-hidden>
+            <circle cx="110" cy="110" r={R} fill="none" stroke="#262626" strokeWidth="14" />
             <circle
               cx="110" cy="110" r={R} fill="none" stroke={tone} strokeWidth="14"
               strokeLinecap="round"
               strokeDasharray={C}
               strokeDashoffset={C * (1 - shownRatio)}
+              className="motion-reduce:transition-none"
               style={{ transition: "stroke-dashoffset 300ms" }}
             />
           </svg>
 
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-3xl" aria-hidden>
-              {habit.icon ?? "✅"}
-            </span>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
             {habit.kind === "timer" ? (
-              <span className="mt-1 text-4xl font-bold tabular-nums text-ink">
+              <span className="font-display text-[44px] font-bold tabular-nums leading-none">
                 {formatDuration(Math.max(0, target - shown))}
               </span>
             ) : (
-              <span className="mt-1 flex items-center gap-5">
+              <span className="flex items-center gap-4">
                 <button
                   type="button"
                   onClick={() => onSetCount(Math.max(0, cur - 1))}
                   aria-label="Decrease"
-                  className="text-2xl text-muted active:text-ink"
+                  className="flex h-11 w-11 items-center justify-center rounded-full text-muted active:bg-white/10 active:text-ink"
                 >
-                  −
+                  <svg {...ICON}><path d="M5 12h14" /></svg>
                 </button>
-                <span className="text-4xl font-bold tabular-nums text-ink">{cur}</span>
+                <span className="font-display text-[52px] font-bold tabular-nums leading-none">{cur}</span>
                 <button
                   type="button"
                   onClick={() => onSetCount(cur + 1)}
                   aria-label="Increase"
-                  className="text-2xl text-muted active:text-ink"
+                  className="flex h-11 w-11 items-center justify-center rounded-full text-muted active:bg-white/10 active:text-ink"
                 >
-                  +
+                  <svg {...ICON}><path d="M12 5v14M5 12h14" /></svg>
                 </button>
               </span>
             )}
-            <span className="mt-1 text-sm text-muted">
+            <span className="text-sm text-muted">
               {habit.kind === "timer"
-                ? `${Math.round(target / 60)} min goal`
-                : `/${target}${habit.unit ? ` ${habit.unit}` : ""}`}
+                ? `of ${Math.round(target / 60)} min`
+                : `of ${target}${habit.unit ? ` ${habit.unit}` : ""}`}
             </span>
+            {done && <span className="mt-1 text-xs font-semibold tracking-[0.08em] text-green">DONE</span>}
           </div>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center justify-center gap-5 pb-2">
+      {/* Actions: reset · main · complete */}
+      <div className="flex items-center justify-center gap-5 pb-4">
         <button
           type="button"
           onClick={() => { setElapsed(0); setRunning(false); onSetCount(0); }}
           aria-label="Reset"
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-white/[0.06] text-lg text-muted active:scale-95"
+          className="elevation-2 flex h-14 w-14 items-center justify-center rounded-full text-muted active:scale-95"
         >
-          ↺
+          <svg {...ICON}>
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+            <path d="M3 3v5h5" />
+          </svg>
         </button>
 
         {habit.kind === "timer" ? (
           <button
             type="button"
             onClick={() => (running ? stopTimer() : setRunning(true))}
-            className="flex h-14 min-w-[140px] items-center justify-center rounded-full text-base font-bold text-ink-inverse active:scale-95"
-            style={{ backgroundColor: tone }}
+            className="flex h-14 min-w-[150px] items-center justify-center gap-2 rounded-full bg-green text-base font-semibold text-ink-inverse active:scale-95"
           >
-            {running ? "❚❚ Pause" : "▶ Start"}
+            {running ? (
+              <><svg {...ICON} width={18} height={18}><path d="M8 5v14M16 5v14" /></svg>Pause</>
+            ) : (
+              <><svg {...ICON} width={18} height={18} fill="currentColor"><path d="M7 5l12 7-12 7z" /></svg>Start</>
+            )}
           </button>
         ) : (
           <button
             type="button"
             onClick={() => onSetCount(cur + stepSize(habit))}
-            className="flex h-14 min-w-[140px] items-center justify-center rounded-full text-base font-bold text-ink-inverse active:scale-95"
-            style={{ backgroundColor: tone }}
+            className="flex h-14 min-w-[150px] items-center justify-center rounded-full bg-green text-base font-semibold text-ink-inverse active:scale-95"
           >
-            Add
+            Add 1{habit.unit ? ` ${habit.unit}` : ""}
           </button>
         )}
 
         <button
           type="button"
-          onClick={() => { setElapsed(0); setRunning(false); onSetCount(done ? 0 : target); }}
-          aria-label={done ? "Mark not done" : "Mark complete"}
+          onClick={complete}
+          aria-label={done ? "Mark not done" : "Mark done"}
           aria-pressed={done}
-          className="flex h-12 w-12 items-center justify-center rounded-full text-lg active:scale-95"
-          style={{
-            backgroundColor: done ? tone : "rgba(255,255,255,0.06)",
-            color: done ? "#111111" : "rgba(255,255,255,0.4)",
-          }}
+          className={[
+            "flex h-14 w-14 items-center justify-center rounded-full active:scale-95",
+            done ? "bg-green text-ink-inverse" : "elevation-2 text-green",
+          ].join(" ")}
         >
-          ✓
+          <svg {...ICON} width={22} height={22} strokeWidth={2.6}>
+            <path d="M5 12l5 5L20 7" />
+          </svg>
         </button>
       </div>
+      <p className="pb-2 text-center text-xs text-subtle">Tap the tick to mark it done for the day.</p>
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 pb-[max(env(safe-area-inset-bottom),16px)]" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+          <div className="elevation-3 flex w-full max-w-md flex-col gap-4 rounded-[28px] bg-surface p-5">
+            <div className="flex flex-col gap-1.5">
+              <h2 id="delete-title" className="font-display text-xl font-semibold">Delete &ldquo;{habit.name}&rdquo;?</h2>
+              <p className="text-sm leading-[1.45] text-muted">
+                Its history and streak are removed for good. To hide it but keep the history, archive it instead.
+              </p>
+            </div>
+            {deleteError && <p className="text-[13px] text-ink">{deleteError}</p>}
+            <button
+              type="button"
+              onClick={remove}
+              disabled={deleting}
+              className="elevation-2 h-[52px] rounded-full text-base font-semibold text-gold active:scale-[0.98] disabled:opacity-60"
+            >
+              {deleting ? "Deleting…" : "Delete habit"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              disabled={deleting}
+              className="h-12 rounded-full border border-white/[0.12] text-[15px] font-semibold active:bg-white/[0.06]"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -700,7 +775,7 @@ function MenuItem({
       type="button"
       onClick={onClick}
       className={[
-        "block w-full px-4 py-2.5 text-left text-sm font-medium active:bg-white/10",
+        "block min-h-11 w-full px-4 py-2.5 text-left text-[15px] font-medium active:bg-white/10",
         danger ? "text-gold" : "text-ink",
       ].join(" ")}
     >
