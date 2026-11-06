@@ -86,7 +86,7 @@ export default function LoginForm({ next, initialEmail }: { next: string; initia
     const res = await callAction(() => requestLoginCodeAction({ email, captchaToken: captcha.token }));
     captcha.reset();
     setPending(false);
-    if (!res.ok) {
+    if (!res.ok && res.code !== "email_rate_limited") {
       setError(res);
       return false;
     }
@@ -94,8 +94,9 @@ export default function LoginForm({ next, initialEmail }: { next: string; initia
     setCodeEmail(email);
     setCode("");
     setStep("code");
+    if (!res.ok) setError(res);
     setTimeout(() => codeRef.current?.focus(), 50);
-    return true;
+    return res.ok;
   }
 
   async function submitCode(value = code) {

@@ -113,7 +113,7 @@ export async function requestLoginCodeAction(input: {
     const res = authFailure(error);
     // "No such user" must look like success; only limits and the captcha
     // are worth telling the person about.
-    if (["rate_limited", "captcha_failed", "network"].includes(res.code)) return res;
+    if (["rate_limited", "email_rate_limited", "captcha_failed", "network"].includes(res.code)) return res;
   }
   return { ok: true };
 }
@@ -198,7 +198,7 @@ export async function resendSignupCodeAction(input: {
   });
   if (error) {
     const res = authFailure(error);
-    if (["rate_limited", "captcha_failed", "network"].includes(res.code)) return res;
+    if (["rate_limited", "email_rate_limited", "captcha_failed", "network"].includes(res.code)) return res;
   }
   return { ok: true };
 }
@@ -218,7 +218,7 @@ export async function requestPasswordResetAction(input: {
   });
   if (error) {
     const res = authFailure(error);
-    if (["rate_limited", "captcha_failed", "network"].includes(res.code)) return res;
+    if (["rate_limited", "email_rate_limited", "captcha_failed", "network"].includes(res.code)) return res;
   }
   return { ok: true };
 }

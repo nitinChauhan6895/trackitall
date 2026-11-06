@@ -27,6 +27,7 @@ const MESSAGES: Record<string, string> = {
   reauthentication_needed: "For your security, log in again before changing this.",
   network: NETWORK_MESSAGE,
   rate_limited: RATE_LIMIT_MESSAGE,
+  email_rate_limited: "We sent you an email a moment ago. Use the code from it, or wait a minute and resend.",
 };
 
 const RATE_LIMIT_CODES = new Set([
@@ -48,6 +49,10 @@ export function authErrorCode(err: unknown): string {
   const e = (err ?? {}) as MaybeAuthError;
   if (e.name === "AuthRetryableFetchError" || /fetch failed|network/i.test(e.message ?? "")) {
     return "network";
+  }
+  // Supabase allows one email per address about every 60 seconds.
+  if (e.code === "over_email_send_rate_limit" || /only request this after/i.test(e.message ?? "")) {
+    return "email_rate_limited";
   }
   if ((e.code && RATE_LIMIT_CODES.has(e.code)) || e.status === 429) return "rate_limited";
   if (e.code) return e.code;
@@ -82,7 +87,7 @@ export function fail(code: string, message?: string): AuthFailure {
 }
 
 export function isRateLimit(code: string): boolean {
-  return code === "rate_limited";
+  return code === "rate_limited" || code === "email_rate_limited";
 }
 
 /** Copy for the /auth/error screen, keyed by the email flow the link was for. */

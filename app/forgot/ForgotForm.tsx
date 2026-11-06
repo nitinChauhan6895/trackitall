@@ -38,15 +38,16 @@ export default function ForgotForm({ initialEmail }: { initialEmail: string }) {
     const res = await callAction(() => requestPasswordResetAction({ email: target, captchaToken: captcha.token }));
     captcha.reset();
     setPending(false);
-    if (!res.ok) {
+    if (!res.ok && res.code !== "email_rate_limited") {
       setMessage({ tone: "error", text: res.message });
       return false;
     }
-    if (sentTo) setMessage({ tone: "success", text: "We've sent another link and code." });
+    if (!res.ok) setMessage({ tone: "success", text: res.message });
+    else if (sentTo) setMessage({ tone: "success", text: "We've sent another link and code." });
     setSentTo(target.trim());
     setCode("");
     setTimeout(() => codeRef.current?.focus(), 50);
-    return true;
+    return res.ok;
   }
 
   async function verify(value = code) {
