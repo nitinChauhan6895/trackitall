@@ -33,6 +33,7 @@ export const qk = {
   habits: () => ["habits"] as const,
   goals: () => ["goals"] as const,
   logContext: (date: string) => ["logContext", date] as const,
+  favourites: () => ["favourites"] as const,
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -248,4 +249,56 @@ export async function fetchNutritionDiary(date: string): Promise<NutritionDiaryD
     : DEFAULT_TARGETS;
 
   return { date, entries, totals: sumMacros(entries), targets, hasTargets: !!t };
+}
+
+// ---------- favourite exercises ----------
+
+export type FavouriteExercise = {
+  muscle_group: MuscleGroup;
+  name: string;
+  cardio_type: string | null;
+};
+
+/** Stable key for matching a favourite: same group, same name ignoring case. */
+export function favouriteKey(group: string, name: string): string {
+  return `${group}:${name.trim().toLowerCase()}`;
+}
+
+/**
+ * The user's favourites, oldest first (the order they were added). Returns
+ * null when the table doesn't exist yet (migration 024 not run), so the UI
+ * can hide the feature instead of failing.
+ */
+export async function fetchFavourites(): Promise<FavouriteExercise[] | null> {
+  const supabase = await authedClient();
+  const { data, error } = await supabase
+    .from("favourite_exercises")
+    .select("muscle_group, name, cardio_type")
+    .order("created_at", { ascending: true });
+  if (error) {
+    if (isMissingTable(error)) return null;
+    throw error;
+  }
+  return (data ?? []) as FavouriteExercise[];
+}
+
+export async function addFavourite(fav: FavouriteExercise): Promise<void> {
+  const supabase = await authedClient();
+  const { error } = await supabase
+    .from("favourite_exercises")
+    .upsert(
+      { muscle_group: fav.muscle_group, name: fav.name.trim(), cardio_type: fav.cardio_type },
+      { onConflict: "user_id,muscle_group,name", ignoreDuplicates: true },
+    );
+  if (error) throw error;
+}
+
+export async function removeFavourite(group: MuscleGroup, name: string): Promise<void> {
+  const supabase = await authedClient();
+  const { error } = await supabase
+    .from("favourite_exercises")
+    .delete()
+    .eq("muscle_group", group)
+    .ilike("name", name.trim().replace(/[%_\\]/g, (c) => `\\${c}`));
+  if (error) throw error;
 }

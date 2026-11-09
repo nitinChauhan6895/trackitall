@@ -28,7 +28,16 @@ import {
 import { libraryFor, type LibraryItem } from "@/lib/presets";
 import { HIIT_EXERCISES, resolveHiitMetrics } from "@/lib/hiit";
 import { enqueue, isOffline, removeQueuedOps } from "@/lib/offlineQueue";
-import { fetchLogContext, qk, type MonthSummary } from "@/lib/browserData";
+import {
+  addFavourite,
+  favouriteKey,
+  fetchFavourites,
+  fetchLogContext,
+  qk,
+  removeFavourite,
+  type FavouriteExercise,
+  type MonthSummary,
+} from "@/lib/browserData";
 import { toDateKey } from "@/lib/date";
 import { formatWeekdayDayMonth } from "@/lib/dateFormat";
 import { fuzzySearch } from "@/lib/fuzzy";
@@ -288,6 +297,42 @@ export default function QuickLogger({
     ]);
   }
 
+  // Search text and the open muscle group live here so the search bar can
+  // narrow to that group's exercises while it's open.
+  const [query, setQuery] = useState("");
+  const [openGroup, setOpenGroup] = useState<MuscleGroup | null>(null);
+
+  // Favourite exercises (per user). null = feature unavailable (migration 024
+  // not run, or offline with nothing cached): the UI simply hides it.
+  const { data: favourites } = useQuery({
+    queryKey: qk.favourites(),
+    queryFn: fetchFavourites,
+    retry: false,
+  });
+  const favList = favourites ?? [];
+  const favEnabled = Array.isArray(favourites);
+  const favSet = new Set(favList.map((f) => favouriteKey(f.muscle_group, f.name)));
+
+  async function toggleFavourite(group: MuscleGroup, name: string, cardioType?: string | null) {
+    const key = favouriteKey(group, name);
+    const on = favSet.has(key);
+    const prev = queryClient.getQueryData<FavouriteExercise[] | null>(qk.favourites());
+    queryClient.setQueryData<FavouriteExercise[] | null>(qk.favourites(), (old) => {
+      const list = old ?? [];
+      return on
+        ? list.filter((f) => favouriteKey(f.muscle_group, f.name) !== key)
+        : [...list, { muscle_group: group, name: name.trim(), cardio_type: cardioType ?? null }];
+    });
+    try {
+      if (on) await removeFavourite(group, name);
+      else await addFavourite({ muscle_group: group, name, cardio_type: cardioType ?? null });
+    } catch {
+      queryClient.setQueryData(qk.favourites(), prev);
+    } finally {
+      queryClient.invalidateQueries({ queryKey: qk.favourites() });
+    }
+  }
+
   // Last-trained dates and the previous session. Offline or signed out this
   // simply stays empty: tiles read "Not trained yet" and Quick start hides.
   const { data: context } = useQuery({
@@ -483,7 +528,40 @@ export default function QuickLogger({
         <p className="text-sm text-muted">Pick a muscle group or search the library.</p>
       </header>
 
-      <ExerciseSearch onAdd={(g, init) => addExercises(g, [init])} />
+      <ExerciseSearch
+        query={query}
+        onQuery={setQuery}
+        scope={openGroup}
+        onAdd={(g, init) => addExercises(g, [init])}
+      />
+
+      {/* Favourites: one tap adds the exercise to this log. */}
+      {favEnabled && favList.length > 0 && !query.trim() && (
+        <section className="flex flex-col gap-2.5">
+          <div className="flex items-baseline justify-between px-1">
+            <span className="text-xs font-semibold tracking-[0.08em] text-muted">FAVOURITES</span>
+            <span className="text-xs text-subtle">tap to add</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {favList.map((f) => (
+              <button
+                key={favouriteKey(f.muscle_group, f.name)}
+                type="button"
+                onClick={() =>
+                  addExercises(f.muscle_group, [
+                    f.cardio_type ? { name: f.name, cardioType: f.cardio_type as CardioType } : { name: f.name },
+                  ])
+                }
+                aria-label={`Add ${f.name}`}
+                className="elevation-1 pressable flex h-10 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-ink"
+              >
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-gold" />
+                {f.name}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Today's log */}
       {items.length > 0 && (
@@ -506,6 +584,12 @@ export default function QuickLogger({
                     onChange={(patch) => update(ex.id, patch)}
                     onSave={() => saveExercise(ex.id)}
                     onRemove={() => removeExercise(ex)}
+                    favourite={favSet.has(favouriteKey(ex.group, ex.name))}
+                    onToggleFavourite={
+                      favEnabled && modeFor(ex.group) !== "hiit" && ex.name.trim()
+                        ? () => toggleFavourite(ex.group, ex.name, ex.cardioType)
+                        : undefined
+                    }
                   />
                 ))}
             </div>
@@ -535,6 +619,13 @@ export default function QuickLogger({
       <MuscleGroups
         date={date}
         lastTrained={context?.lastTrained ?? {}}
+        group={openGroup}
+        onGroup={(g) => {
+          setOpenGroup(g);
+          setQuery("");
+        }}
+        query={query}
+        favSet={favSet}
         circuits={circuits}
         onAdd={(g, init) => addExercises(g, [init])}
         onLoadCircuit={loadCircuit}
@@ -599,13 +690,19 @@ const SEARCH_CLASS =
 // Library search across every group. A miss offers to add the text as a
 // custom exercise under a chosen muscle group.
 function ExerciseSearch({
+  query,
+  onQuery: setQuery,
+  scope,
   onAdd,
 }: {
+  query: string;
+  onQuery: (q: string) => void;
+  /** An open muscle group: the search then filters that group's list below. */
+  scope: MuscleGroup | null;
   onAdd: (group: MuscleGroup, init: Partial<DraftExercise>) => void;
 }) {
-  const [query, setQuery] = useState("");
   const [pickingGroup, setPickingGroup] = useState(false);
-  const q = query.trim();
+  const q = scope ? "" : query.trim();
   // Typo-tolerant: "benchpres", "sqaut" and "rdl" all find their exercise.
   const results = q ? fuzzySearch(SEARCH_INDEX, q, (e) => e.item.name, 30).map((r) => r.item) : [];
 
@@ -622,7 +719,7 @@ function ExerciseSearch({
           <circle cx="11" cy="11" r="7" />
           <path d="M20 20l-3.5-3.5" />
         </svg>
-        <span className="sr-only">Search all exercises</span>
+        <span className="sr-only">{scope ? `Search ${MUSCLE_GROUP_LABELS[scope]} exercises` : "Search all exercises"}</span>
         <input
           type="search"
           value={query}
@@ -630,7 +727,7 @@ function ExerciseSearch({
             setQuery(e.target.value);
             setPickingGroup(false);
           }}
-          placeholder="Search all exercises…"
+          placeholder={scope ? `Search ${MUSCLE_GROUP_LABELS[scope]} exercises…` : "Search all exercises…"}
           className="min-w-0 flex-1 bg-transparent text-base text-ink outline-none placeholder:text-muted"
         />
       </label>
@@ -711,21 +808,37 @@ function PlusMark() {
 function MuscleGroups({
   date,
   lastTrained,
+  group,
+  onGroup: setGroup,
+  query,
+  favSet,
   circuits,
   onAdd,
   onLoadCircuit,
 }: {
   date: string;
   lastTrained: Partial<Record<MuscleGroup, string>>;
+  group: MuscleGroup | null;
+  onGroup: (g: MuscleGroup | null) => void;
+  /** The search bar's text: narrows the open group's list. */
+  query: string;
+  favSet: Set<string>;
   circuits: Circuit[];
   onAdd: (group: MuscleGroup, init: Partial<DraftExercise>) => void;
   onLoadCircuit: (c: Circuit) => void;
 }) {
-  const [group, setGroup] = useState<MuscleGroup | null>(null);
   const [added, setAdded] = useState<Set<string>>(new Set());
 
   if (group) {
     const mode = modeFor(group);
+    const q = query.trim();
+    const library = libraryFor(group);
+    // Typed text filters this group only; favourites come first either way.
+    const matched = q ? fuzzySearch(library, q, (i) => i.name, 60).map((r) => r.item) : library;
+    const list = [...matched].sort(
+      (a, b) => Number(favSet.has(favouriteKey(group, b.name))) - Number(favSet.has(favouriteKey(group, a.name))),
+    );
+    const canAddCustom = mode === "strength" && q !== "" && !library.some((i) => i.name.toLowerCase() === q.toLowerCase());
     return (
       <section className="flex flex-col gap-3">
         <div className="flex items-center gap-3 px-1">
@@ -745,12 +858,20 @@ function MuscleGroups({
         </div>
         <div className="flex items-baseline justify-between px-1">
           <h2 className="font-display text-xl font-semibold">{MUSCLE_GROUP_LABELS[group]}</h2>
-          <span className="text-xs text-muted">tap to add</span>
+          <span className="text-xs text-muted">{q ? `${list.length} ${list.length === 1 ? "match" : "matches"}` : "tap to add"}</span>
         </div>
-        {mode === "hiit" && <CircuitPanel circuits={circuits} onLoadCircuit={onLoadCircuit} />}
+        {mode === "hiit" && !q && <CircuitPanel circuits={circuits} onLoadCircuit={onLoadCircuit} />}
+        {list.length === 0 ? (
+          !canAddCustom && (
+            <p className="rounded-3xl border border-dashed border-white/15 px-4 py-6 text-center text-sm text-muted">
+              No {MUSCLE_GROUP_LABELS[group]} exercises match &ldquo;{q}&rdquo;.
+            </p>
+          )
+        ) : (
         <ul className="elevation-1 flex flex-col rounded-3xl">
-          {libraryFor(group).map((item) => {
+          {list.map((item) => {
             const on = added.has(item.name);
+            const fav = favSet.has(favouriteKey(group, item.name));
             return (
               <li key={item.name} className="border-b border-surface-2 last:border-0">
                 <button
@@ -761,13 +882,32 @@ function MuscleGroups({
                   }}
                   className="flex w-full items-center justify-between gap-3 px-[18px] py-3.5 text-left active:bg-white/[0.04]"
                 >
-                  <span className="font-medium text-ink">{item.name}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium text-ink">{item.name}</span>
+                    {fav && <span role="img" aria-label="Favourite" className="h-[7px] w-[7px] shrink-0 rounded-full bg-gold" />}
+                  </span>
                   {on ? <span className="shrink-0 text-xs font-semibold text-green">Added</span> : <PlusMark />}
                 </button>
               </li>
             );
           })}
         </ul>
+        )}
+        {canAddCustom && (
+          <button
+            type="button"
+            onClick={() => {
+              onAdd(group, { name: q });
+              setAdded((prev) => new Set(prev).add(q));
+            }}
+            className="elevation-1 pressable flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left"
+          >
+            <span className="min-w-0 flex-1 text-[15px] text-ink">
+              Add <span className="font-semibold">&ldquo;{q}&rdquo;</span> as a custom {MUSCLE_GROUP_LABELS[group]} exercise
+            </span>
+            {added.has(q) ? <span className="shrink-0 text-xs font-semibold text-green">Added</span> : <PlusMark />}
+          </button>
+        )}
       </section>
     );
   }
@@ -825,13 +965,19 @@ function ExerciseCard({
   onChange,
   onSave,
   onRemove,
+  favourite = false,
+  onToggleFavourite,
 }: {
   ex: DraftExercise;
   onChange: (patch: Partial<DraftExercise>) => void;
   onSave: () => void;
   onRemove: () => void;
+  favourite?: boolean;
+  /** Absent when favourites aren't available for this card. */
+  onToggleFavourite?: () => void;
 }) {
   const mode = modeFor(ex.group);
+  const favToggle = onToggleFavourite ? <FavouriteToggle on={favourite} onClick={onToggleFavourite} /> : null;
   const expanded = !ex.collapsed;
   // Strength needs a typed name; cardio/HIIT derive their name automatically.
   const canSave =
@@ -851,7 +997,10 @@ function ExerciseCard({
         className={["flex w-full items-center gap-3 pl-[18px] pr-4 pt-4 text-left", expanded ? "pb-3.5" : "pb-4"].join(" ")}
       >
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate font-display text-xl font-semibold text-ink">{cardTitle(ex)}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate font-display text-xl font-semibold text-ink">{cardTitle(ex)}</span>
+            {favourite && <span role="img" aria-label="Favourite" className="h-[7px] w-[7px] shrink-0 rounded-full bg-gold" />}
+          </span>
           <span className="truncate text-[13px] text-muted">{summarizeExercise(ex)}</span>
         </span>
         <StatusChip status={ex.status} />
@@ -862,7 +1011,8 @@ function ExerciseCard({
 
       {expanded && (
         <div className="flex flex-col gap-3.5 px-4 pb-4">
-          <ExerciseForm mode={mode} ex={ex} onChange={onChange} />
+          <ExerciseForm mode={mode} ex={ex} onChange={onChange} footerExtra={favToggle} />
+          {mode !== "strength" && favToggle && <div className="-my-1 flex justify-end">{favToggle}</div>}
 
           <div className="grid grid-cols-[1fr_1.6fr] gap-2.5 border-t border-white/[0.08] pt-3.5">
             <button
@@ -898,10 +1048,13 @@ function ExerciseForm({
   mode,
   ex,
   onChange,
+  footerExtra,
 }: {
   mode: Mode;
   ex: DraftExercise;
   onChange: (patch: Partial<DraftExercise>) => void;
+  /** Shown at the end of the Add set row (strength only). */
+  footerExtra?: React.ReactNode;
 }) {
   // Cardio/HIIT keep a single inline entry bound to sets[0].
   const entry = ex.sets[0] ?? emptySet();
@@ -951,6 +1104,7 @@ function ExerciseForm({
         <StrengthSets
           sets={ex.sets}
           onChange={(sets) => onChange({ sets, status: "draft" })}
+          footerExtra={footerExtra}
         />
       ) : (
         descriptors.map((d, i) => {
@@ -1066,9 +1220,11 @@ function Field({
 function StrengthSets({
   sets,
   onChange,
+  footerExtra,
 }: {
   sets: DraftSet[];
   onChange: (sets: DraftSet[]) => void;
+  footerExtra?: React.ReactNode;
 }) {
   const inputClass =
     "h-12 w-full min-w-0 rounded-xl border border-white/[0.04] bg-surface-2 px-3 font-display text-lg font-semibold text-ink outline-none placeholder:text-subtle focus:border-[1.5px] focus:border-green";
@@ -1167,8 +1323,33 @@ function StrengthSets({
             Repeat last
           </button>
         )}
+        {footerExtra && <div className="ml-auto">{footerExtra}</div>}
       </div>
     </div>
+  );
+}
+
+/** Quiet text toggle from the design: hollow grey dot when off, gold dot when on. */
+function FavouriteToggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className={[
+        "flex h-11 items-center gap-2 pl-2.5 pr-0.5 text-[13px] font-medium active:opacity-70",
+        on ? "text-[#D4D4D4]" : "text-subtle",
+      ].join(" ")}
+    >
+      <span
+        aria-hidden
+        className={[
+          "h-2 w-2 shrink-0 rounded-full",
+          on ? "bg-gold" : "border-[1.5px] border-[#6E6E6E]",
+        ].join(" ")}
+      />
+      {on ? "Favourite" : "Add to favourites"}
+    </button>
   );
 }
 
