@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
-import { Inter, Space_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 import OfflineSync from "@/components/OfflineSync";
@@ -8,18 +8,21 @@ import FlashToast from "@/components/FlashToast";
 import { APP_VERSION } from "@/lib/version";
 import Providers from "./providers";
 
-// Self-hosted at build time, so the PWA keeps its fonts offline.
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+// Bundled in the repo (app/fonts), not downloaded from Google at build time:
+// that download intermittently failed and took the whole deploy down with it,
+// and bundling also keeps the PWA's fonts available offline. Variable fonts, so
+// one file per family covers every weight the app uses.
+const inter = localFont({
+  src: [{ path: "./fonts/Inter-latin-var.woff2", weight: "100 900", style: "normal" }],
   variable: "--font-inter",
   display: "swap",
+  adjustFontFallback: "Arial",
 });
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+const spaceGrotesk = localFont({
+  src: [{ path: "./fonts/SpaceGrotesk-latin-var.woff2", weight: "300 700", style: "normal" }],
   variable: "--font-space-grotesk",
   display: "swap",
+  adjustFontFallback: "Arial",
 });
 
 export const metadata: Metadata = {
