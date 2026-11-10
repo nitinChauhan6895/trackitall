@@ -535,13 +535,22 @@ export default function QuickLogger({
         onAdd={(g, init) => addExercises(g, [init])}
       />
 
-      {/* Favourites: one tap adds the exercise to this log. */}
-      {favEnabled && favList.length > 0 && !query.trim() && (
+      {/* Favourites: one tap adds the exercise to this log. Always shown (when
+          the feature is available) so it's discoverable; empty -> a hint. */}
+      {favEnabled && !query.trim() && (
         <section className="flex flex-col gap-2.5">
           <div className="flex items-baseline justify-between px-1">
             <span className="text-xs font-semibold tracking-[0.08em] text-muted">FAVOURITES</span>
-            <span className="text-xs text-subtle">tap to add</span>
+            {favList.length > 0 && <span className="text-xs text-subtle">tap to add</span>}
           </div>
+          {favList.length === 0 ? (
+            <p className="flex items-start gap-2.5 rounded-2xl border border-dashed border-white/15 px-4 py-3 text-[13px] leading-[1.45] text-muted">
+              <span aria-hidden className="mt-[5px] h-2 w-2 shrink-0 rounded-full border-[1.5px] border-[#6E6E6E]" />
+              <span>
+                Tap <span className="font-semibold text-ink">Add to favourites</span> on an exercise to pin it here for one-tap adding.
+              </span>
+            </p>
+          ) : (
           <div className="flex flex-wrap gap-2">
             {favList.map((f) => (
               <button
@@ -560,6 +569,7 @@ export default function QuickLogger({
               </button>
             ))}
           </div>
+          )}
         </section>
       )}
 
