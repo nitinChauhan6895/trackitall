@@ -58,3 +58,8 @@ export function buildCalendarGrid(year: number, month: number): Date[] {
   return days;
 }
 
+
+/** "YYYY-MM" for a year and 1-based month. */
+export function monthId(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}

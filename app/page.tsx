@@ -11,8 +11,7 @@ import {
   getRecentTraining,
   getIncomingShares,
 } from "@/lib/data";
-import CalendarCard from "./CalendarCard";
-import HeroCard, { FlameIcon } from "./HeroCard";
+import HomeCalendar, { FlameIcon } from "./HomeCalendar";
 import type { MonthSummary } from "@/lib/browserData";
 import { fraction } from "@/lib/nutrition";
 import {
@@ -25,7 +24,7 @@ import {
 } from "@/lib/types";
 import { evaluateBadges, sortedByEarned } from "@/lib/badges";
 import { groupPrs } from "@/lib/prGroups";
-import { parseMonthParam, prevMonth, toDateKey } from "@/lib/date";
+import { monthId, parseMonthParam, prevMonth, toDateKey } from "@/lib/date";
 import { Badge } from "@/components/Badge";
 import { MeasurementCard, PrCard } from "@/components/HomeCards";
 import ShareInbox from "@/components/ShareInbox";
@@ -82,10 +81,15 @@ export default async function HomePage({
         : null,
       getCurrentStreak(),
     ]);
-  const heroSummary = {
-    ...Object.fromEntries(lastMonthSummary ?? []),
-    ...Object.fromEntries(currentSummary ?? viewedSummary),
+  // Server-rendered month summaries seed the calendar card's query cache.
+  const initialSummaries: Record<string, MonthSummary> = {
+    [monthId(year, month)]: Object.fromEntries(viewedSummary),
   };
+  initialSummaries[monthId(cur.year, cur.month)] = Object.fromEntries(currentSummary ?? viewedSummary);
+  if (lastMonthSummary) {
+    const pm = prevMonth(cur.year, cur.month);
+    initialSummaries[monthId(pm.year, pm.month)] = Object.fromEntries(lastMonthSummary);
+  }
 
   const firstName = profile.first_name || displayName(profile);
   // "Thursday, 5 November"
@@ -110,7 +114,13 @@ export default async function HomePage({
         </Link>
       </header>
 
-      <HeroCard summary={heroSummary} todayKey={todayKey} streak={streak} />
+      <HomeCalendar
+        todayKey={todayKey}
+        streak={streak}
+        initialSummaries={initialSummaries}
+        // Back from a day page (/?m=YYYY-MM): the month view opens on that month.
+        initialMonth={searchParams.m ? { year, month } : undefined}
+      />
 
       {/* Bento tiles */}
       <div className="grid grid-cols-2 gap-3">
@@ -140,15 +150,6 @@ export default async function HomePage({
           </span>
         </Link>
       </div>
-
-      {/* Calendar — client component with instant, cache-backed month nav */}
-      <CalendarCard
-        initialYear={year}
-        initialMonth={month}
-        initialSummary={Object.fromEntries(viewedSummary)}
-        todayKey={todayKey}
-        streakDays={streakDayKeys(streak, todayKey, heroSummary)}
-      />
 
       {/* Last 7 days trained (streamed) */}
       <section className="flex flex-col gap-3">
@@ -441,20 +442,6 @@ function SectionHeader({ title, href, action }: { title: string; href: string; a
       </Link>
     </div>
   );
-}
-
-// The current streak's date keys, ending today when today is trained and
-// yesterday otherwise (matching how currentStreak counts).
-function streakDayKeys(streak: number, todayKey: string, summary: MonthSummary): string[] {
-  const [y, m, d] = todayKey.split("-").map(Number);
-  const cursor = new Date(y, m - 1, d);
-  if (!(summary[todayKey]?.length > 0)) cursor.setDate(cursor.getDate() - 1);
-  const keys: string[] = [];
-  for (let i = 0; i < streak; i++) {
-    keys.push(toDateKey(cursor));
-    cursor.setDate(cursor.getDate() - 1);
-  }
-  return keys;
 }
 
 function EmptyHint({ href, children }: { href: string; children: React.ReactNode }) {
