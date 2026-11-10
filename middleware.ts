@@ -8,13 +8,6 @@ const OLD_HOST = "trackitall-ten.vercel.app";
 const CANONICAL_ORIGIN = "https://www.vesmo.in";
 
 export async function middleware(request: NextRequest) {
-  // The app never uses next/image, yet Next serves its image-optimizer endpoint
-  // by default, and several recent Next.js advisories (including remote code
-  // execution) are in it. Nothing needs it, so refuse the path outright.
-  if (request.nextUrl.pathname.startsWith("/_next/image")) {
-    return new NextResponse(null, { status: 404 });
-  }
-
   const host = request.headers.get("host");
   if (host === OLD_HOST && !request.nextUrl.pathname.startsWith("/api/")) {
     const { pathname, search } = request.nextUrl;
@@ -25,6 +18,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|favicon.ico|manifest.webmanifest|sw.js|offline.html|icons/|.*\\.png$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|offline.html|icons/|.*\\.png$).*)",
   ],
 };
