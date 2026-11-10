@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  fetchAllPrs,
+  fetchPrSources,
   fetchDayExercises,
   fetchMonthSummary,
   fetchNutritionDiary,
@@ -29,7 +29,7 @@ export default function Prefetcher() {
       queryClient.prefetchQuery({ queryKey: qk.day(key), queryFn: () => fetchDayExercises(key) });
       queryClient.prefetchQuery({ queryKey: qk.diary(key), queryFn: () => fetchNutritionDiary(key) });
       queryClient.prefetchQuery({ queryKey: qk.month(y, m), queryFn: () => fetchMonthSummary(y, m) });
-      queryClient.prefetchQuery({ queryKey: qk.prs(), queryFn: fetchAllPrs });
+      queryClient.prefetchQuery({ queryKey: qk.prSources(), queryFn: fetchPrSources });
     };
 
     // Defer so it never competes with the current page's own fetches.

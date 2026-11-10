@@ -8,12 +8,10 @@ import { getLocalUser } from "@/lib/supabase/user";
 import {
   CARDIO_TYPES,
   MUSCLE_GROUPS,
-  PR_UNIT_TYPES,
   parseDuration,
   parseTimeToSeconds,
   type CardioType,
   type MuscleGroup,
-  type PrUnitType,
   type ShareableUser,
 } from "@/lib/types";
 import {
@@ -368,63 +366,6 @@ export async function deleteSet(formData: FormData) {
   const { error } = await supabase.from("sets").delete().eq("id", id);
   if (error) throw error;
   revalidatePath(`/day/${date}`);
-}
-
-// ---------- PRs ----------
-
-export async function savePr(input: {
-  id?: string;
-  exercise_name: string;
-  unit_type: PrUnitType;
-  value: number;
-  distance_unit: "m" | "km" | null;
-  reps?: number | null;
-  achieved_date?: string | null;
-}) {
-  const name = input.exercise_name.trim();
-  if (!name) throw new Error("Exercise name is required");
-  if (!PR_UNIT_TYPES.includes(input.unit_type))
-    throw new Error("Invalid unit type");
-  if (!Number.isFinite(input.value) || input.value < 0)
-    throw new Error("Invalid value");
-  if (input.achieved_date && !DATE_RE.test(input.achieved_date))
-    throw new Error("Invalid date");
-
-  const { supabase, user } = await requireUser();
-
-  const payload = {
-    user_id: user.id,
-    exercise_name: name.slice(0, 120),
-    unit_type: input.unit_type,
-    value: input.value,
-    distance_unit: input.unit_type === "distance" ? input.distance_unit : null,
-    // Reps only make sense for kg-type PRs; ignore for time/distance.
-    reps: input.unit_type === "kg" ? cleanInt(input.reps) : null,
-    achieved_date: input.achieved_date ?? null,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (input.id) {
-    const { error } = await supabase
-      .from("prs")
-      .update(payload)
-      .eq("id", input.id);
-    if (error) throw error;
-  } else {
-    const { error } = await supabase.from("prs").insert(payload);
-    if (error) throw error;
-  }
-
-  revalidatePath("/prs");
-  revalidatePath("/");
-}
-
-export async function deletePr(id: string) {
-  const { supabase } = await requireUser();
-  const { error } = await supabase.from("prs").delete().eq("id", id);
-  if (error) throw error;
-  revalidatePath("/prs");
-  revalidatePath("/");
 }
 
 // ---------- HIIT circuits (reusable library) ----------

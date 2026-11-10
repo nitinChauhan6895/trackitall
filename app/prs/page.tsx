@@ -1,7 +1,7 @@
-import { getAllPrs } from "@/lib/data";
-import PrManager from "./PrManager";
+import { getPrSources } from "@/lib/data";
+import PrCorner from "./PrCorner";
 
 export default async function PrsPage() {
-  const prs = await getAllPrs();
-  return <PrManager initialPrs={prs} />;
+  const sources = await getPrSources();
+  return <PrCorner initialSources={sources} />;
 }

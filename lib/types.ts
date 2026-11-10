@@ -243,48 +243,6 @@ export type Circuit = {
   exercises: CircuitExercise[];
 };
 
-// ---- PRs ----
-export const PR_UNIT_TYPES = ["kg", "time", "distance"] as const;
-export type PrUnitType = (typeof PR_UNIT_TYPES)[number];
-
-export type Pr = {
-  id: string;
-  user_id: string;
-  exercise_name: string;
-  unit_type: PrUnitType;
-  value: number; // kg amount, total seconds (time), or distance amount
-  distance_unit: "m" | "km" | null;
-  reps: number | null; // optional, mainly for kg-type PRs (e.g. 120 kg x 5)
-  achieved_date: string | null; // date the PR was set (YYYY-MM-DD)
-  created_at: string;
-  updated_at: string;
-};
-
-// Emoji icon for a PR tile, based on its unit type.
-export function prIcon(pr: Pick<Pr, "unit_type">): string {
-  if (pr.unit_type === "time") return "⏱️";
-  if (pr.unit_type === "distance") return "📍";
-  return "🏋️";
-}
-
-/** A PR's number and its unit, for layouts that style them apart
- *  ("60" + "kg"). Times have no separate unit ("28:40"). */
-export function splitPrValue(
-  pr: Pick<Pr, "unit_type" | "value" | "distance_unit">,
-): { value: string; unit: string } {
-  if (pr.unit_type === "kg") return { value: trimNum(pr.value), unit: "kg" };
-  if (pr.unit_type === "distance") return { value: trimNum(pr.value), unit: pr.distance_unit ?? "m" };
-  return { value: formatSeconds(pr.value), unit: "" };
-}
-
-export function formatPrValue(pr: Pick<Pr, "unit_type" | "value" | "distance_unit">): string {
-  if (pr.unit_type === "kg") return `${trimNum(pr.value)} kg`;
-  if (pr.unit_type === "distance")
-    return `${trimNum(pr.value)} ${pr.distance_unit ?? "m"}`;
-  // time
-  return formatSeconds(pr.value);
-}
-
 export function formatSeconds(total: number): string {
   const t = Math.max(0, Math.round(total));
   const h = Math.floor(t / 3600);

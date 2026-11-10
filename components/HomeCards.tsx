@@ -1,23 +1,4 @@
-import Link from "next/link";
-import { splitPrValue, type Pr } from "@/lib/types";
 import { Sparkline } from "@/components/Sparkline";
-
-// Home PR Corner tile: exercise, best value (unit in green) and reps.
-export function PrCard({ pr }: { pr: Pr }) {
-  const { value, unit } = splitPrValue(pr);
-  return (
-    <Link href="/prs" className="elevation-1 pressable flex flex-col gap-[18px] rounded-3xl p-[18px] text-ink">
-      <span className="truncate text-sm font-semibold text-[#D4D4D4]">{pr.exercise_name}</span>
-      <span className="flex flex-col gap-0.5">
-        <span className="font-display text-[34px] font-bold leading-none">
-          {value}
-          {unit && <span className="text-[15px] font-semibold text-green"> {unit}</span>}
-        </span>
-        <span className="text-[13px] text-muted">{pr.reps != null ? `× ${pr.reps} reps` : "Personal best"}</span>
-      </span>
-    </Link>
-  );
-}
 
 // Measurement card with a sparkline + month delta.
 export function MeasurementCard({
