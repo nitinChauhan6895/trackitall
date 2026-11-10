@@ -369,24 +369,48 @@ function Legend({ swatch, children }: { swatch: string; children: React.ReactNod
   );
 }
 
-/** Animates its height (~250ms ease-out) whenever its content changes size. */
+/**
+ * Animates its height (~250ms ease-out) whenever its content changes size.
+ *
+ * It clips only WHILE the height is changing: clipping all the time cut off
+ * whatever reaches past the content box, like the bottom of today's ring.
+ */
 function AnimatedHeight({ animate, children }: { animate: boolean; children: React.ReactNode }) {
   const inner = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | undefined>(undefined);
+  const [moving, setMoving] = useState(false);
 
   useLayoutEffect(() => {
     const el = inner.current;
     if (!el) return;
-    const measure = () => setHeight(el.offsetHeight);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const measure = () => {
+      // Exact (fractional) height; offsetHeight rounds down and shaves pixels.
+      const next = el.getBoundingClientRect().height;
+      setHeight((prev) => {
+        if (prev !== undefined && Math.abs(prev - next) > 0.5) {
+          setMoving(true);
+          clearTimeout(timer);
+          timer = setTimeout(() => setMoving(false), 300);
+        }
+        return next;
+      });
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      clearTimeout(timer);
+    };
   }, []);
 
   return (
     <div
-      className={animate ? "overflow-hidden transition-[height] duration-[250ms] ease-out motion-reduce:transition-none" : "overflow-hidden"}
+      className={[
+        animate ? "transition-[height] duration-[250ms] ease-out motion-reduce:transition-none" : "",
+        moving ? "overflow-hidden" : "",
+      ].join(" ")}
       style={{ height }}
     >
       <div ref={inner}>{children}</div>
