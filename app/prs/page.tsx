@@ -3,5 +3,5 @@ import PrCorner from "./PrCorner";
 
 export default async function PrsPage() {
   const sources = await getPrSources();
-  return <PrCorner initialSources={sources} />;
+  return <PrCorner initialSources={sources} fetchedAt={Date.now()} />;
 }

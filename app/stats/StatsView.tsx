@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { loadStatsAction } from "@/app/actions";
 import { qk } from "@/lib/browserData";
+import { refetchUnlessJustFetched, useSeedQuery } from "@/lib/seed";
 import { toDateKey } from "@/lib/date";
 import { formatDayMonth } from "@/lib/dateFormat";
 import { RANGE_KEYS, RANGE_LABELS, type RangeKey } from "@/lib/stats";
@@ -37,14 +38,19 @@ export type NutritionWeekSummary = {
 export default function StatsView({
   stats: initialStats,
   nutrition: initialNutrition,
+  fetchedAt,
 }: {
+  /** When the server fetched these (ms). */
+  fetchedAt: number;
   stats: StatsData;
   nutrition?: NutritionWeekSummary | null;
 }) {
   // Stats are computed server-side; we cache the *result* so revisits paint
   // instantly from IndexedDB and refresh in the background.
+  useSeedQuery(qk.stats(), { stats: initialStats, nutrition: initialNutrition ?? null }, fetchedAt);
   const { data } = useQuery({
     queryKey: qk.stats(),
+    refetchOnMount: refetchUnlessJustFetched,
     // Pass the device's "today": the server clock is UTC, which is yesterday
     // for IST users until 05:30, shifting every week/month boundary.
     queryFn: () => loadStatsAction(toDateKey(new Date())),

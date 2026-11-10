@@ -2,8 +2,9 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { fetchMonthSummary, qk, type MonthSummary } from "@/lib/browserData";
+import { refetchUnlessJustFetched } from "@/lib/seed";
 import { buildCalendarGrid, monthId, monthLabel, nextMonth, prevMonth, toDateKey } from "@/lib/date";
 
 const MONTHS = [
@@ -48,6 +49,7 @@ export default function HomeCalendar({
   todayKey,
   streak,
   initialSummaries,
+  fetchedAt,
   initialMonth,
 }: {
   /** The SERVER's today; corrected to the device's date after mount. */
@@ -55,9 +57,24 @@ export default function HomeCalendar({
   streak: number;
   /** Month summaries rendered on the server, keyed by monthId(). */
   initialSummaries: Record<string, MonthSummary>;
+  /** When the server fetched the summaries (ms). */
+  fetchedAt: number;
   /** Month to show if the month view opens (e.g. back from a day page). */
   initialMonth?: YM;
 }) {
+  // Put the server's months into the cache (when newer than what's there) so
+  // the queries below don't immediately fetch what the server just sent.
+  const qc = useQueryClient();
+  const seeded = useRef(false);
+  if (!seeded.current) {
+    seeded.current = true;
+    for (const [id, data] of Object.entries(initialSummaries)) {
+      const [y, m] = id.split("-").map(Number);
+      const state = qc.getQueryState(qk.month(y, m));
+      if (!state || (state.dataUpdatedAt ?? 0) < fetchedAt) qc.setQueryData(qk.month(y, m), data, { updatedAt: fetchedAt });
+    }
+  }
+
   const [today, setToday] = useState(todayKey);
   const [view, setView] = useState<View>("week");
   const [weekStart, setWeekStart] = useState(() => mondayOf(todayKey));
@@ -121,6 +138,7 @@ export default function HomeCalendar({
       queryKey: qk.month(year, month),
       queryFn: () => fetchMonthSummary(year, month),
       initialData: initialSummaries[monthId(year, month)],
+      refetchOnMount: refetchUnlessJustFetched,
     })),
   });
   const summary: MonthSummary = Object.assign({}, ...results.map((r) => r.data ?? {}));

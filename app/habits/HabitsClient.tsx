@@ -10,6 +10,7 @@ import {
   setHabitArchived,
 } from "@/app/actions";
 import { qk } from "@/lib/browserData";
+import { refetchUnlessJustFetched, useSeedQuery } from "@/lib/seed";
 import { toDateKey } from "@/lib/date";
 import { formatShortDate } from "@/lib/dateFormat";
 import {
@@ -49,16 +50,21 @@ type View =
 
 export default function HabitsClient({
   initial,
+  fetchedAt,
   todayKey,
 }: {
   initial: HabitsData;
+  /** When the server fetched `initial` (ms). */
+  fetchedAt: number;
   /** The SERVER's date. Seeding state from it keeps the SSR and the first
    *  client render identical; the device's real date is applied on mount. */
   todayKey: string;
 }) {
   const queryClient = useQueryClient();
+  useSeedQuery(qk.habits(), initial, fetchedAt);
   const { data } = useQuery({
     queryKey: qk.habits(),
+    refetchOnMount: refetchUnlessJustFetched,
     // Wrapped: React Query passes a context object (with an AbortSignal) to
     // queryFn, and a server action can't serialise it — the call would throw
     // before reaching the server, so new habits only showed after a reload.

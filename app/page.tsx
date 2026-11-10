@@ -119,6 +119,7 @@ export default async function HomePage({
         todayKey={todayKey}
         streak={streak}
         initialSummaries={initialSummaries}
+        fetchedAt={Date.now()}
         // Back from a day page (/?m=YYYY-MM): the month view opens on that month.
         initialMonth={searchParams.m ? { year, month } : undefined}
       />
