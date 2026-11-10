@@ -4,5 +4,5 @@ import GoalsClient from "./GoalsClient";
 
 export default async function GoalsPage() {
   const goals = await getGoalsData();
-  return <GoalsClient initial={goals} todayKey={toDateKey(new Date())} />;
+  return <GoalsClient initial={goals} fetchedAt={Date.now()} todayKey={toDateKey(new Date())} />;
 }

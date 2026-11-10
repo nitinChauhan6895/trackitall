@@ -35,5 +35,5 @@ export default async function StatsPage() {
     );
   }
 
-  return <StatsView stats={stats} nutrition={nutrition} />;
+  return <StatsView stats={stats} nutrition={nutrition} fetchedAt={Date.now()} />;
 }

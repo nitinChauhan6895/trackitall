@@ -4,6 +4,7 @@
 
 import { getBrowserClient } from "@/lib/supabase/client";
 import { PR_SELECT, type PrSourceRow } from "@/lib/prs";
+import { fetchAllRows } from "@/lib/pageAll";
 import {
   MUSCLE_GROUPS,
   type Circuit,
@@ -125,13 +126,17 @@ export async function fetchLogContext(date: string): Promise<LogContext> {
   // year back is plenty for "last trained"; older groups read as untrained.
   const since = new Date(date);
   since.setFullYear(since.getFullYear() - 1);
-  const { data, error } = await supabase
-    .from("exercises")
-    .select("workout_date, muscle_group")
-    .lte("workout_date", date)
-    .gte("workout_date", since.toISOString().slice(0, 10))
-    .order("workout_date", { ascending: false })
-    .limit(5000);
+  // Paged: a plain .limit(5000) is still capped at 1000 rows by the API.
+  const { data, error } = await fetchAllRows((from, to) =>
+    supabase
+      .from("exercises")
+      .select("workout_date, muscle_group")
+      .lte("workout_date", date)
+      .gte("workout_date", since.toISOString().slice(0, 10))
+      .order("workout_date", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, to),
+  );
   if (error) throw error;
 
   const lastTrained: LogContext["lastTrained"] = {};
@@ -171,20 +176,17 @@ export async function fetchCircuits(): Promise<Circuit[]> {
 /** All logged exercises for automatic PRs (paged past the 1000-row cap). */
 export async function fetchPrSources(): Promise<PrSourceRow[]> {
   const supabase = await authedClient();
-  const out: PrSourceRow[] = [];
-  const PAGE = 1000;
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
+  const { data, error } = await fetchAllRows((from, to) =>
+    supabase
       .from("exercises")
       .select(PR_SELECT)
       .order("workout_date", { ascending: true })
       .order("created_at", { ascending: true })
-      .range(from, from + PAGE - 1);
-    if (error) throw error;
-    out.push(...((data ?? []) as unknown as PrSourceRow[]));
-    if (!data || data.length < PAGE) break;
-  }
-  return out;
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
+  if (error) throw error;
+  return data as unknown as PrSourceRow[];
 }
 
 export async function fetchMeasurements(): Promise<Measurement[]> {

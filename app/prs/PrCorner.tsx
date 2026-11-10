@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { fetchPrSources, qk } from "@/lib/browserData";
+import { refetchUnlessJustFetched, useSeedQuery } from "@/lib/seed";
 import { toDateKey } from "@/lib/date";
 import { formatShortDate } from "@/lib/dateFormat";
 import {
@@ -25,15 +26,24 @@ const GLASS_BACK =
  * PR corner, fully automatic: every record comes from the workout log, so it
  * updates itself whenever a workout is saved or edited.
  */
-export default function PrCorner({ initialSources }: { initialSources: PrSourceRow[] }) {
+export default function PrCorner({
+  initialSources,
+  fetchedAt,
+}: {
+  initialSources: PrSourceRow[];
+  /** When the server fetched `initialSources` (ms). */
+  fetchedAt: number;
+}) {
+  useSeedQuery(qk.prSources(), initialSources, fetchedAt);
   const { data: sources = initialSources } = useQuery({
     queryKey: qk.prSources(),
+    refetchOnMount: refetchUnlessJustFetched,
     queryFn: fetchPrSources,
     initialData: initialSources,
   });
   const [filter, setFilter] = useState<Filter>("all");
 
-  const { records, events } = computePrs(sources);
+  const { records, events } = useMemo(() => computePrs(sources), [sources]);
   const thisMonth = toDateKey(new Date()).slice(0, 7);
   const beatenThisMonth = events.filter((e) => e.date.startsWith(thisMonth)).length;
   const weights = records.filter((r) => r.metric === "weight");

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { loadGoalsAction, saveGoal, deleteGoal } from "@/app/actions";
 import { qk } from "@/lib/browserData";
+import { refetchUnlessJustFetched, useSeedQuery } from "@/lib/seed";
 import { toDateKey } from "@/lib/date";
 import { formatShortDate } from "@/lib/dateFormat";
 import {
@@ -45,16 +46,21 @@ export type GoalsData = { goals: Goal[]; exercises: GoalExercise[] };
 
 export default function GoalsClient({
   initial,
+  fetchedAt,
   todayKey,
 }: {
   initial: GoalsData;
+  /** When the server fetched `initial` (ms). */
+  fetchedAt: number;
   /** The SERVER's date — seeding from it keeps SSR and first client render
    *  identical; the device's real date is applied on mount. */
   todayKey: string;
 }) {
   const queryClient = useQueryClient();
+  useSeedQuery(qk.goals(), initial, fetchedAt);
   const { data } = useQuery({
     queryKey: qk.goals(),
+    refetchOnMount: refetchUnlessJustFetched,
     // Wrapped so React Query's context object isn't sent to the server action
     // (it can't be serialised, and the refetch would silently fail).
     queryFn: () => loadGoalsAction(),

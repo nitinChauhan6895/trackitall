@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { refetchUnlessJustFetched, useSeedQuery } from "@/lib/seed";
 import {
   copyMeal,
   deleteFoodLog,
@@ -49,17 +50,22 @@ function heading(key: string, today: string): string {
 
 export default function NutritionDiary({
   initialDiary,
+  fetchedAt,
   today,
 }: {
   initialDiary: Diary;
+  /** When the server fetched `initialDiary` (ms). */
+  fetchedAt: number;
   today: string;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   // Cache-backed diary: instant from IndexedDB on re-open, reconciled in the
   // background; edits invalidate this key to refetch.
+  useSeedQuery(qk.diary(initialDiary.date), initialDiary, fetchedAt);
   const { data: diary = initialDiary } = useQuery({
     queryKey: qk.diary(initialDiary.date),
+    refetchOnMount: refetchUnlessJustFetched,
     queryFn: () => fetchNutritionDiary(initialDiary.date),
     initialData: initialDiary,
   });

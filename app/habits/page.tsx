@@ -4,5 +4,5 @@ import HabitsClient from "./HabitsClient";
 
 export default async function HabitsPage() {
   const initial = await getHabitsData();
-  return <HabitsClient initial={initial} todayKey={toDateKey(new Date())} />;
+  return <HabitsClient initial={initial} fetchedAt={Date.now()} todayKey={toDateKey(new Date())} />;
 }

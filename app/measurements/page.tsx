@@ -3,5 +3,5 @@ import MeasurementsManager from "./MeasurementsManager";
 
 export default async function MeasurementsPage() {
   const entries = await getMeasurements();
-  return <MeasurementsManager initial={entries} />;
+  return <MeasurementsManager initial={entries} fetchedAt={Date.now()} />;
 }

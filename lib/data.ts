@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getLocalUser } from "@/lib/supabase/user";
 import {
@@ -37,7 +38,8 @@ import {
   type SavedMeal,
 } from "@/lib/nutrition";
 import { toDateKey } from "@/lib/date";
-import { computePrs, PR_SELECT, type PrSourceRow } from "@/lib/prs";
+import { fetchAllRows } from "@/lib/pageAll";
+import { computePrs, type PrSourceRow } from "@/lib/prs";
 import { type HabitsData } from "@/lib/habits";
 import { type Goal, type GoalExercise } from "@/lib/goals";
 
@@ -226,26 +228,32 @@ export async function getDayExercises(date: string): Promise<Exercise[]> {
   })) as Exercise[];
 }
 
+const HISTORY_SELECT =
+  "name, muscle_group, workout_date, cardio_type, created_at, sets(reps, weight_kg, distance_km, distance_m, time_seconds)";
+
 /**
- * Every logged exercise with the set fields automatic PRs need. Paged, so a
- * long history isn't cut off at PostgREST's 1000-row default.
+ * The whole exercise history in one paged read, shared per request: Home needs
+ * it for both the badges and the PR widget, and React's cache() makes the
+ * second caller reuse the first's result instead of querying again.
  */
-export async function getPrSources(): Promise<PrSourceRow[]> {
+const loadExerciseHistory = cache(async (): Promise<(PrSourceRow & { cardio_type: string | null })[]> => {
   const supabase = createClient();
-  const out: PrSourceRow[] = [];
-  const PAGE = 1000;
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
+  const { data, error } = await fetchAllRows((from, to) =>
+    supabase
       .from("exercises")
-      .select(PR_SELECT)
+      .select(HISTORY_SELECT)
       .order("workout_date", { ascending: true })
       .order("created_at", { ascending: true })
-      .range(from, from + PAGE - 1);
-    if (error) throw error;
-    out.push(...((data ?? []) as unknown as PrSourceRow[]));
-    if (!data || data.length < PAGE) break;
-  }
-  return out;
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
+  if (error) throw error;
+  return data as unknown as (PrSourceRow & { cardio_type: string | null })[];
+});
+
+/** Every logged exercise with the set fields automatic PRs need. */
+export async function getPrSources(): Promise<PrSourceRow[]> {
+  return loadExerciseHistory();
 }
 
 type DayAgg = {
@@ -341,15 +349,14 @@ export async function getBadgeData(): Promise<{
   stats: BadgeStats;
   earnedDates: Record<string, string | null>;
 }> {
-  const supabase = createClient();
-  // The same rows also drive the automatic PRs (Personal Best badge).
-  const exRes = await supabase
-    .from("exercises")
-    .select(
-      "workout_date, muscle_group, name, cardio_type, created_at, sets(reps, weight_kg, distance_km, distance_m, time_seconds)",
-    );
-
-  const exs = (exRes.data ?? []) as any[];
+  // The same rows also drive the automatic PRs (Personal Best badge), and on
+  // Home the PR widget reads them too: one shared, paged load.
+  let exs: any[] = [];
+  try {
+    exs = await loadExerciseHistory();
+  } catch {
+    // Badges degrade to empty rather than taking the page down.
+  }
   const days = exs.map((e) => e.workout_date as string);
 
   // Per-day aggregation (drives both totals and the chronological replay).
@@ -507,10 +514,19 @@ const STATS_SELECT = (withHard: boolean) =>
 
 export async function getStatsData(todayKey?: string): Promise<StatsData> {
   const supabase = createClient();
-  let { data, error } = await supabase.from("exercises").select(STATS_SELECT(true));
-  if (error && isMissingColumn(error)) {
+  const pagedStats = (withHard: boolean) =>
+    fetchAllRows((from, to) =>
+      supabase
+        .from("exercises")
+        .select(STATS_SELECT(withHard))
+        .order("workout_date", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+  let { data, error } = await pagedStats(true);
+  if (error && isMissingColumn(error as { code?: string })) {
     // migration_018 not run yet — every set simply reads as not-hard.
-    ({ data, error } = await supabase.from("exercises").select(STATS_SELECT(false)));
+    ({ data, error } = await pagedStats(false));
   }
   if (error) throw error;
   const today =
@@ -569,9 +585,14 @@ export async function buildCoachHistory(groups: CoachGroup[]): Promise<History> 
   const todayKey = toDateKey(new Date());
 
   const [exRes, prRes] = await Promise.all([
-    supabase
-      .from("exercises")
-      .select("workout_date, name, muscle_group, sets(reps, weight_kg)"),
+    fetchAllRows((from, to) =>
+      supabase
+        .from("exercises")
+        .select("workout_date, name, muscle_group, sets(reps, weight_kg)")
+        .order("workout_date", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
     supabase.from("prs").select("exercise_name, achieved_date, updated_at"),
   ]);
   const exs = (exRes.data ?? []) as any[];
@@ -662,7 +683,14 @@ export async function buildCoachHistory(groups: CoachGroup[]): Promise<History> 
 export async function getSuggestedFocus(): Promise<CoachGroup[]> {
   const supabase = createClient();
   const todayKey = toDateKey(new Date());
-  const { data } = await supabase.from("exercises").select("workout_date, muscle_group");
+  const { data } = await fetchAllRows((from, to) =>
+    supabase
+      .from("exercises")
+      .select("workout_date, muscle_group")
+      .order("workout_date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
   const rows = (data ?? []) as any[];
 
   const lastByApp = new Map<string, string>();
@@ -1016,7 +1044,14 @@ export async function getGoalsData(): Promise<{
       .order("end_date", { ascending: false }),
     // Bounded window: goals older than this are history, and their progress
     // bars would be pulling a year of sets into the browser otherwise.
-    supabase.from("exercises").select(GOAL_EXERCISE_SELECT(true)),
+    fetchAllRows((from, to) =>
+      supabase
+        .from("exercises")
+        .select(GOAL_EXERCISE_SELECT(true))
+        .order("workout_date", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+    ),
   ]);
 
   if (gRes.error) {
@@ -1024,8 +1059,15 @@ export async function getGoalsData(): Promise<{
     throw gRes.error;
   }
   let exercises = eRes.data;
-  if (eRes.error && isMissingColumn(eRes.error)) {
-    const retry = await supabase.from("exercises").select(GOAL_EXERCISE_SELECT(false));
+  if (eRes.error && isMissingColumn(eRes.error as { code?: string })) {
+    const retry = await fetchAllRows((from, to) =>
+      supabase
+        .from("exercises")
+        .select(GOAL_EXERCISE_SELECT(false))
+        .order("workout_date", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
     exercises = retry.data;
   } else if (eRes.error) {
     throw eRes.error;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { monthParam } from "@/lib/date";
@@ -74,7 +74,10 @@ export default function DayView({ date }: { date: string }) {
     queryFn: fetchPrSources,
     retry: false,
   });
-  const newPrs = prSources ? computePrs(prSources).events.filter((e) => e.date === date) : [];
+  // Replaying the whole log is the costly part: do it once per data change,
+  // not on every tap that re-renders this screen.
+  const allPrEvents = useMemo(() => (prSources ? computePrs(prSources).events : []), [prSources]);
+  const newPrs = useMemo(() => allPrEvents.filter((e) => e.date === date), [allPrEvents, date]);
 
   const onChanged = () => {
     queryClient.invalidateQueries({ queryKey: qk.day(date) });

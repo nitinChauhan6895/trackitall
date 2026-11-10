@@ -5,6 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchMeasurements, qk } from "@/lib/browserData";
+import { refetchUnlessJustFetched, useSeedQuery } from "@/lib/seed";
 import {
   MEASUREMENT_FIELDS,
   type Measurement,
@@ -36,16 +37,21 @@ const GLASS_BACK =
 
 export default function MeasurementsManager({
   initial,
+  fetchedAt,
 }: {
   initial: Measurement[];
+  /** When the server fetched `initial` (ms). */
+  fetchedAt: number;
 }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<Measurement | null>(null);
   const [adding, setAdding] = useState(false);
 
   // Cache-backed: instant on revisit, refreshed in the background.
+  useSeedQuery(qk.measurements(), initial, fetchedAt);
   const { data: entries = initial } = useQuery({
     queryKey: qk.measurements(),
+    refetchOnMount: refetchUnlessJustFetched,
     queryFn: fetchMeasurements,
     initialData: initial,
   });
