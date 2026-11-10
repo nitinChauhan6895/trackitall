@@ -7,7 +7,7 @@ import {
   getMonthWorkoutSummary,
   getNutritionDiary,
   getProfile,
-  getAllPrs,
+  getPrSources,
   getRecentTraining,
   getIncomingShares,
 } from "@/lib/data";
@@ -23,10 +23,11 @@ import {
   type MeasurementField,
 } from "@/lib/types";
 import { evaluateBadges, sortedByEarned } from "@/lib/badges";
-import { groupPrs } from "@/lib/prGroups";
+import { computePrs } from "@/lib/prs";
+import PrTile from "@/components/PrTile";
 import { monthId, parseMonthParam, prevMonth, toDateKey } from "@/lib/date";
 import { Badge } from "@/components/Badge";
-import { MeasurementCard, PrCard } from "@/components/HomeCards";
+import { MeasurementCard } from "@/components/HomeCards";
 import ShareInbox from "@/components/ShareInbox";
 
 // Deduped per request: the streak pill and the badges row share one query.
@@ -226,14 +227,15 @@ function BadgesSkeleton() {
 }
 
 async function PrPreview() {
-  // One card per exercise (current best), most recently active first.
-  const groups = groupPrs(await getAllPrs()).slice(0, 2);
-  if (groups.length === 0)
-    return <EmptyHint href="/prs">Add your first PR →</EmptyHint>;
+  // The two most recently set records, straight from the workout log.
+  const { records } = computePrs(await getPrSources());
+  const latest = records.slice(0, 2);
+  if (latest.length === 0)
+    return <EmptyHint href="/prs">Your records appear here as you log workouts →</EmptyHint>;
   return (
     <div className="grid grid-cols-2 gap-3">
-      {groups.map((g) => (
-        <PrCard key={g.key} pr={g.best} />
+      {latest.map((r) => (
+        <PrTile key={r.key} name={r.name} metric={r.metric} value={r.value} delta={r.delta} reps={r.reps} href="/prs" />
       ))}
     </div>
   );

@@ -3,13 +3,13 @@
 // shapes so the query cache can persist to IndexedDB.
 
 import { getBrowserClient } from "@/lib/supabase/client";
+import { PR_SELECT, type PrSourceRow } from "@/lib/prs";
 import {
   MUSCLE_GROUPS,
   type Circuit,
   type Exercise,
   type Measurement,
   type MuscleGroup,
-  type Pr,
 } from "@/lib/types";
 import {
   DEFAULT_TARGETS,
@@ -26,7 +26,8 @@ export const qk = {
   day: (date: string) => ["day", date] as const,
   diary: (date: string) => ["diary", date] as const,
   month: (year: number, month: number) => ["month", year, month] as const,
-  prs: () => ["prs"] as const,
+  /** Raw rows behind the automatic PRs (computed on read). */
+  prSources: () => ["prSources"] as const,
   measurements: () => ["measurements"] as const,
   stats: () => ["stats"] as const,
   circuits: () => ["circuits"] as const,
@@ -167,15 +168,23 @@ export async function fetchCircuits(): Promise<Circuit[]> {
 
 // ---------- PRs & measurements ----------
 
-export async function fetchAllPrs(): Promise<Pr[]> {
+/** All logged exercises for automatic PRs (paged past the 1000-row cap). */
+export async function fetchPrSources(): Promise<PrSourceRow[]> {
   const supabase = await authedClient();
-  const { data, error } = await supabase
-    .from("prs")
-    .select("*")
-    .order("achieved_date", { ascending: false, nullsFirst: false })
-    .order("updated_at", { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as Pr[];
+  const out: PrSourceRow[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("exercises")
+      .select(PR_SELECT)
+      .order("workout_date", { ascending: true })
+      .order("created_at", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    out.push(...((data ?? []) as unknown as PrSourceRow[]));
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
 }
 
 export async function fetchMeasurements(): Promise<Measurement[]> {

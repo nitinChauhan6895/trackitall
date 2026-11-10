@@ -4,7 +4,9 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { monthParam } from "@/lib/date";
-import { fetchDayExercises, qk } from "@/lib/browserData";
+import { fetchDayExercises, fetchPrSources, qk } from "@/lib/browserData";
+import { computePrs } from "@/lib/prs";
+import PrTile from "@/components/PrTile";
 import { enqueue, isOffline, runOp, type OpType } from "@/lib/offlineQueue";
 import {
   CARDIO_FIELDS,
@@ -65,7 +67,19 @@ export default function DayView({ date }: { date: string }) {
     queryFn: () => fetchDayExercises(date),
     retry: false,
   });
-  const onChanged = () => queryClient.invalidateQueries({ queryKey: qk.day(date) });
+  // New personal records set on this day (computed from the whole log, so
+  // they follow edits). Offline with nothing cached: simply none shown.
+  const { data: prSources } = useQuery({
+    queryKey: qk.prSources(),
+    queryFn: fetchPrSources,
+    retry: false,
+  });
+  const newPrs = prSources ? computePrs(prSources).events.filter((e) => e.date === date) : [];
+
+  const onChanged = () => {
+    queryClient.invalidateQueries({ queryKey: qk.day(date) });
+    queryClient.invalidateQueries({ queryKey: qk.prSources() });
+  };
 
   // Run an edit against the cached day. The optimistic update is applied first
   // so the UI responds instantly; if we're offline the op is queued and the
@@ -165,6 +179,30 @@ export default function DayView({ date }: { date: string }) {
           <Stat value={byGroup.size} label="Muscles" />
         </div>
       </section>
+
+      {newPrs.length > 0 && (
+        <section className="flex flex-col gap-3" aria-label="New personal records">
+          <div className="flex items-baseline justify-between px-1">
+            <h2 className="font-display text-xl font-semibold">
+              {newPrs.length === 1 ? "New personal record" : "New personal records"}
+            </h2>
+            <span className="text-sm text-muted">{newPrs.length}</span>
+          </div>
+          <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {newPrs.map((e) => (
+              <PrTile
+                key={e.key}
+                name={e.name}
+                metric={e.metric}
+                value={e.value}
+                delta={e.delta}
+                reps={e.reps}
+                className="w-[210px] shrink-0 snap-start"
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {exercises.length === 0 ? (
         <p className="rounded-[28px] border border-dashed border-white/15 px-4 py-8 text-center text-sm text-muted">

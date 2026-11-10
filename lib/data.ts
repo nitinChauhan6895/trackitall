@@ -7,7 +7,6 @@ import {
   type IncomingShare,
   type Measurement,
   type MuscleGroup,
-  type Pr,
   type Profile,
 } from "@/lib/types";
 import {
@@ -38,6 +37,7 @@ import {
   type SavedMeal,
 } from "@/lib/nutrition";
 import { toDateKey } from "@/lib/date";
+import { computePrs, PR_SELECT, type PrSourceRow } from "@/lib/prs";
 import { type HabitsData } from "@/lib/habits";
 import { type Goal, type GoalExercise } from "@/lib/goals";
 
@@ -226,15 +226,26 @@ export async function getDayExercises(date: string): Promise<Exercise[]> {
   })) as Exercise[];
 }
 
-export async function getAllPrs(): Promise<Pr[]> {
+/**
+ * Every logged exercise with the set fields automatic PRs need. Paged, so a
+ * long history isn't cut off at PostgREST's 1000-row default.
+ */
+export async function getPrSources(): Promise<PrSourceRow[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("prs")
-    .select("*")
-    .order("achieved_date", { ascending: false, nullsFirst: false })
-    .order("updated_at", { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as Pr[];
+  const out: PrSourceRow[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("exercises")
+      .select(PR_SELECT)
+      .order("workout_date", { ascending: true })
+      .order("created_at", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    out.push(...((data ?? []) as unknown as PrSourceRow[]));
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
 }
 
 type DayAgg = {
@@ -256,7 +267,7 @@ function keyToMs(k: string): number {
 // Replays days in chronological order to find the date each badge was first earned.
 function computeEarnedDates(
   dayList: DayAgg[],
-  prs: any[],
+  prEvents: { date: string }[],
 ): Record<string, string | null> {
   const earned: Record<string, string> = {};
   const set = (id: string, date: string) => {
@@ -316,16 +327,10 @@ function computeEarnedDates(
     prevMs = ms;
   }
 
+  // Personal Best: the first day a previous best was beaten.
   let pbDate: string | null = null;
-  for (const p of prs) {
-    if (
-      p.updated_at &&
-      p.created_at &&
-      new Date(p.updated_at).getTime() - new Date(p.created_at).getTime() > 60000
-    ) {
-      const k = toDateKey(new Date(p.updated_at));
-      if (!pbDate || k < pbDate) pbDate = k;
-    }
+  for (const e of prEvents) {
+    if (!pbDate || e.date < pbDate) pbDate = e.date;
   }
   if (pbDate) earned["personalBest"] = pbDate;
 
@@ -337,14 +342,12 @@ export async function getBadgeData(): Promise<{
   earnedDates: Record<string, string | null>;
 }> {
   const supabase = createClient();
-  const [exRes, prRes] = await Promise.all([
-    supabase
-      .from("exercises")
-      .select(
-        "workout_date, muscle_group, name, cardio_type, sets(distance_km, distance_m, weight_kg)",
-      ),
-    supabase.from("prs").select("created_at, updated_at"),
-  ]);
+  // The same rows also drive the automatic PRs (Personal Best badge).
+  const exRes = await supabase
+    .from("exercises")
+    .select(
+      "workout_date, muscle_group, name, cardio_type, created_at, sets(reps, weight_kg, distance_km, distance_m, time_seconds)",
+    );
 
   const exs = (exRes.data ?? []) as any[];
   const days = exs.map((e) => e.workout_date as string);
@@ -397,13 +400,10 @@ export async function getBadgeData(): Promise<{
     maxGroupsInDay = Math.max(maxGroupsInDay, a.groups.size);
   }
 
-  const prs = (prRes.data ?? []) as any[];
-  const pbBeaten = prs.some(
-    (p) =>
-      p.updated_at &&
-      p.created_at &&
-      new Date(p.updated_at).getTime() - new Date(p.created_at).getTime() > 60000,
-  );
+  // PRs are automatic now: a record per exercise, "beaten" when a later
+  // workout tops the previous best.
+  const { records: prRecords, events: prEvents } = computePrs(exs as PrSourceRow[]);
+  const pbBeaten = prEvents.length > 0;
 
   const stats: BadgeStats = {
     totalWorkouts: new Set(days).size,
@@ -419,13 +419,13 @@ export async function getBadgeData(): Promise<{
     maxDeadliftKg,
     maxGroupsInDay,
     pbBeaten,
-    prCount: prs.length,
+    prCount: prRecords.length,
   };
 
   const dayList = Array.from(dayMap.values()).sort((a, b) =>
     a.date < b.date ? -1 : 1,
   );
-  return { stats, earnedDates: computeEarnedDates(dayList, prs) };
+  return { stats, earnedDates: computeEarnedDates(dayList, prEvents) };
 }
 
 export async function getCircuits(): Promise<Circuit[]> {
