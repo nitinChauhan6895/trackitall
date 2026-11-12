@@ -13,6 +13,18 @@ import {
 } from "@/lib/types";
 import { toDateKey } from "@/lib/date";
 import { deleteMeasurement, saveMeasurement } from "@/app/actions";
+import { optimisticUpdate, tempId } from "@/lib/optimistic";
+
+type MeasurementInput = Parameters<typeof saveMeasurement>[0];
+
+// Newest first, as the server returns them.
+function sortEntries(list: Measurement[]): Measurement[] {
+  return [...list].sort((a, b) =>
+    a.entry_date !== b.entry_date
+      ? (a.entry_date < b.entry_date ? 1 : -1)
+      : (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0),
+  );
+}
 
 // Latest non-null value recorded for a metric (entries are newest-first).
 function latest(entries: Measurement[], key: MeasurementField): number | null {
@@ -60,16 +72,40 @@ export default function MeasurementsManager({
     setEditing(null);
     setAdding(false);
   }
-  function done() {
+  // Both close the form at once and show the change straight away; the save
+  // runs in the background and is undone (with a message) if it fails.
+  function saveEntry(input: MeasurementInput) {
+    const before = editing;
     close();
-    queryClient.invalidateQueries({ queryKey: qk.measurements() });
+    const row: Measurement = {
+      ...input,
+      id: input.id ?? tempId(),
+      user_id: before?.user_id ?? "",
+      created_at: before?.created_at ?? new Date().toISOString(),
+    };
+    void optimisticUpdate<Measurement[]>(
+      queryClient,
+      qk.measurements(),
+      (old) => sortEntries([...old.filter((m) => m.id !== row.id), row]),
+      () => saveMeasurement(input),
+    );
+  }
+  function removeEntry(id: string) {
+    close();
+    void optimisticUpdate<Measurement[]>(
+      queryClient,
+      qk.measurements(),
+      (old) => old.filter((m) => m.id !== id),
+      () => deleteMeasurement(id),
+      "Couldn't delete. The entry is back.",
+    );
   }
 
   if (editing || adding) {
     return (
       // A full-screen layer over the tab bar; the form has its own actions.
       <main className="fixed inset-0 z-40 mx-auto flex w-full max-w-md flex-col overflow-y-auto bg-page px-4 pb-10 safe-top">
-        <MeasurementForm key={editing?.id ?? "new"} editing={editing} onDone={done} onCancel={close} />
+        <MeasurementForm key={editing?.id ?? "new"} editing={editing} onSave={saveEntry} onDelete={removeEntry} onCancel={close} />
       </main>
     );
   }
@@ -128,9 +164,14 @@ export default function MeasurementsManager({
             <div key={m.id} className="elevation-1 flex flex-col gap-3 rounded-3xl px-[18px] pb-[18px] pt-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-base font-semibold">{fmtDate(m.entry_date)}</span>
-                <button type="button" onClick={() => setEditing(m)} className="text-sm font-semibold text-green active:opacity-70">
-                  Edit
-                </button>
+                {m.id.startsWith("temp-") ? (
+                  // Not saved yet: it has no real id to edit until the save lands.
+                  <span className="text-sm text-subtle">Saving…</span>
+                ) : (
+                  <button type="button" onClick={() => setEditing(m)} className="text-sm font-semibold text-green active:opacity-70">
+                    Edit
+                  </button>
+                )}
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {MEASUREMENT_FIELDS.map((f) => {
@@ -165,11 +206,13 @@ function MiniStat({ value, unit, label }: { value: number | null; unit: string; 
 
 function MeasurementForm({
   editing,
-  onDone,
+  onSave,
+  onDelete,
   onCancel,
 }: {
   editing: Measurement | null;
-  onDone: () => void;
+  onSave: (input: MeasurementInput) => void;
+  onDelete: (id: string) => void;
   onCancel: () => void;
 }) {
   const [date, setDate] = useState(editing?.entry_date ?? toDateKey(new Date()));
@@ -181,7 +224,6 @@ function MeasurementForm({
     }
     return init;
   });
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const set = (key: MeasurementField) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -194,12 +236,14 @@ function MeasurementForm({
     return Number.isFinite(n) ? n : null;
   }
 
-  async function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-    setBusy(true);
-    try {
-      await saveMeasurement({
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setError("Pick a date.");
+      return;
+    }
+    onSave({
         id: editing?.id,
         entry_date: date,
         bodyweight: num("bodyweight"),
@@ -212,24 +256,11 @@ function MeasurementForm({
         navel: num("navel"),
         arms: num("arms"),
         thighs: num("thighs"),
-      });
-      onDone();
-    } catch (err: any) {
-      setError(err?.message ?? "Could not save.");
-      setBusy(false);
-    }
+    });
   }
 
-  async function remove() {
-    if (!editing) return;
-    setBusy(true);
-    try {
-      await deleteMeasurement(editing.id);
-      onDone();
-    } catch (err: any) {
-      setError(err?.message ?? "Could not delete.");
-      setBusy(false);
-    }
+  function remove() {
+    if (editing) onDelete(editing.id);
   }
 
   return (
@@ -311,17 +342,17 @@ function MeasurementForm({
       <div className="mt-auto flex flex-col gap-2">
         <button
           type="submit"
-          disabled={busy}
-          className="h-14 rounded-full bg-green text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
+         
+          className="h-14 rounded-full bg-green text-base font-semibold text-ink-inverse transition active:scale-[0.98]"
         >
-          {busy ? "Saving…" : editing ? "Update entry" : "Save entry"}
+          {editing ? "Update entry" : "Save entry"}
         </button>
         {editing && (
-          <button type="button" onClick={remove} disabled={busy} className="h-12 text-[15px] font-medium text-gold active:opacity-70">
+          <button type="button" onClick={remove} className="h-12 text-[15px] font-medium text-gold active:opacity-70">
             Delete entry
           </button>
         )}
-        <button type="button" onClick={onCancel} disabled={busy} className="h-12 text-[15px] font-medium text-muted active:opacity-70">
+        <button type="button" onClick={onCancel} className="h-12 text-[15px] font-medium text-muted active:opacity-70">
           Cancel
         </button>
       </div>
