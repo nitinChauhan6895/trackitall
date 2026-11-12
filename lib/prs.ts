@@ -149,6 +149,27 @@ export function computePrs(rows: PrSourceRow[]): { records: PrRecord[]; events: 
   return { records, events };
 }
 
+/**
+ * Exercises (lower-cased names) whose best was beaten within the last `days`
+ * days, counting from `todayKey` (YYYY-MM-DD). Baselines don't count, matching
+ * what the day view celebrates. The Coach uses this to favour exercises the
+ * user is progressing on.
+ */
+export function recentPrNames(events: PrEvent[], todayKey: string, days: number): Set<string> {
+  const today = keyToUtcMs(todayKey);
+  const names = new Set<string>();
+  for (const e of events) {
+    const age = Math.round((today - keyToUtcMs(e.date)) / 86_400_000);
+    if (age >= 0 && age <= days) names.add(e.name.trim().toLowerCase());
+  }
+  return names;
+}
+
+function keyToUtcMs(k: string): number {
+  const [y, m, d] = k.split("-").map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
 // ---------- presentation ----------
 
 function trim(n: number, dp: number): string {

@@ -39,7 +39,7 @@ import {
 } from "@/lib/nutrition";
 import { toDateKey } from "@/lib/date";
 import { fetchAllRows } from "@/lib/pageAll";
-import { computePrs, type PrSourceRow } from "@/lib/prs";
+import { computePrs, recentPrNames, type PrSourceRow } from "@/lib/prs";
 import { type HabitsData } from "@/lib/habits";
 import { type Goal, type GoalExercise } from "@/lib/goals";
 
@@ -581,22 +581,13 @@ function keyMs(k: string): number {
 
 // Per-user history that drives the engine's scoring & weight suggestions.
 export async function buildCoachHistory(groups: CoachGroup[]): Promise<History> {
-  const supabase = createClient();
   const todayKey = toDateKey(new Date());
 
-  const [exRes, prRes] = await Promise.all([
-    fetchAllRows((from, to) =>
-      supabase
-        .from("exercises")
-        .select("workout_date, name, muscle_group, sets(reps, weight_kg)")
-        .order("workout_date", { ascending: true })
-        .order("id", { ascending: true })
-        .range(from, to),
-    ),
-    supabase.from("prs").select("exercise_name, achieved_date, updated_at"),
-  ]);
-  const exs = (exRes.data ?? []) as any[];
-  const prs = (prRes.data ?? []) as any[];
+  // Same paged history Home and the PR corner read, so the Coach's "recent PR"
+  // boost agrees with what the user sees. A failed read leaves the Coach with
+  // no history (generic suggestions) rather than an error screen.
+  const exs = (await loadExerciseHistory().catch(() => [])) as any[];
+  const prNames = recentPrNames(computePrs(exs as PrSourceRow[]).events, todayKey, 30);
 
   const dates = Array.from(new Set(exs.map((e) => e.workout_date as string))).sort(
     (a, b) => (a < b ? 1 : -1),
@@ -642,14 +633,6 @@ export async function buildCoachHistory(groups: CoachGroup[]): Promise<History> 
     if (date === prevDate) prev2Names.add(key);
   }
   for (const [key, date] of lastDateByName) daysSince.set(key, dayDiff(todayKey, date));
-
-  // recent PRs (last 30 days)
-  const prNames = new Set<string>();
-  for (const p of prs) {
-    const d = (p.achieved_date as string) ?? toDateKey(new Date(p.updated_at));
-    if (d && dayDiff(todayKey, d) <= 30)
-      prNames.add(String(p.exercise_name ?? "").trim().toLowerCase());
-  }
 
   // days since each selected group was last trained
   const lastByApp = new Map<string, string>();
