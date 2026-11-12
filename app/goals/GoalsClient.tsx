@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { loadGoalsAction, saveGoal, deleteGoal } from "@/app/actions";
 import { qk } from "@/lib/browserData";
@@ -96,7 +96,7 @@ export default function GoalsClient({
     return (
       // A full-screen layer over the tab bar: the form has its own sticky
       // action where the bar would be.
-      <main className="fixed inset-0 z-40 mx-auto flex w-full max-w-md flex-col overflow-y-auto bg-page px-4 pb-36 safe-top">
+      <main className="fixed inset-0 z-40 mx-auto flex w-full max-w-md flex-col overflow-y-auto overflow-x-hidden bg-page px-4 pb-36 safe-top">
         <GoalForm
           goal={view.id ? goals.find((g) => g.id === view.id) : undefined}
           initialMetric={view.name === "new" ? view.metric : undefined}
@@ -563,6 +563,26 @@ function aboutText(metric: GoalMetric): string {
 const STEP_LABEL = "text-xs font-semibold tracking-[0.08em] text-muted";
 const FIELD = "elevation-2 w-full rounded-2xl px-4 text-base text-ink outline-none placeholder:text-subtle focus:border-green/60";
 
+const DATE_FIELD =
+  " h-[52px] min-w-0 max-w-full appearance-none text-left [color-scheme:dark] [&::-webkit-date-and-time-value]:text-left";
+
+/** 150 → "2 h 30 min". */
+function formatHoursMinutes(totalMinutes: number): string {
+  const m = Math.round(totalMinutes);
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  return rest ? `${h} h ${rest} min` : `${h} h`;
+}
+
+function PencilIcon() {
+  return (
+    <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-auto shrink-0 text-muted">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+    </svg>
+  );
+}
+
 function Step({ n, label, children }: { n: string; label: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-3">
@@ -601,6 +621,7 @@ function GoalForm({
   const [cardioType, setCardioType] = useState<string>(goal?.cardio_type ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const targetRef = useRef<HTMLInputElement>(null);
 
   const meta = GOAL_META[metric];
   const scopedByGroup = GROUP_SCOPED.includes(metric);
@@ -711,18 +732,27 @@ function GoalForm({
 
       <Step n="02" label="TARGET">
         <div className="elevation-1 flex flex-col gap-4 rounded-3xl p-[18px]">
-          <label className="flex items-baseline gap-2.5">
+          {/* An obvious, tappable field: any number can be typed, the chips
+              are only shortcuts. */}
+          <label className="elevation-2 flex cursor-text items-center gap-2.5 rounded-2xl border border-white/10 px-4 py-2 focus-within:border-green/60">
             <span className="sr-only">Target {meta.unit}</span>
             <input
+              ref={targetRef}
               value={target}
               onChange={(e) => setTarget(e.target.value.replace(/[^0-9.]/g, ""))}
+              onFocus={(e) => e.target.select()}
               inputMode="decimal"
+              placeholder="0"
               // Sized to its digits so the unit sits right after the number.
-              style={{ width: `${Math.max(1, target.length) * 0.62 + 0.1}em` }}
-              className="min-w-0 max-w-[60%] bg-transparent p-0 font-display text-[56px] font-bold tracking-[-0.03em] text-ink outline-none"
+              style={{ width: `${Math.max(2, target.length) * 0.62 + 0.1}em` }}
+              className="min-w-0 max-w-[60%] bg-transparent p-0 font-display text-[56px] font-bold tracking-[-0.03em] text-ink outline-none placeholder:text-subtle"
             />
             <span className="text-lg font-semibold text-green">{meta.unit}</span>
+            <PencilIcon />
           </label>
+          {metric === "cardio_time" && Number(target) >= 60 && (
+            <span className="-mt-2 px-1 text-[13px] text-muted">= {formatHoursMinutes(Number(target))}</span>
+          )}
           <div className="flex gap-2">
             {meta.presets.map((v) => {
               const on = Number(target) === v;
@@ -733,7 +763,7 @@ function GoalForm({
                   onClick={() => setTarget(String(v))}
                   aria-pressed={on}
                   className={[
-                    "h-11 flex-1 rounded-xl text-sm",
+                    "h-11 min-w-0 flex-1 rounded-xl text-sm",
                     on ? "bg-green font-semibold text-ink-inverse" : "elevation-2 font-medium text-[#D4D4D4]",
                   ].join(" ")}
                 >
@@ -741,6 +771,22 @@ function GoalForm({
                 </button>
               );
             })}
+            {(() => {
+              const custom = target !== "" && !meta.presets.includes(Number(target));
+              return (
+                <button
+                  type="button"
+                  onClick={() => targetRef.current?.focus()}
+                  aria-pressed={custom}
+                  className={[
+                    "h-11 min-w-0 flex-[1.4] rounded-xl px-1 text-[13px]",
+                    custom ? "bg-green font-semibold text-ink-inverse" : "elevation-2 font-medium text-green",
+                  ].join(" ")}
+                >
+                  Custom
+                </button>
+              );
+            })()}
           </div>
           {(scopedByGroup || scopedByCardio) && (
             <>
@@ -820,14 +866,17 @@ function GoalForm({
           ))}
         </div>
         {duration === "custom" ? (
-          <div className="grid grid-cols-2 gap-2.5">
-            <label className="flex flex-col gap-1.5">
+          // minmax(0,1fr) + min-w-0: iOS date inputs have a wide built-in
+          // minimum width; without these the row overflowed the screen and the
+          // whole edit page could be dragged sideways.
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-2.5">
+            <label className="flex min-w-0 flex-col gap-1.5">
               <span className="px-1 text-xs text-muted">Start</span>
-              <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className={FIELD + " h-[52px] [color-scheme:dark]"} />
+              <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className={FIELD + DATE_FIELD} />
             </label>
-            <label className="flex flex-col gap-1.5">
+            <label className="flex min-w-0 flex-col gap-1.5">
               <span className="px-1 text-xs text-muted">End</span>
-              <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className={FIELD + " h-[52px] [color-scheme:dark]"} />
+              <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className={FIELD + DATE_FIELD} />
             </label>
           </div>
         ) : (
