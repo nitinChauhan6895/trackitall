@@ -1,9 +1,8 @@
 "use client";
 
 import { formatWeekdayDayMonth } from "@/lib/dateFormat";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { refetchUnlessJustFetched, useSeedQuery } from "@/lib/seed";
 import {
@@ -23,6 +22,12 @@ import {
 } from "@/lib/nutrition";
 import { fetchNutritionDiary, qk } from "@/lib/browserData";
 import type { NutritionDiary as Diary } from "@/lib/data";
+import { optimisticUpdate, tempId } from "@/lib/optimistic";
+
+/** The diary with a new entry list, totals recomputed to match. */
+function withEntries(d: Diary, entries: FoodLogEntry[]): Diary {
+  return { ...d, entries, totals: sumMacros(entries) };
+}
 
 const MACRO_META = [
   { key: "protein", label: "Protein", color: "#FFC95C", targetKey: "daily_protein_g" },
@@ -58,7 +63,6 @@ export default function NutritionDiary({
   fetchedAt: number;
   today: string;
 }) {
-  const router = useRouter();
   const queryClient = useQueryClient();
   // Cache-backed diary: instant from IndexedDB on re-open, reconciled in the
   // background; edits invalidate this key to refetch.
@@ -69,14 +73,64 @@ export default function NutritionDiary({
     queryFn: () => fetchNutritionDiary(initialDiary.date),
     initialData: initialDiary,
   });
-  const refresh = () =>
-    queryClient.invalidateQueries({ queryKey: qk.diary(initialDiary.date) });
+  const diaryKey = qk.diary(initialDiary.date);
+
+  // Every edit below shows on screen at once; the save runs in the background
+  // and is undone (with a message) if it fails. See lib/optimistic.ts.
+  function editEntry(entry: FoodLogEntry, patch: EntryPatch) {
+    setEditing(null);
+    const next: FoodLogEntry = {
+      ...entry,
+      quantity: patch.quantity,
+      computed_calories: patch.calories,
+      computed_protein: patch.protein,
+      computed_carbs: patch.carbs,
+      computed_fat: patch.fat,
+      computed_fiber: patch.fiber,
+    };
+    void optimisticUpdate<Diary>(
+      queryClient,
+      diaryKey,
+      (d) => withEntries(d, d.entries.map((e) => (e.id === entry.id ? next : e))),
+      () => updateFoodLog({ id: entry.id, unit: entry.unit, ...patch }),
+    );
+  }
+  function removeEntry(entry: FoodLogEntry) {
+    setEditing(null);
+    void optimisticUpdate<Diary>(
+      queryClient,
+      diaryKey,
+      (d) => withEntries(d, d.entries.filter((e) => e.id !== entry.id)),
+      () => deleteFoodLog(entry.id),
+      "Couldn't remove it. The food is back.",
+    );
+  }
+  function updateTargets(t: NutritionTargets) {
+    setShowTargets(false);
+    void optimisticUpdate<Diary>(
+      queryClient,
+      diaryKey,
+      (d) => ({ ...d, targets: t, hasTargets: true }),
+      () => saveTargets(t),
+    );
+  }
+  function copyYesterday(meal: Meal) {
+    // Show yesterday's foods straight away when they're already cached;
+    // otherwise they appear when the save finishes.
+    const from = shiftKey(date, -1);
+    const source = queryClient.getQueryData<Diary>(qk.diary(from))?.entries.filter((e) => e.meal === meal) ?? [];
+    void optimisticUpdate<Diary>(
+      queryClient,
+      diaryKey,
+      (d) => withEntries(d, [...d.entries, ...source.map((e) => ({ ...e, id: tempId(), log_date: date }))]),
+      () => copyMeal({ fromDate: from, toDate: date, meal }),
+    );
+  }
   const { date, entries, totals, targets, hasTargets } = diary;
   const [editing, setEditing] = useState<FoodLogEntry | null>(null);
   const [showTargets, setShowTargets] = useState(false);
   const [savingMeal, setSavingMeal] = useState<{ meal: Meal; entries: FoodLogEntry[] } | null>(null);
   const [breakdown, setBreakdown] = useState<{ meal: Meal; entries: FoodLogEntry[] } | null>(null);
-  const [pending, startTransition] = useTransition();
 
   const byMeal = (meal: Meal) => entries.filter((e) => e.meal === meal);
   const searchHref = (meal: Meal) =>
@@ -182,13 +236,7 @@ export default function NutritionDiary({
                   {items.length === 0 ? (
                     <button
                       type="button"
-                      disabled={pending}
-                      onClick={() =>
-                        startTransition(async () => {
-                          await copyMeal({ fromDate: shiftKey(date, -1), toDate: date, meal });
-                          refresh();
-                        })
-                      }
+                      onClick={() => copyYesterday(meal)}
                       className="h-9 shrink-0 px-2 text-[13px] font-medium text-muted active:text-ink disabled:opacity-50"
                     >
                       Copy yesterday
@@ -215,6 +263,8 @@ export default function NutritionDiary({
                       <li key={e.id}>
                         <button
                           type="button"
+                          // A just-added food has no real id until its save lands.
+                          disabled={e.id.startsWith("temp-")}
                           onClick={() => setEditing(e)}
                           className="elevation-2 flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-left active:bg-white/10"
                         >
@@ -240,10 +290,8 @@ export default function NutritionDiary({
         <EditEntrySheet
           entry={editing}
           onClose={() => setEditing(null)}
-          onDone={() => {
-            setEditing(null);
-            refresh();
-          }}
+          onSave={(patch) => editEntry(editing, patch)}
+          onRemove={() => removeEntry(editing)}
         />
       )}
 
@@ -251,10 +299,7 @@ export default function NutritionDiary({
         <TargetsSheet
           targets={targets}
           onClose={() => setShowTargets(false)}
-          onDone={() => {
-            setShowTargets(false);
-            refresh();
-          }}
+          onSave={updateTargets}
         />
       )}
 
@@ -263,10 +308,7 @@ export default function NutritionDiary({
           meal={savingMeal.meal}
           entries={savingMeal.entries}
           onClose={() => setSavingMeal(null)}
-          onDone={() => {
-            setSavingMeal(null);
-            refresh();
-          }}
+          onDone={() => setSavingMeal(null)}
         />
       )}
 
@@ -490,17 +532,27 @@ function fmtThousands(n: number): string {
 
 // ---------- Edit a logged entry (scale portion / remove) ----------
 
+type EntryPatch = {
+  quantity: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+};
+
 function EditEntrySheet({
   entry,
   onClose,
-  onDone,
+  onSave,
+  onRemove,
 }: {
   entry: FoodLogEntry;
   onClose: () => void;
-  onDone: () => void;
+  onSave: (patch: EntryPatch) => void;
+  onRemove: () => void;
 }) {
   const [qty, setQty] = useState(String(entry.quantity));
-  const [busy, setBusy] = useState(false);
 
   // Macros scale linearly with quantity (same unit), so no food refetch needed.
   const factor =
@@ -513,34 +565,18 @@ function EditEntrySheet({
     fiber: Math.round(entry.computed_fiber * factor),
   };
 
-  async function save() {
-    setBusy(true);
-    try {
-      await updateFoodLog({
-        id: entry.id,
-        quantity: Number(qty) || 0,
-        unit: entry.unit,
-        calories: entry.computed_calories * factor,
-        protein: entry.computed_protein * factor,
-        carbs: entry.computed_carbs * factor,
-        fat: entry.computed_fat * factor,
-        fiber: entry.computed_fiber * factor,
-      });
-      onDone();
-    } catch {
-      setBusy(false);
-    }
+  function save() {
+    onSave({
+      quantity: Number(qty) || 0,
+      calories: entry.computed_calories * factor,
+      protein: entry.computed_protein * factor,
+      carbs: entry.computed_carbs * factor,
+      fat: entry.computed_fat * factor,
+      fiber: entry.computed_fiber * factor,
+    });
   }
 
-  async function remove() {
-    setBusy(true);
-    try {
-      await deleteFoodLog(entry.id);
-      onDone();
-    } catch {
-      setBusy(false);
-    }
-  }
+  const remove = onRemove;
 
   return (
     <Sheet title={entry.food_name} onClose={onClose}>
@@ -570,7 +606,7 @@ function EditEntrySheet({
           <button
             type="button"
             onClick={remove}
-            disabled={busy}
+           
             className="flex-1 rounded-xl border border-gold/40 px-4 py-3 text-sm font-semibold text-gold active:bg-gold-soft disabled:opacity-50"
           >
             Remove
@@ -578,10 +614,10 @@ function EditEntrySheet({
           <button
             type="button"
             onClick={save}
-            disabled={busy || Number(qty) <= 0}
+            disabled={Number(qty) <= 0}
             className="flex-[1.6] rounded-xl bg-green px-4 py-3 text-sm font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-40"
           >
-            {busy ? "Saving…" : "Save"}
+            Save
           </button>
         </div>
       </div>
@@ -605,33 +641,28 @@ function Stat({ n, label, strong }: { n: number; label: string; strong?: boolean
 function TargetsSheet({
   targets,
   onClose,
-  onDone,
+  onSave,
 }: {
   targets: NutritionTargets;
   onClose: () => void;
-  onDone: () => void;
+  onSave: (t: NutritionTargets) => void;
 }) {
   const [cal, setCal] = useState(String(targets.daily_calories));
   const [pro, setPro] = useState(String(targets.daily_protein_g));
   const [carb, setCarb] = useState(String(targets.daily_carbs_g));
   const [fat, setFat] = useState(String(targets.daily_fat_g));
   const [fib, setFib] = useState(String(targets.daily_fiber_g));
-  const [busy, setBusy] = useState(false);
 
-  async function save() {
-    setBusy(true);
-    try {
-      await saveTargets({
-        daily_calories: Number(cal) || 0,
-        daily_protein_g: Number(pro) || 0,
-        daily_carbs_g: Number(carb) || 0,
-        daily_fat_g: Number(fat) || 0,
-        daily_fiber_g: Number(fib) || 0,
-      });
-      onDone();
-    } catch {
-      setBusy(false);
-    }
+  function save() {
+    // Whole numbers, as the server stores them.
+    const n = (v: string) => Math.round(Number(v) || 0);
+    onSave({
+      daily_calories: n(cal),
+      daily_protein_g: n(pro),
+      daily_carbs_g: n(carb),
+      daily_fat_g: n(fat),
+      daily_fiber_g: n(fib),
+    });
   }
 
   return (
@@ -647,10 +678,10 @@ function TargetsSheet({
         <button
           type="button"
           onClick={save}
-          disabled={busy}
+         
           className="w-full rounded-xl bg-green px-4 py-3 text-base font-bold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
         >
-          {busy ? "Saving…" : "Save targets"}
+          Save targets
         </button>
       </div>
     </Sheet>
