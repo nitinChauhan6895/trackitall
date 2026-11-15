@@ -581,22 +581,17 @@ function keyMs(k: string): number {
 
 // Per-user history that drives the engine's scoring & weight suggestions.
 export async function buildCoachHistory(groups: CoachGroup[]): Promise<History> {
-  const supabase = createClient();
   const todayKey = toDateKey(new Date());
 
-  const [exRes, prRes] = await Promise.all([
-    fetchAllRows((from, to) =>
-      supabase
-        .from("exercises")
-        .select("workout_date, name, muscle_group, sets(reps, weight_kg)")
-        .order("workout_date", { ascending: true })
-        .order("id", { ascending: true })
-        .range(from, to),
-    ),
-    supabase.from("prs").select("exercise_name, achieved_date, updated_at"),
-  ]);
-  const exs = (exRes.data ?? []) as any[];
-  const prs = (prRes.data ?? []) as any[];
+  // One shared, paged read of the workout log (the same one badges, Home and
+  // the PR corner use). PRs are automatic now, computed from this log, so the
+  // old manual `prs` table is no longer read.
+  let exs: any[] = [];
+  try {
+    exs = await loadExerciseHistory();
+  } catch {
+    // Suggestions degrade to "no history" rather than failing the Coach.
+  }
 
   const dates = Array.from(new Set(exs.map((e) => e.workout_date as string))).sort(
     (a, b) => (a < b ? 1 : -1),
@@ -643,12 +638,12 @@ export async function buildCoachHistory(groups: CoachGroup[]): Promise<History> 
   }
   for (const [key, date] of lastDateByName) daysSince.set(key, dayDiff(todayKey, date));
 
-  // recent PRs (last 30 days)
+  // Recent PRs (last 30 days): exercises whose best was beaten recently, from
+  // the same computePrs the PR corner and Home use. Keys are normalised
+  // (trimmed, single-spaced, lower-case) to match the engine's lookups.
   const prNames = new Set<string>();
-  for (const p of prs) {
-    const d = (p.achieved_date as string) ?? toDateKey(new Date(p.updated_at));
-    if (d && dayDiff(todayKey, d) <= 30)
-      prNames.add(String(p.exercise_name ?? "").trim().toLowerCase());
+  for (const ev of computePrs(exs as PrSourceRow[]).events) {
+    if (dayDiff(todayKey, ev.date) <= 30) prNames.add(ev.key.slice(0, ev.key.indexOf("|")));
   }
 
   // days since each selected group was last trained
