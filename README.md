@@ -87,6 +87,17 @@ npm run dev
 Open http://localhost:3000, tap **Create an account**, pick a username and
 password, and you're in. Next time, just sign in with the same credentials.
 
+### 6. Checks
+
+```bash
+npm run typecheck   # tsc --noEmit
+npm run lint
+npm test            # unit tests in tests/ (Node's built-in runner, Node 22.18+)
+npm run build
+```
+
+The same four checks run on every pull request (`.github/workflows/ci.yml`).
+
 ## Installing as a PWA
 
 On your phone, open the deployed site in the browser and choose **Add to Home

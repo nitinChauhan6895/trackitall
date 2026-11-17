@@ -291,3 +291,8 @@ export function parseTimeToSeconds(input: string): number | null {
 function trimNum(n: number): string {
   return Number.isInteger(n) ? String(n) : String(n);
 }
+
+// Weight inputs accept any value to 2 decimals (sets.weight_kg is numeric(6,2)),
+// so plates like 1.25 kg give totals such as 3.75 or 2.25 without the browser
+// flagging them as invalid (a 0.5 step rejected those).
+export const WEIGHT_STEP = "0.01";

@@ -14,6 +14,7 @@ import {
   formatSeconds,
   parseDuration,
   parseTimeToSeconds,
+  WEIGHT_STEP,
   type CardioField,
   type CardioType,
   type Circuit,
@@ -1285,7 +1286,7 @@ function StrengthSets({
               type="number"
               inputMode="decimal"
               min={0}
-              step="0.5"
+              step={WEIGHT_STEP}
               placeholder="0"
               aria-label={`Set ${i + 1} weight in kg`}
               className={inputClass}
