@@ -1285,7 +1285,7 @@ function StrengthSets({
               type="number"
               inputMode="decimal"
               min={0}
-              step="0.5"
+              step="0.01"
               placeholder="0"
               aria-label={`Set ${i + 1} weight in kg`}
               className={inputClass}
