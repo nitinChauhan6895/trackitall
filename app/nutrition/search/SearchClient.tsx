@@ -383,7 +383,7 @@ function SavedMealLogSheet({
             type="number"
             inputMode="decimal"
             min={0}
-            step="0.5"
+            step="any"
             className="min-w-0 flex-1 rounded-2xl border border-gold/50 bg-surface-2 px-4 py-3 text-center text-2xl font-bold text-ink outline-none focus:border-green"
           />
           <button

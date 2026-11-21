@@ -593,10 +593,12 @@ export async function buildCoachHistory(groups: CoachGroup[]): Promise<History> 
         .order("id", { ascending: true })
         .range(from, to),
     ),
-    supabase.from("prs").select("exercise_name, achieved_date, updated_at"),
+    // PRs are automatic (computed from the workout log), the same source as
+    // PR corner and Home; the old manual `prs` table is no longer written.
+    getPrSources(),
   ]);
   const exs = (exRes.data ?? []) as any[];
-  const prs = (prRes.data ?? []) as any[];
+  const { events: prEvents } = computePrs(prRes);
 
   const dates = Array.from(new Set(exs.map((e) => e.workout_date as string))).sort(
     (a, b) => (a < b ? 1 : -1),
@@ -645,10 +647,8 @@ export async function buildCoachHistory(groups: CoachGroup[]): Promise<History> 
 
   // recent PRs (last 30 days)
   const prNames = new Set<string>();
-  for (const p of prs) {
-    const d = (p.achieved_date as string) ?? toDateKey(new Date(p.updated_at));
-    if (d && dayDiff(todayKey, d) <= 30)
-      prNames.add(String(p.exercise_name ?? "").trim().toLowerCase());
+  for (const ev of prEvents) {
+    if (dayDiff(todayKey, ev.date) <= 30) prNames.add(ev.name.trim().toLowerCase());
   }
 
   // days since each selected group was last trained
