@@ -1132,6 +1132,9 @@ function ExerciseForm({
                     type={isTime && !isCardioTime ? "text" : "number"}
                     inputMode={isTime && !isCardioTime ? "text" : "decimal"}
                     min={isTime && !isCardioTime ? undefined : 0}
+                    // "any": without a step the browser only accepts whole numbers,
+                    // so 2.25 kg or 3.75 km would be flagged invalid.
+                    step={isTime && !isCardioTime ? undefined : "any"}
                     placeholder={
                       isCardioTime
                         ? entry.timeUnit === "minutes"
@@ -1285,7 +1288,7 @@ function StrengthSets({
               type="number"
               inputMode="decimal"
               min={0}
-              step="0.5"
+              step="0.01"
               placeholder="0"
               aria-label={`Set ${i + 1} weight in kg`}
               className={inputClass}
