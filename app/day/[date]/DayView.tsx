@@ -46,7 +46,7 @@ function inputsFor(exercise: Exercise, kind: SetKind): InputSpec[] {
   }
   return [
     { name: "reps", placeholder: "Reps", type: "number", step: "1" },
-    { name: "weight", placeholder: "Weight (kg)", type: "number", step: "0.5" },
+    { name: "weight", placeholder: "Weight (kg)", type: "number", step: "any" },
   ];
 }
 
@@ -616,7 +616,7 @@ function shiftKey(key: string, n: number): string {
 
 const HIIT_INPUTS: Record<ResolvedMetric["draftKey"], InputSpec> = {
   reps: { name: "reps", placeholder: "Reps", type: "number", step: "1" },
-  weight: { name: "weight", placeholder: "Weight (kg)", type: "number", step: "0.5" },
+  weight: { name: "weight", placeholder: "Weight (kg)", type: "number", step: "any" },
   distance_km: { name: "distance_km", placeholder: "Distance (km)", type: "number", step: "0.1" },
   distance_m: { name: "distance_m", placeholder: "Distance (m)", type: "number", step: "1" },
   time: { name: "time", placeholder: "Time (hh:mm:ss)", type: "text" },
@@ -633,7 +633,7 @@ const FIELD_INPUTS: Record<CardioField, InputSpec> = {
   calories: { name: "calories", placeholder: "Calories (kcal)", type: "number", step: "1" },
   incline: { name: "incline", placeholder: "Incline", type: "number", step: "0.5" },
   resistance: { name: "resistance", placeholder: "Resistance", type: "number", step: "1" },
-  weight: { name: "weight", placeholder: "Weight (kg)", type: "number", step: "0.5" },
+  weight: { name: "weight", placeholder: "Weight (kg)", type: "number", step: "any" },
 };
 
 function formatHiitSet(name: string, s: WorkoutSet): string {
