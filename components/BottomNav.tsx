@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { toDateKey } from "@/lib/date";
+import StickyBottom from "@/components/StickyBottom";
 
 // Routes that should NOT show the app nav (auth screens + full-screen flows that
 // carry their own bottom action bar — revisited in the day-view round).
@@ -27,9 +28,11 @@ export default function BottomNav() {
     href === "/" ? path === "/" : path.startsWith(href);
 
   return (
+    // Sticky, not fixed: see components/StickyBottom.tsx (iOS 26 bug).
+    <StickyBottom>
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-30 mx-auto flex w-full max-w-md items-center gap-2.5 px-4 pb-7 safe-bottom"
+      className="pointer-events-auto flex w-full items-center gap-2.5 px-4 pb-7 safe-bottom"
     >
       {/* Floating "liquid glass" tab bar with the log action beside it. */}
       <div className="grid h-16 flex-1 grid-cols-4 elevation-3 rounded-full bg-[rgba(44,44,44,0.62)] p-1.5 backdrop-saturate-[1.6]">
@@ -46,6 +49,7 @@ export default function BottomNav() {
         <PlusIcon />
       </Link>
     </nav>
+    </StickyBottom>
   );
 }
 
