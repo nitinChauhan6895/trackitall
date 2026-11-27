@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import StickyBottom from "@/components/StickyBottom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { monthParam } from "@/lib/date";
 import { fetchDayExercises, fetchPrSources, qk } from "@/lib/browserData";
@@ -129,6 +130,7 @@ export default function DayView({ date }: { date: string }) {
   const heading = `${WEEKDAYS_FULL[dt.getDay()]}, ${dd} ${MONTHS_FULL[m - 1].slice(0, 3)}`;
 
   return (
+    <>
     <main className="flex flex-1 flex-col gap-5 px-4 pb-36 safe-top">
       {/* Top controls (glass) */}
       <div className="flex items-center gap-2 pt-4">
@@ -300,18 +302,6 @@ export default function DayView({ date }: { date: string }) {
       )}
       </div>
 
-      {/* Floating glass action, bottom-right. */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto flex w-full max-w-md justify-end px-4 pb-7 safe-bottom">
-        <Link
-          href={`/log/${date}`}
-          className="pointer-events-auto flex h-[60px] items-center gap-2 elevation-3 rounded-full bg-green/[0.92] pl-5 pr-6 text-base font-semibold text-ink-inverse transition active:scale-95"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Add exercise
-        </Link>
-      </div>
 
       {shareMenuOpen && (
         <ShareMenu
@@ -328,6 +318,21 @@ export default function DayView({ date }: { date: string }) {
         <ShareDayModal date={date} onClose={() => setShareOpen(false)} />
       )}
     </main>
+      {/* Floating glass action, bottom-right. Sticky, not fixed: see
+          components/StickyBottom.tsx (iOS 26 bug). Outside <main> so it sits
+          at the very end of the page, past main's bottom padding. */}
+      <StickyBottom className="flex justify-end px-4 pb-7 safe-bottom">
+        <Link
+          href={`/log/${date}`}
+          className="pointer-events-auto flex h-[60px] items-center gap-2 elevation-3 rounded-full bg-green/[0.92] pl-5 pr-6 text-base font-semibold text-ink-inverse transition active:scale-95"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Add exercise
+        </Link>
+      </StickyBottom>
+    </>
   );
 }
 

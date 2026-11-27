@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import StickyBottom from "@/components/StickyBottom";
 import { useRouter } from "next/navigation";
 import {
   formatSeconds,
@@ -107,7 +108,7 @@ export default function CircuitBuilder({ initial }: { initial?: Circuit }) {
   }
 
   return (
-    <main className="flex flex-1 flex-col px-4 pb-28 safe-top">
+    <main className="flex flex-1 flex-col px-4 safe-top">
       <header className="flex items-center justify-between py-4">
         <button
           type="button"
@@ -248,16 +249,20 @@ export default function CircuitBuilder({ initial }: { initial?: Circuit }) {
 
       {error && <p className="mt-3 text-sm text-gold">{error}</p>}
 
-      <div className="fixed inset-x-0 bottom-0 mx-auto w-full max-w-md px-4 pb-5 pt-2 safe-bottom">
+      {/* Room to scroll the last field clear of the save bar below. */}
+      <div aria-hidden className="h-24 shrink-0" />
+
+      {/* Sticky, not fixed: see components/StickyBottom.tsx (iOS 26 bug). */}
+      <StickyBottom z="z-20" className="pb-5 pt-2 safe-bottom">
         <button
           type="button"
           onClick={save}
           disabled={busy}
-          className="flex w-full items-center justify-center rounded-2xl bg-green px-4 py-4 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
+          className="pointer-events-auto flex w-full items-center justify-center rounded-2xl bg-green px-4 py-4 text-base font-semibold text-ink-inverse transition active:scale-[0.98] disabled:opacity-50"
         >
           {busy ? "Saving…" : "Save Circuit"}
         </button>
-      </div>
+      </StickyBottom>
 
       {sheetOpen && (
         <AddExerciseSheet

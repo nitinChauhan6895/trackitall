@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import StickyBottom from "@/components/StickyBottom";
 import { loadGoalsAction, saveGoal, deleteGoal } from "@/app/actions";
 import { qk } from "@/lib/browserData";
 import { refetchUnlessJustFetched, useSeedQuery } from "@/lib/seed";
@@ -96,7 +97,7 @@ export default function GoalsClient({
     return (
       // A full-screen layer over the tab bar: the form has its own sticky
       // action where the bar would be.
-      <main className="fixed inset-0 z-40 mx-auto flex w-full max-w-md flex-col overflow-y-auto overflow-x-hidden bg-page px-4 pb-36 safe-top">
+      <main className="fixed inset-0 z-40 mx-auto flex w-full max-w-md flex-col overflow-y-auto overflow-x-hidden bg-page px-4 safe-top">
         <GoalForm
           goal={view.id ? goals.find((g) => g.id === view.id) : undefined}
           initialMetric={view.name === "new" ? view.metric : undefined}
@@ -683,7 +684,7 @@ function GoalForm({
     : `Create goal · ${formatValue(metric, Number(target) || 0)} ${meta.unit}${period ? ` ${period}` : ""}`;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-1 flex-col gap-6">
       <div className="flex items-center gap-3 pt-4">
         <button type="button" onClick={onCancel} aria-label="Back" className={GLASS_BACK}>
           <BackArrow />
@@ -912,8 +913,11 @@ function GoalForm({
 
       {error && <p className="text-center text-sm text-gold">{error}</p>}
 
-      {/* Sticky glass action */}
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-md px-4 pb-7 safe-bottom">
+      {/* Room to scroll the last field clear of the action below. */}
+      <div aria-hidden className="h-28 shrink-0" />
+
+      {/* Sticky glass action. Sticky, not fixed: see components/StickyBottom.tsx. */}
+      <StickyBottom z="z-50" className="pb-7 safe-bottom">
         <button
           type="button"
           disabled={busy}
@@ -922,7 +926,7 @@ function GoalForm({
         >
           {busy ? "Saving…" : actionLabel}
         </button>
-      </div>
+      </StickyBottom>
     </div>
   );
 }

@@ -64,10 +64,12 @@ export default function RootLayout({
       <body>
         <Providers>
           <OfflineSync />
-          <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col overflow-x-hidden">
+          {/* overflow-x: clip (not hidden) so this isn't a scroll container;
+              the sticky bottom bars inside need the page itself to scroll. */}
+          <div className="mx-auto flex min-h-[100dvh] w-full max-w-md flex-col [overflow-x:clip]">
             {children}
+            <BottomNav />
           </div>
-          <BottomNav />
           <Suspense fallback={null}>
             <FlashToast />
           </Suspense>
